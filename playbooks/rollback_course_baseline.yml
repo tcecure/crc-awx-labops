@@ -1,0 +1,102 @@
+---
+- name: Roll back pods to Course Baseline snapshot (Proxmox qm)
+  hosts: pve
+  gather_facts: false
+
+  vars:
+    # Set default snapshot name here:
+    snapshot_name: "Course-Baseline"
+
+    # Mode:
+    #   all  -> rollback all 10 pods (200-219)
+    #   one  -> rollback only one pod (needs pod_num)
+    mode: "all"
+
+    # Pod number 1-10 when mode=one
+    pod_num: 1
+
+    # Behavior
+    stop_before_rollback: true
+    start_after_rollback: true
+
+  tasks:
+    - name: Validate mode
+      ansible.builtin.assert:
+        that:
+          - mode in ["all", "one"]
+        fail_msg: "mode must be all or one"
+
+    - name: Validate pod_num if mode=one
+      ansible.builtin.assert:
+        that:
+          - pod_num | int >= 1
+          - pod_num | int <= 10
+        fail_msg: "pod_num must be 1..10"
+      when: mode == "one"
+
+    - name: Build VM list for rollback
+      ansible.builtin.set_fact:
+        vm_ids: >-
+          {{
+            (range(200, 220) | list)
+            if mode == "all"
+            else
+            [ (199 + (pod_num|int)), (209 + (pod_num|int)) ]
+          }}
+
+    # For mode=one:
+    # pod 1 => DC 200, WS 210
+    # pod 10 => DC 209, WS 219
+
+    - name: Show target plan
+      ansible.builtin.debug:
+        msg:
+          - "Mode={{ mode }}"
+          - "Snapshot={{ snapshot_name }}"
+          - "VM IDs={{ vm_ids }}"
+
+    - name: Pre-check snapshot exists on each VM
+      ansible.builtin.shell: |
+        sudo qm listsnapshot {{ item }} | awk '{print $1}' | grep -Fx "{{ snapshot_name }}"
+      args:
+        executable: /bin/bash
+      register: snapcheck
+      changed_when: false
+      loop: "{{ vm_ids }}"
+
+    - name: Stop VMs before rollback (optional)
+      ansible.builtin.shell: |
+        sudo qm stop {{ item }} --skiplock 1
+      args:
+        executable: /bin/bash
+      register: stop_out
+      failed_when: false
+      changed_when: "'stopped' in (stop_out.stdout|lower) or stop_out.rc == 0"
+      loop: "{{ vm_ids }}"
+      when: stop_before_rollback
+
+    - name: Rollback snapshot on each VM
+      ansible.builtin.shell: |
+        sudo qm rollback {{ item }} {{ snapshot_name }} --skiplock 1
+      args:
+        executable: /bin/bash
+      register: rb_out
+      loop: "{{ vm_ids }}"
+
+    - name: Start VMs after rollback (optional)
+      ansible.builtin.shell: |
+        sudo qm start {{ item }} --skiplock 1
+      args:
+        executable: /bin/bash
+      register: start_out
+      failed_when: false
+      changed_when: start_out.rc == 0
+      loop: "{{ vm_ids }}"
+      when: start_after_rollback
+
+    - name: Summary
+      ansible.builtin.debug:
+        msg:
+          - "Rollback complete."
+          - "Rolled back VMs: {{ vm_ids }}"
+          - "Snapshot used: {{ snapshot_name }}"
