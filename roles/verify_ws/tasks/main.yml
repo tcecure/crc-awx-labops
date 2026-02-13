@@ -1,0 +1,65 @@
+---
+- name: Derive pod number from inventory_name
+  ansible.builtin.set_fact:
+    pod_number: "{{ inventory_hostname | regex_search('p(\\d+)$', '\\1') | first }}"
+
+- name: "M3 L3.2 - Check Local Administrators contains SG-ACS-IT-Admins and not SG-ACS-All-Staff"
+  ansible.windows.win_powershell:
+    script: |
+      $members = net localgroup Administrators | Where-Object { $_ -and $_ -notmatch "^-|^The command|^Members|^Alias|^Comment" }
+      $hasITAdmins = ($members | Where-Object { $_ -match "SG-ACS-IT-Admins" }).Count -gt 0
+      $hasAllStaff = ($members | Where-Object { $_ -match "SG-ACS-All-Staff" }).Count -gt 0
+      if ($hasITAdmins -and (-not $hasAllStaff)) {
+        @{ pass = $true; reason = "SG-ACS-IT-Admins in local Admins, SG-ACS-All-Staff removed" }
+      } else {
+        $reasons = @()
+        if (-not $hasITAdmins) { $reasons += "SG-ACS-IT-Admins missing from local Admins" }
+        if ($hasAllStaff) { $reasons += "SG-ACS-All-Staff still in local Admins" }
+        @{ pass = $false; reason = ($reasons -join ", ") }
+      }
+  register: m3_l32
+
+- name: "M4 L4.2 - Check C:\\LabEvidence\\Lab4-2\\review.csv exists and non-empty"
+  ansible.windows.win_powershell:
+    script: |
+      $path = "C:\LabEvidence\Lab4-2\review.csv"
+      if (Test-Path $path) {
+        $size = (Get-Item $path).Length
+        if ($size -gt 0) {
+          @{ pass = $true; reason = "review.csv exists, size=${size} bytes" }
+        } else {
+          @{ pass = $false; reason = "review.csv exists but is empty" }
+        }
+      } else {
+        @{ pass = $false; reason = "review.csv not found at $path" }
+      }
+  register: m4_l42
+
+- name: "M4 L4.3 - Check C:\\LabEvidence\\Lab4-3\\ exists with required files non-empty"
+  ansible.windows.win_powershell:
+    script: |
+      $dir = "C:\LabEvidence\Lab4-3"
+      if (Test-Path $dir) {
+        $files = Get-ChildItem -Path $dir -File
+        if ($files.Count -gt 0) {
+          $nonEmpty = @($files | Where-Object { $_.Length -gt 0 })
+          $empty = @($files | Where-Object { $_.Length -eq 0 })
+          if ($empty.Count -eq 0) {
+            @{ pass = $true; reason = "Lab4-3 dir exists with $($nonEmpty.Count) non-empty file(s)" }
+          } else {
+            @{ pass = $false; reason = "Lab4-3 has $($empty.Count) empty file(s): $($empty.Name -join ',')" }
+          }
+        } else {
+          @{ pass = $false; reason = "Lab4-3 directory exists but contains no files" }
+        }
+      } else {
+        @{ pass = $false; reason = "Lab4-3 directory not found at $dir" }
+      }
+  register: m4_l43
+
+- name: Consolidate WS results
+  ansible.builtin.set_fact:
+    ws_results:
+      L3.2: "{{ m3_l32.output[0] }}"
+      L4.2: "{{ m4_l42.output[0] }}"
+      L4.3: "{{ m4_l43.output[0] }}"

@@ -1,0 +1,77 @@
+---
+- name: Verify DC labs (Modules 1-4 DC-side)
+  hosts: crc_dcs
+  gather_facts: false
+  strategy: free
+  roles:
+    - verify_dc
+
+- name: Verify WS labs (Modules 3-4 WS-side)
+  hosts: crc_workstations
+  gather_facts: false
+  strategy: free
+  roles:
+    - verify_ws
+
+- name: Consolidate results and produce report
+  hosts: localhost
+  gather_facts: false
+  connection: local
+
+  tasks:
+    - name: Build per-pod results
+      ansible.builtin.set_fact:
+        pod_results: >-
+          {%- set pods = {} -%}
+          {%- for i in range(1, 11) -%}
+            {%- set pad = '%02d' | format(i) -%}
+            {%- set dc_host = 'dc01-p' ~ pad -%}
+            {%- set ws_host = 'ws01-p' ~ pad -%}
+            {%- set dc = hostvars[dc_host]['dc_results'] | default({}) -%}
+            {%- set ws = hostvars[ws_host]['ws_results'] | default({}) -%}
+            {%- set _ = pods.update({'pod' ~ pad: {'dc': dc, 'ws': ws}}) -%}
+          {%- endfor -%}
+          {{ pods }}
+
+    - name: Compute totals
+      ansible.builtin.set_fact:
+        total_passed: >-
+          {%- set count = [0] -%}
+          {%- for pod_key, pod_val in pod_results.items() -%}
+            {%- for section in ['dc', 'ws'] -%}
+              {%- for lab_key, lab_val in pod_val[section].items() -%}
+                {%- if lab_val.pass | default(false) -%}
+                  {%- set _ = count.append(count.pop() + 1) -%}
+                {%- endif -%}
+              {%- endfor -%}
+            {%- endfor -%}
+          {%- endfor -%}
+          {{ count[0] }}
+        total_failed: >-
+          {%- set count = [0] -%}
+          {%- for pod_key, pod_val in pod_results.items() -%}
+            {%- for section in ['dc', 'ws'] -%}
+              {%- for lab_key, lab_val in pod_val[section].items() -%}
+                {%- if not (lab_val.pass | default(false)) -%}
+                  {%- set _ = count.append(count.pop() + 1) -%}
+                {%- endif -%}
+              {%- endfor -%}
+            {%- endfor -%}
+          {%- endfor -%}
+          {{ count[0] }}
+
+    - name: Write JSON artifact
+      ansible.builtin.copy:
+        content: "{{ {'pods': pod_results, 'totals': {'passed': total_passed | int, 'failed': total_failed | int}} | to_nice_json }}"
+        dest: /runner/artifacts/auto-verify.json
+      delegate_to: localhost
+
+    - name: Print PASS/FAIL matrix
+      ansible.builtin.debug:
+        msg: |
+          {% for i in range(1, 11) %}
+          {%- set pad = '%02d' | format(i) -%}
+          {%- set pod = pod_results['pod' ~ pad] -%}
+          POD{{ pad }}: M1 [1.1 {{ 'P' if pod.dc['L1.1'].pass | default(false) else 'F' }} | 1.2 {{ 'P' if pod.dc['L1.2'].pass | default(false) else 'F' }} | 1.3 {{ 'P' if pod.dc['L1.3'].pass | default(false) else 'F' }}]  M2 [2.1 {{ 'P' if pod.dc['L2.1'].pass | default(false) else 'F' }} | 2.2 {{ 'P' if pod.dc['L2.2'].pass | default(false) else 'F' }} | 2.3 {{ 'P' if pod.dc['L2.3'].pass | default(false) else 'F' }}]  M3 [3.1 {{ 'P' if pod.dc['L3.1'].pass | default(false) else 'F' }} | 3.2 {{ 'P' if pod.ws['L3.2'].pass | default(false) else 'F' }}]  M4 [4.1 {{ 'P' if pod.dc['L4.1'].pass | default(false) else 'F' }} | 4.2 {{ 'P' if pod.ws['L4.2'].pass | default(false) else 'F' }} | 4.3 {{ 'P' if pod.ws['L4.3'].pass | default(false) else 'F' }}]
+          {% endfor %}
+          TOTAL: passed={{ total_passed }} failed={{ total_failed }}
