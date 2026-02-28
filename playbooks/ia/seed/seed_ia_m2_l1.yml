@@ -1,0 +1,70 @@
+---
+- name: "Seed IA M2-L1: Scheduled Task Runs as Human Account"
+  hosts: crc_dcs
+  gather_facts: true
+  strategy: free
+  tags: [ia, seed, m2]
+
+  tasks:
+    - name: Include common OUs
+      ansible.builtin.include_tasks: ../common/ensure_ad_ous.yml
+
+    - name: Include common groups
+      ansible.builtin.include_tasks: ../common/ensure_ad_groups.yml
+
+    - name: Include artifact directories
+      ansible.builtin.include_tasks: ../common/ensure_artifacts_dirs.yml
+
+    - name: Derive pod number
+      ansible.builtin.set_fact:
+        pod_id: "{{ inventory_hostname | regex_search('p(\\d+)$', '\\1') | first }}"
+
+    - name: Ensure svc_backup does NOT exist
+      ansible.windows.win_powershell:
+        script: |
+          Import-Module ActiveDirectory
+          $u = Get-ADUser -Filter "SamAccountName -eq 'svc_backup'" -ErrorAction SilentlyContinue
+          if ($u) {
+            Remove-ADUser -Identity $u -Confirm:$false
+            Write-Host "Removed svc_backup"
+          } else {
+            Write-Host "svc_backup already absent"
+          }
+
+    - name: Ensure s.jenkins exists as a human account
+      ansible.windows.win_powershell:
+        script: |
+          Import-Module ActiveDirectory
+          $domainDN = (Get-ADDomain).DistinguishedName
+          $ouStaff = "OU=Staff,OU=Users,OU=ACS,$domainDN"
+          $pw = ConvertTo-SecureString "{{ seed_user_password }}" -AsPlainText -Force
+          $sam = "s.jenkins"
+          if (-not (Get-ADUser -Filter "SamAccountName -eq '$sam'" -ErrorAction SilentlyContinue)) {
+            New-ADUser -SamAccountName $sam -Name "Steve Jenkins" -GivenName "Steve" -Surname "Jenkins" `
+              -DisplayName "Steve Jenkins" `
+              -UserPrincipalName "$sam@$((Get-ADDomain).DNSRoot)" `
+              -Path $ouStaff -AccountPassword $pw -Enabled $true `
+              -PasswordNeverExpires $true -ChangePasswordAtLogon $false
+            Write-Host "Created s.jenkins"
+          } else {
+            Write-Host "s.jenkins already exists"
+          }
+
+    - name: Create scheduled task running as human account s.jenkins
+      ansible.windows.win_powershell:
+        script: |
+          $taskName = "ACS Nightly Backup"
+          $domain = (Get-ADDomain).NetBIOSName
+          Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
+          $action = New-ScheduledTaskAction -Execute "powershell.exe" `
+            -Argument "-ExecutionPolicy Bypass -Command `"Write-Output 'Backup started'; Copy-Item C:\Data\* C:\Backups\ -Recurse -ErrorAction SilentlyContinue`""
+          $trigger = New-ScheduledTaskTrigger -Daily -At "2:00AM"
+          $principal = New-ScheduledTaskPrincipal -UserId "$domain\s.jenkins" -LogonType Password -RunLevel Highest
+          Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal `
+            -Description "Nightly backup job - currently running as human account (FAIL state)" -Force
+          Write-Host "Scheduled task created with human principal"
+
+    - name: Drop lab-ready marker
+      ansible.builtin.include_tasks: ../common/drop_lab_artifacts.yml
+      vars:
+        lab_id: "IA-M2-L1"

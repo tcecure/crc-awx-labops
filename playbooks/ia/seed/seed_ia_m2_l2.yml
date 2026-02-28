@@ -1,0 +1,34 @@
+---
+- name: "Seed IA M2-L2: Rogue Device Artifact Present"
+  hosts: crc_workstations
+  gather_facts: true
+  strategy: free
+  tags: [ia, seed, m2]
+
+  tasks:
+    - name: Include artifact directories
+      ansible.builtin.include_tasks: ../common/ensure_artifacts_dirs.yml
+
+    - name: Derive pod number
+      ansible.builtin.set_fact:
+        pod_id: "{{ inventory_hostname | regex_search('p(\\d+)$', '\\1') | first }}"
+
+    - name: Deploy Authorized_Device_List.csv from template
+      ansible.windows.win_template:
+        src: ../../../templates/ia/Authorized_Device_List.csv.j2
+        dest: "{{ ia_artifacts_dir }}\\Authorized_Device_List.csv"
+
+    - name: Drop rogue MAC hint file
+      ansible.windows.win_copy:
+        content: "AA-BB-CC-11-22-33\r\n"
+        dest: "{{ lab_artifacts_root }}\\rogue_mac.txt"
+
+    - name: Ensure Device_Config_Record.csv does NOT exist
+      ansible.windows.win_file:
+        path: "{{ ia_artifacts_dir }}\\Device_Config_Record.csv"
+        state: absent
+
+    - name: Drop lab-ready marker
+      ansible.builtin.include_tasks: ../common/drop_lab_artifacts.yml
+      vars:
+        lab_id: "IA-M2-L2"

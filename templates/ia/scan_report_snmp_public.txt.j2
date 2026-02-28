@@ -1,0 +1,26 @@
+OpenVAS Scan Report — ACS Corporation Pod {{ pod_id }}
+Scan Date: 2026-01-20
+Target Range: 10.50.{{ pod_id | int }}.0/24
+Scanner: OpenVAS 22.4
+
+=== FINDINGS ===
+
+[HIGH] CVE-2024-XXXX — SNMP community string is public
+  Host: 10.50.{{ pod_id | int }}.30 (PRINT-P{{ pod_id }})
+  Port: 161/udp
+  Description: The SNMP agent on this device is configured with the
+  default community string "public". This allows any network user to
+  read device configuration, interface statistics, and routing tables.
+  Remediation: Change the SNMP community string to a complex value
+  and restrict SNMP access to management stations only.
+
+[MEDIUM] SSL Certificate Expiring Soon
+  Host: 10.50.{{ pod_id | int }}.10 (DC01-P{{ pod_id }})
+  Port: 443/tcp
+  Description: The SSL certificate expires within 60 days.
+  Remediation: Renew the certificate before expiration.
+
+[INFO] Host Discovery
+  Hosts found: 3 (DC01-P{{ pod_id }}, WS01-P{{ pod_id }}, PRINT-P{{ pod_id }})
+
+=== END OF REPORT ===

@@ -1,0 +1,29 @@
+---
+- name: "Seed IA M4-L1: Default Credentials Remediation (Artifact-Based)"
+  hosts: crc_workstations
+  gather_facts: true
+  strategy: free
+  tags: [ia, seed, m4]
+
+  tasks:
+    - name: Include artifact directories
+      ansible.builtin.include_tasks: ../common/ensure_artifacts_dirs.yml
+
+    - name: Derive pod number
+      ansible.builtin.set_fact:
+        pod_id: "{{ inventory_hostname | regex_search('p(\\d+)$', '\\1') | first }}"
+
+    - name: Deploy Hardening_Standard.txt missing default-password clause
+      ansible.windows.win_template:
+        src: ../../../templates/ia/Hardening_Standard.txt.j2
+        dest: "{{ ia_artifacts_dir }}\\Hardening_Standard.txt"
+
+    - name: Ensure M4-L1 evidence file does NOT exist
+      ansible.windows.win_file:
+        path: "{{ evidence_root }}\\M4-L1.txt"
+        state: absent
+
+    - name: Drop lab-ready marker
+      ansible.builtin.include_tasks: ../common/drop_lab_artifacts.yml
+      vars:
+        lab_id: "IA-M4-L1"

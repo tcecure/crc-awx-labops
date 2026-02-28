@@ -1,0 +1,29 @@
+---
+- name: "Seed IA M4-L2: Scan Report Indicates SNMP 'public'"
+  hosts: crc_workstations
+  gather_facts: true
+  strategy: free
+  tags: [ia, seed, m4]
+
+  tasks:
+    - name: Include artifact directories
+      ansible.builtin.include_tasks: ../common/ensure_artifacts_dirs.yml
+
+    - name: Derive pod number
+      ansible.builtin.set_fact:
+        pod_id: "{{ inventory_hostname | regex_search('p(\\d+)$', '\\1') | first }}"
+
+    - name: Deploy scan report with SNMP public finding
+      ansible.windows.win_template:
+        src: ../../../templates/ia/scan_report_snmp_public.txt.j2
+        dest: "{{ lab_scans_dir }}\\openvas_scan_report.txt"
+
+    - name: Ensure Device_Config_Record.csv does NOT exist
+      ansible.windows.win_file:
+        path: "{{ ia_artifacts_dir }}\\Device_Config_Record.csv"
+        state: absent
+
+    - name: Drop lab-ready marker
+      ansible.builtin.include_tasks: ../common/drop_lab_artifacts.yml
+      vars:
+        lab_id: "IA-M4-L2"
