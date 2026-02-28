@@ -1,0 +1,49 @@
+---
+- name: "Seed IA M3-L3: Must Change Password at Next Logon Not Set"
+  hosts: crc_dcs
+  gather_facts: true
+  strategy: free
+  tags: [ia, seed, m3]
+
+  tasks:
+    - name: Include common OUs
+      ansible.builtin.include_tasks: ../common/ensure_ad_ous.yml
+
+    - name: Include common groups
+      ansible.builtin.include_tasks: ../common/ensure_ad_groups.yml
+
+    - name: Include artifact directories
+      ansible.builtin.include_tasks: ../common/ensure_artifacts_dirs.yml
+
+    - name: Derive pod number
+      ansible.builtin.set_fact:
+        pod_id: "{{ inventory_hostname | regex_search('p(\\d+)$', '\\1') | first }}"
+
+    - name: Ensure d.chen exists enabled without must-change flag
+      ansible.windows.win_powershell:
+        script: |
+          Import-Module ActiveDirectory
+          $domainDN = (Get-ADDomain).DistinguishedName
+          $ouStaff = "OU=Staff,OU=Users,OU=ACS,$domainDN"
+          $pw = ConvertTo-SecureString "{{ seed_user_password }}" -AsPlainText -Force
+          $sam = "d.chen"
+          $u = Get-ADUser -Filter "SamAccountName -eq '$sam'" -ErrorAction SilentlyContinue
+          if ($u) {
+            Enable-ADAccount $sam
+            Set-ADUser $sam -ChangePasswordAtLogon $false
+            Set-ADUser $sam -Replace @{pwdLastSet = -1}
+            Write-Host "d.chen exists, ensured enabled with must-change=false"
+          } else {
+            New-ADUser -SamAccountName $sam -Name "David Chen" -GivenName "David" -Surname "Chen" `
+              -DisplayName "David Chen" `
+              -UserPrincipalName "$sam@$((Get-ADDomain).DNSRoot)" `
+              -Path $ouStaff -AccountPassword $pw -Enabled $true `
+              -PasswordNeverExpires $false -ChangePasswordAtLogon $false
+            Set-ADUser $sam -Replace @{pwdLastSet = -1}
+            Write-Host "Created d.chen with must-change=false"
+          }
+
+    - name: Drop lab-ready marker
+      ansible.builtin.include_tasks: ../common/drop_lab_artifacts.yml
+      vars:
+        lab_id: "IA-M3-L3"

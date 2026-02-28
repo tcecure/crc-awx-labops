@@ -1,0 +1,34 @@
+---
+- name: "Seed IA M4-L3: Script Contains password123"
+  hosts: crc_workstations
+  gather_facts: true
+  strategy: free
+  tags: [ia, seed, m4]
+
+  tasks:
+    - name: Include artifact directories
+      ansible.builtin.include_tasks: ../common/ensure_artifacts_dirs.yml
+
+    - name: Derive pod number
+      ansible.builtin.set_fact:
+        pod_id: "{{ inventory_hostname | regex_search('p(\\d+)$', '\\1') | first }}"
+
+    - name: Deploy db_connect script with hardcoded password123
+      ansible.windows.win_template:
+        src: ../../../templates/ia/db_connect_with_password123.txt.j2
+        dest: "{{ lab_scripts_dir }}\\db_connect.py"
+
+    - name: Ensure Vault_Entries.txt does NOT exist
+      ansible.windows.win_file:
+        path: "{{ vault_dir }}\\Vault_Entries.txt"
+        state: absent
+
+    - name: Ensure remediation summary does NOT exist
+      ansible.windows.win_file:
+        path: "{{ evidence_root }}\\M4-L3.txt"
+        state: absent
+
+    - name: Drop lab-ready marker
+      ansible.builtin.include_tasks: ../common/drop_lab_artifacts.yml
+      vars:
+        lab_id: "IA-M4-L3"

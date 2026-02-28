@@ -1,0 +1,38 @@
+---
+- name: "Seed IA M3-L2: Weak Password Policy Must Be Remediated"
+  hosts: crc_dcs
+  gather_facts: true
+  strategy: free
+  tags: [ia, seed, m3]
+
+  tasks:
+    - name: Include common OUs
+      ansible.builtin.include_tasks: ../common/ensure_ad_ous.yml
+
+    - name: Include artifact directories
+      ansible.builtin.include_tasks: ../common/ensure_artifacts_dirs.yml
+
+    - name: Set weak password policy via secedit
+      ansible.windows.win_powershell:
+        script: |
+          $cfgPath = "C:\Windows\Temp\ia_m3l2_weak.cfg"
+          $dbPath  = "C:\Windows\Temp\ia_m3l2_weak.sdb"
+          @"
+          [Unicode]
+          Unicode=yes
+          [System Access]
+          MinimumPasswordLength = 6
+          PasswordComplexity = 0
+          LockoutBadCount = 0
+          PasswordHistorySize = 0
+          MaximumPasswordAge = 90
+          MinimumPasswordAge = 0
+          "@ | Set-Content -Path $cfgPath -Encoding Unicode
+          secedit /configure /db $dbPath /cfg $cfgPath /areas SECURITYPOLICY /quiet
+          gpupdate /force | Out-Null
+          Write-Host "Weak password policy applied: MinLen=6, Complexity=Off, Lockout=0"
+
+    - name: Drop lab-ready marker
+      ansible.builtin.include_tasks: ../common/drop_lab_artifacts.yml
+      vars:
+        lab_id: "IA-M3-L2"

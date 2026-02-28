@@ -1,0 +1,17 @@
+---
+# Global variables for CRC Lab Operations
+
+# Evidence and artifact directories (used by all labs)
+evidence_root: "C:\\Evidence"
+ia_artifacts_dir: "C:\\Evidence\\IA-Artifacts"
+lab_artifacts_root: "C:\\LabArtifacts"
+lab_scripts_dir: "C:\\LabArtifacts\\Scripts"
+lab_scans_dir: "C:\\LabArtifacts\\Scans"
+vault_dir: "C:\\Evidence\\IA-Artifacts\\Vault"
+
+# Seed user password (passed via AWX extra vars or environment)
+seed_user_password: "{{ seed_user_password | default(lookup('env', 'SEED_USER_PASSWORD')) | default('Welcome!2026') }}"
+
+# Domain naming pattern
+# Pod number derived from inventory hostname (e.g., dc01-p01 -> 01)
+# Domain: acs-p{{ pod_id }}.local
