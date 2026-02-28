@@ -1,9 +1,9 @@
 ---
-- name: Roll back CRC pods to course baseline snapshot
-  hosts: proxmox
+- name: "Reset Labs: Roll Back to Clean Baseline"
+  hosts: pve
   gather_facts: false
   vars:
-    snapshot_name: "course-baseline-v1"
+    snapshot_name: "Student-Baseline"
     vm_ids: [200,201,202,203,204,205,206,207,208,209,210,211,212,213,214,215,216,217,218,219]
 
   tasks:
@@ -17,10 +17,14 @@
       failed_when: snap_check.rc != 0
       loop: "{{ vm_ids }}"
 
-    - name: Stop VMs before rollback (safe)
+    - name: Stop VMs before rollback
       ansible.builtin.shell: "qm stop {{ item }} --skiplock 1 || true"
       loop: "{{ vm_ids }}"
       changed_when: false
+
+    - name: Wait for VMs to fully stop
+      ansible.builtin.pause:
+        seconds: 10
 
     - name: Rollback to snapshot
       ansible.builtin.shell: "qm rollback {{ item }} {{ snapshot_name }} --skiplock 1"
@@ -30,6 +34,6 @@
       ansible.builtin.shell: "qm start {{ item }} --skiplock 1"
       loop: "{{ vm_ids }}"
 
-    - name: Wait briefly for boots
+    - name: Wait for VMs to boot
       ansible.builtin.pause:
-        seconds: 20
+        seconds: 30

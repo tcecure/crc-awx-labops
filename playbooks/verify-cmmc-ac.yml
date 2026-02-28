@@ -1,17 +1,17 @@
 ---
-- name: Verify DC labs (Modules 1-4 DC-side)
+- name: "Verify Labs: CMMC Level 1 Access Control (AC) - DCs"
   hosts: crc_dcs
   gather_facts: false
   strategy: free
   roles:
-    - verify_dc
+    - verify_ac_dc
 
-- name: Verify WS labs (Modules 3-4 WS-side)
+- name: "Verify Labs: CMMC Level 1 Access Control (AC) - Workstations"
   hosts: crc_workstations
   gather_facts: false
   strategy: free
   roles:
-    - verify_ws
+    - verify_ac_ws
 
 - name: Consolidate results and produce report
   hosts: localhost
@@ -62,16 +62,17 @@
 
     - name: Write JSON artifact
       ansible.builtin.copy:
-        content: "{{ {'pods': pod_results, 'totals': {'passed': total_passed | int, 'failed': total_failed | int}} | to_nice_json }}"
+        content: "{{ {'course': 'CMMC Level 1 Access Control (AC)', 'pods': pod_results, 'totals': {'passed': total_passed | int, 'failed': total_failed | int}} | to_nice_json }}"
         dest: /runner/artifacts/auto-verify.json
       delegate_to: localhost
 
     - name: Print PASS/FAIL matrix
       ansible.builtin.debug:
         msg: |
+          === CMMC Level 1 Access Control (AC) — Lab Results ===
           {% for i in range(1, 11) %}
           {%- set pad = '%02d' | format(i) -%}
           {%- set pod = pod_results['pod' ~ pad] -%}
-          POD{{ pad }}: M1 [1.1 {{ 'P' if pod.dc['L1.1'].pass | default(false) else 'F' }} | 1.2 {{ 'P' if pod.dc['L1.2'].pass | default(false) else 'F' }} | 1.3 {{ 'P' if pod.dc['L1.3'].pass | default(false) else 'F' }}]  M2 [2.1 {{ 'P' if pod.dc['L2.1'].pass | default(false) else 'F' }} | 2.2 {{ 'P' if pod.dc['L2.2'].pass | default(false) else 'F' }} | 2.3 {{ 'P' if pod.dc['L2.3'].pass | default(false) else 'F' }}]  M3 [3.1 {{ 'P' if pod.dc['L3.1'].pass | default(false) else 'F' }} | 3.2 {{ 'P' if pod.ws['L3.2'].pass | default(false) else 'F' }}]  M4 [4.1 {{ 'P' if pod.dc['L4.1'].pass | default(false) else 'F' }} | 4.2 {{ 'P' if pod.ws['L4.2'].pass | default(false) else 'F' }} | 4.3 {{ 'P' if pod.ws['L4.3'].pass | default(false) else 'F' }}]
+          POD{{ pad }}: L1 [1.1 {{ 'P' if pod.dc['L1.1'].pass | default(false) else 'F' }} | 1.2 {{ 'P' if pod.dc['L1.2'].pass | default(false) else 'F' }} | 1.3 {{ 'P' if pod.dc['L1.3'].pass | default(false) else 'F' }}]  L2 [2.1 {{ 'P' if pod.dc['L2.1'].pass | default(false) else 'F' }} | 2.2 {{ 'P' if pod.dc['L2.2'].pass | default(false) else 'F' }} | 2.3 {{ 'P' if pod.dc['L2.3'].pass | default(false) else 'F' }}]  L3 [3.1 {{ 'P' if pod.dc['L3.1'].pass | default(false) else 'F' }} | 3.2 {{ 'P' if pod.ws['L3.2'].pass | default(false) else 'F' }} | 3.3 {{ 'P' if pod.dc['L3.3'].pass | default(false) else 'F' }}]  L4 [4.1 {{ 'P' if pod.dc['L4.1'].pass | default(false) else 'F' }} | 4.2 {{ 'P' if pod.ws['L4.2'].pass | default(false) else 'F' }} | 4.3 {{ 'P' if pod.ws['L4.3'].pass | default(false) else 'F' }}]
           {% endfor %}
           TOTAL: passed={{ total_passed }} failed={{ total_failed }}
