@@ -1,0 +1,28 @@
+---
+- name: "Seed IA M3-L1: Password Policy Report Missing (Evidence-Only)"
+  hosts: crc_dcs
+  gather_facts: true
+  strategy: free
+  tags: [ia, seed, m3]
+
+  tasks:
+    - name: Include common OUs
+      ansible.builtin.include_tasks: ../common/ensure_ad_ous.yml
+
+    - name: Include artifact directories
+      ansible.builtin.include_tasks: ../common/ensure_artifacts_dirs.yml
+
+    - name: Ensure PasswordPolicy_Report.html does NOT exist
+      ansible.windows.win_file:
+        path: "{{ ia_artifacts_dir }}\\PasswordPolicy_Report.html"
+        state: absent
+
+    - name: Ensure M3-L1.txt evidence file does NOT exist
+      ansible.windows.win_file:
+        path: "{{ evidence_root }}\\M3-L1.txt"
+        state: absent
+
+    - name: Drop lab-ready marker
+      ansible.builtin.include_tasks: ../common/drop_lab_artifacts.yml
+      vars:
+        lab_id: "IA-M3-L1"
