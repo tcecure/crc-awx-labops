@@ -8,12 +8,12 @@
   ansible.builtin.set_fact:
     domain_name: "{{ domain_prefix }}.local"
 
-- name: "M1 L1.1 - Check ex.employee exists, disabled, not in Finance"
+- name: "L1.1 - Check ex.employee exists, disabled, not in Finance"
   ansible.windows.win_powershell:
     script: |
       try {
         $u = Get-ADUser -Identity "ex.employee" -Properties Enabled,MemberOf -ErrorAction Stop
-        $inFinance = ($u.MemberOf | ForEach-Object { (Get-ADGroup $_).Name }) -contains "Finance"
+        $inFinance = ($u.MemberOf | ForEach-Object { (Get-ADGroup $_).Name }) -contains "SG-ACS-Finance"
         if ($u -and (-not $u.Enabled) -and (-not $inFinance)) {
           @{ pass = $true; reason = "ex.employee exists, disabled, not in Finance" }
         } else {
@@ -25,16 +25,16 @@
       } catch {
         @{ pass = $false; reason = "ex.employee not found: $_" }
       }
-  register: m1_l11
+  register: v_l11
 
-- name: "M1 L1.2 - Check hr.user1 not in Finance, in HR"
+- name: "L1.2 - Check hr.user1 not in Finance, in HR"
   ansible.windows.win_powershell:
     script: |
       try {
         $u = Get-ADUser -Identity "hr.user1" -Properties MemberOf -ErrorAction Stop
         $groups = $u.MemberOf | ForEach-Object { (Get-ADGroup $_).Name }
-        $inFinance = $groups -contains "Finance"
-        $inHR = $groups -contains "HR"
+        $inFinance = $groups -contains "SG-ACS-Finance"
+        $inHR = $groups -contains "SG-ACS-HR"
         if ((-not $inFinance) -and $inHR) {
           @{ pass = $true; reason = "hr.user1 not in Finance, in HR" }
         } else {
@@ -46,9 +46,9 @@
       } catch {
         @{ pass = $false; reason = "hr.user1 not found: $_" }
       }
-  register: m1_l12
+  register: v_l12
 
-- name: "M1 L1.3 - Check it.helpdesk not in Domain Admins"
+- name: "L1.3 - Check it.helpdesk not in Domain Admins"
   ansible.windows.win_powershell:
     script: |
       try {
@@ -63,15 +63,14 @@
       } catch {
         @{ pass = $false; reason = "it.helpdesk not found: $_" }
       }
-  register: m1_l13
+  register: v_l13
 
-- name: "M2 L2.1 - Check new.user1 exists, enabled, correct OU, groups"
+- name: "L2.1 - Check new.user1 exists, enabled"
   ansible.windows.win_powershell:
     script: |
       try {
         $u = Get-ADUser -Identity "new.user1" -Properties Enabled,DistinguishedName,MemberOf -ErrorAction Stop
         $enabled = $u.Enabled
-        $groups = $u.MemberOf | ForEach-Object { (Get-ADGroup $_).Name }
         if ($u -and $enabled) {
           @{ pass = $true; reason = "new.user1 exists, enabled, DN=$($u.DistinguishedName)" }
         } else {
@@ -80,16 +79,16 @@
       } catch {
         @{ pass = $false; reason = "new.user1 not found: $_" }
       }
-  register: m2_l21
+  register: v_l21
 
-- name: "M2 L2.2 - Check consult.user1 removed from Consulting, added to Sales"
+- name: "L2.2 - Check consult.user1 removed from Consulting, added to Sales"
   ansible.windows.win_powershell:
     script: |
       try {
         $u = Get-ADUser -Identity "consult.user1" -Properties MemberOf -ErrorAction Stop
         $groups = $u.MemberOf | ForEach-Object { (Get-ADGroup $_).Name }
-        $inConsulting = $groups -contains "Consulting"
-        $inSales = $groups -contains "Sales"
+        $inConsulting = $groups -contains "SG-ACS-Consulting"
+        $inSales = $groups -contains "SG-ACS-Sales"
         if ((-not $inConsulting) -and $inSales) {
           @{ pass = $true; reason = "consult.user1 not in Consulting, in Sales" }
         } else {
@@ -101,9 +100,9 @@
       } catch {
         @{ pass = $false; reason = "consult.user1 not found: $_" }
       }
-  register: m2_l22
+  register: v_l22
 
-- name: "M2 L2.3 - Check fin.user1 disabled, in Terminated OU, stripped groups"
+- name: "L2.3 - Check fin.user1 disabled, in Terminated OU, stripped groups"
   ansible.windows.win_powershell:
     script: |
       try {
@@ -124,9 +123,9 @@
       } catch {
         @{ pass = $false; reason = "fin.user1 not found: $_" }
       }
-  register: m2_l23
+  register: v_l23
 
-- name: "M3 L3.1 - Check sales.user1 DN contains correct OU"
+- name: "L3.1 - Check sales.user1 in correct Sales OU"
   ansible.windows.win_powershell:
     script: |
       try {
@@ -140,16 +139,38 @@
       } catch {
         @{ pass = $false; reason = "sales.user1 not found: $_" }
       }
-  register: m3_l31
+  register: v_l31
 
-- name: "M3 L3.3 - Delegation check (not implemented)"
-  ansible.builtin.set_fact:
-    m3_l33_result:
-      output:
-        - pass: false
-          reason: "not implemented"
+- name: "L3.3 - Check delegation (password reset on Staff OU)"
+  ansible.windows.win_powershell:
+    script: |
+      try {
+        $domainDN = (Get-ADDomain).DistinguishedName
+        $staffOU = "OU=Staff,OU=Users,OU=ACS,$domainDN"
+        $acl = Get-Acl "AD:\$staffOU"
+        $helpdesk = Get-ADUser "it.helpdesk" -ErrorAction Stop
+        $helpdeskSID = $helpdesk.SID
+        $resetPwdGuid = [guid]"00299570-246d-11d0-a768-00aa006e0529"
+        $hasDelegation = $false
+        foreach ($ace in $acl.Access) {
+          if ($ace.IdentityReference -match "it\.helpdesk" -or $ace.IdentityReference -match $helpdeskSID) {
+            if ($ace.ObjectType -eq $resetPwdGuid -and $ace.AccessControlType -eq "Allow") {
+              $hasDelegation = $true
+              break
+            }
+          }
+        }
+        if ($hasDelegation) {
+          @{ pass = $true; reason = "it.helpdesk has password reset delegation on Staff OU" }
+        } else {
+          @{ pass = $false; reason = "it.helpdesk missing password reset delegation on Staff OU" }
+        }
+      } catch {
+        @{ pass = $false; reason = "Delegation check error: $_" }
+      }
+  register: v_l33
 
-- name: "M4 L4.1 - Check contractor.user1 disabled or expiration set"
+- name: "L4.1 - Check contractor.user1 disabled or expiration set"
   ansible.windows.win_powershell:
     script: |
       try {
@@ -167,17 +188,17 @@
       } catch {
         @{ pass = $false; reason = "contractor.user1 not found: $_" }
       }
-  register: m4_l41
+  register: v_l41
 
 - name: Consolidate DC results
   ansible.builtin.set_fact:
     dc_results:
-      L1.1: "{{ m1_l11.output[0] }}"
-      L1.2: "{{ m1_l12.output[0] }}"
-      L1.3: "{{ m1_l13.output[0] }}"
-      L2.1: "{{ m2_l21.output[0] }}"
-      L2.2: "{{ m2_l22.output[0] }}"
-      L2.3: "{{ m2_l23.output[0] }}"
-      L3.1: "{{ m3_l31.output[0] }}"
-      L3.3: "{{ m3_l33_result.output[0] }}"
-      L4.1: "{{ m4_l41.output[0] }}"
+      L1.1: "{{ v_l11.output[0] }}"
+      L1.2: "{{ v_l12.output[0] }}"
+      L1.3: "{{ v_l13.output[0] }}"
+      L2.1: "{{ v_l21.output[0] }}"
+      L2.2: "{{ v_l22.output[0] }}"
+      L2.3: "{{ v_l23.output[0] }}"
+      L3.1: "{{ v_l31.output[0] }}"
+      L3.3: "{{ v_l33.output[0] }}"
+      L4.1: "{{ v_l41.output[0] }}"

@@ -1,0 +1,16 @@
+---
+- name: "Seed Labs: CMMC Level 1 Access Control (AC)"
+  hosts: crc_dcs
+  gather_facts: false
+  strategy: free
+  vars:
+    seed_user_password: "{{ seed_user_password | default(lookup('env', 'SEED_USER_PASSWORD')) }}"
+  roles:
+    - seed_ac_dc
+
+- name: "Seed Labs: CMMC Level 1 Access Control (AC) - Workstations"
+  hosts: crc_workstations
+  gather_facts: false
+  strategy: free
+  roles:
+    - seed_ac_ws

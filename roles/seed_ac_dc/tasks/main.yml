@@ -1,0 +1,30 @@
+---
+- name: Copy ACS baseline seed script
+  ansible.windows.win_copy:
+    src: seed-baseline.ps1
+    dest: C:\Windows\Temp\seed-baseline.ps1
+
+- name: Run ACS baseline seed (OUs, groups, users)
+  ansible.windows.win_shell: >
+    powershell.exe -ExecutionPolicy Bypass -File C:\Windows\Temp\seed-baseline.ps1
+    -SeedPassword "{{ seed_user_password }}"
+  register: baseline_result
+
+- name: Show baseline result
+  ansible.builtin.debug:
+    msg: "{{ baseline_result.stdout_lines | default([]) }}"
+
+- name: Copy DC lab seed script
+  ansible.windows.win_copy:
+    src: apply-dc-lab.ps1
+    dest: C:\Windows\Temp\apply-dc-lab.ps1
+
+- name: Apply all DC lab seeds
+  ansible.windows.win_shell: >
+    powershell.exe -ExecutionPolicy Bypass -File C:\Windows\Temp\apply-dc-lab.ps1
+    -LabId "ALL" -SeedPassword "{{ seed_user_password }}"
+  register: dc_seed_result
+
+- name: Show DC seed results
+  ansible.builtin.debug:
+    msg: "{{ dc_seed_result.stdout_lines | default([]) }}"
