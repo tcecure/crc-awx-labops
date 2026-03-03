@@ -1,6 +1,6 @@
 ---
 - name: "Seed IA M4-L1: Default Credentials Remediation (Artifact-Based)"
-  hosts: crc_workstations
+  hosts: crc_dcs
   gather_facts: true
   strategy: free
   tags: [ia, seed, m4]

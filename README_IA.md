@@ -12,14 +12,14 @@
 | IA-M1-L2 | M1: User Identification | Zombie Account | DC | `tom.davis` enabled in Sales OU with group membership | Disable account; move to Terminated_Users OU; strip groups |
 | IA-M1-L3 | M1: User Identification | Generic Accounts | DC | `Admin`, `User1`, `Test` accounts enabled; no inventory CSV | Disable/remove generic accounts; create Authorized_User_Inventory.csv |
 | IA-M2-L1 | M2: Non-Person Entity ID | Scheduled Task as Human | DC | "ACS Nightly Backup" runs as `s.jenkins`; `svc_backup` absent | Create `svc_backup`; change task principal to service account |
-| IA-M2-L2 | M2: Non-Person Entity ID | Rogue Device Artifact | WS | Authorized_Device_List.csv present; rogue MAC in hint file; no config record | Add rogue MAC as UNAUTHORIZED in device list; create Device_Config_Record.csv |
+| IA-M2-L2 | M2: Non-Person Entity ID | Rogue Device Artifact | DC | Authorized_Device_List.csv present; rogue MAC in hint file; no config record | Add rogue MAC as UNAUTHORIZED in device list; create Device_Config_Record.csv |
 | IA-M2-L3 | M2: Non-Person Entity ID | Service Account Matrix | DC | `svc_backup`, `svc_web`, `svc_print` exist with empty descriptions; no matrix | Populate AD descriptions; create Service_Account_Matrix.csv |
 | IA-M3-L1 | M3: User Auth Management | Password Policy Report | DC | Baseline password policy; no report or evidence files | Export PasswordPolicy_Report.html; create M3-L1.txt evidence |
 | IA-M3-L2 | M3: User Auth Management | Weak Password Policy | DC | MinLen=6, Complexity=Off, Lockout=0 | Set MinLen=12, Complexity=On, Lockout=10 |
 | IA-M3-L3 | M3: User Auth Management | Must Change Password | DC | `d.chen` enabled; must-change flag not set | Reset password; set "must change at next logon"; create incident evidence |
-| IA-M4-L1 | M4: Defaults & Process Auth | Default Credentials | WS | Hardening_Standard.txt missing default-password clause | Add clause about changing default passwords; write remediation summary |
-| IA-M4-L2 | M4: Defaults & Process Auth | SNMP Public String | WS | Scan report contains "SNMP community string is public"; no config record | Create finding; update Device_Config_Record.csv; update hardening standard |
-| IA-M4-L3 | M4: Defaults & Process Auth | Script Contains password123 | WS | `db_connect.py` has hardcoded `password123`; no vault artifacts | Replace with VAULT_REF; create Vault_Entries.txt; write remediation summary |
+| IA-M4-L1 | M4: Defaults & Process Auth | Default Credentials | DC | Hardening_Standard.txt missing default-password clause | Add clause about changing default passwords; write remediation summary |
+| IA-M4-L2 | M4: Defaults & Process Auth | SNMP Public String | DC | Scan report contains "SNMP community string is public"; no config record | Create finding; update Device_Config_Record.csv; update hardening standard |
+| IA-M4-L3 | M4: Defaults & Process Auth | Script Contains password123 | DC | `db_connect.py` has hardcoded `password123`; no vault artifacts | Replace with VAULT_REF; create Vault_Entries.txt; write remediation summary |
 
 ## Directory Structure
 
@@ -78,7 +78,7 @@ All playbooks support these tags for selective execution:
 
 ```bash
 ansible-playbook playbooks/ia/seed/seed_ia_m1_l1.yml --limit dc01-p01
-ansible-playbook playbooks/ia/seed/seed_ia_m2_l2.yml --limit ws01-p03
+ansible-playbook playbooks/ia/seed/seed_ia_m2_l2.yml --limit dc01-p03
 ```
 
 ## Evidence Directories

@@ -1,6 +1,6 @@
 ---
 - name: "Seed IA M2-L2: Rogue Device Artifact Present"
-  hosts: crc_workstations
+  hosts: crc_dcs
   gather_facts: true
   strategy: free
   tags: [ia, seed, m2]
