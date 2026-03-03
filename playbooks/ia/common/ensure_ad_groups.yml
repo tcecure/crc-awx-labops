@@ -1,0 +1,19 @@
+---
+- name: Ensure standard security groups exist
+  ansible.windows.win_powershell:
+    script: |
+      Import-Module ActiveDirectory
+      $domainDN = (Get-ADDomain).DistinguishedName
+      $ouSecGroups = "OU=Security,OU=Groups,OU=ACS,$domainDN"
+      $groups = @(
+        "SG-ACS-Executive","SG-ACS-IT","SG-ACS-Finance","SG-ACS-HR",
+        "SG-ACS-Consulting","SG-ACS-Sales","SG-ACS-IT-Admins",
+        "SG-ACS-Helpdesk","SG-ACS-All-Staff","SG-ACS-Workstation-Admins"
+      )
+      foreach ($g in $groups) {
+        if (-not (Get-ADGroup -Filter "Name -eq '$g'" -ErrorAction SilentlyContinue)) {
+          New-ADGroup -Name $g -SamAccountName $g -GroupScope Global -GroupCategory Security -Path $ouSecGroups
+        }
+      }
+      Write-Host "Security groups verified"
+  tags: [ia, seed, groups]

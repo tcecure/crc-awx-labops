@@ -1,0 +1,57 @@
+---
+- name: "Seed IA M2-L3: Service Account Matrix Required + AD Descriptions Empty"
+  hosts: crc_dcs
+  gather_facts: true
+  strategy: free
+  tags: [ia, seed, m2]
+
+  tasks:
+    - name: Include common OUs
+      ansible.builtin.include_tasks: ../common/ensure_ad_ous.yml
+
+    - name: Include common groups
+      ansible.builtin.include_tasks: ../common/ensure_ad_groups.yml
+
+    - name: Include artifact directories
+      ansible.builtin.include_tasks: ../common/ensure_artifacts_dirs.yml
+
+    - name: Derive pod number
+      ansible.builtin.set_fact:
+        pod_id: "{{ inventory_hostname | regex_search('p(\\d+)$', '\\1') | first }}"
+
+    - name: Ensure service accounts exist with empty descriptions
+      ansible.windows.win_powershell:
+        script: |
+          Import-Module ActiveDirectory
+          $domainDN = (Get-ADDomain).DistinguishedName
+          $ouUsers = "OU=Users,OU=ACS,$domainDN"
+          $pw = ConvertTo-SecureString "{{ seed_user_password }}" -AsPlainText -Force
+          $svcAccounts = @(
+            @{Sam="svc_backup"; Name="svc_backup"; Display="svc_backup"},
+            @{Sam="svc_web";    Name="svc_web";    Display="svc_web"},
+            @{Sam="svc_print";  Name="svc_print";  Display="svc_print"}
+          )
+          foreach ($svc in $svcAccounts) {
+            $u = Get-ADUser -Filter "SamAccountName -eq '$($svc.Sam)'" -ErrorAction SilentlyContinue
+            if ($u) {
+              Enable-ADAccount $svc.Sam
+              Set-ADUser $svc.Sam -Description ""
+              Write-Host "$($svc.Sam) exists, ensured enabled with empty description"
+            } else {
+              New-ADUser -SamAccountName $svc.Sam -Name $svc.Name -DisplayName $svc.Display `
+                -UserPrincipalName "$($svc.Sam)@$((Get-ADDomain).DNSRoot)" `
+                -Path $ouUsers -AccountPassword $pw -Enabled $true `
+                -PasswordNeverExpires $true -ChangePasswordAtLogon $false -Description ""
+              Write-Host "Created $($svc.Sam) with empty description"
+            }
+          }
+
+    - name: Ensure Service_Account_Matrix.csv does NOT exist
+      ansible.windows.win_file:
+        path: "{{ ia_artifacts_dir }}\\Service_Account_Matrix.csv"
+        state: absent
+
+    - name: Drop lab-ready marker
+      ansible.builtin.include_tasks: ../common/drop_lab_artifacts.yml
+      vars:
+        lab_id: "IA-M2-L3"

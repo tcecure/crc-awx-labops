@@ -1,0 +1,64 @@
+---
+- name: "Seed IA M1-L2: Zombie Account (Terminated User Still Enabled)"
+  hosts: crc_dcs
+  gather_facts: true
+  strategy: free
+  tags: [ia, seed, m1]
+
+  tasks:
+    - name: Include common OUs
+      ansible.builtin.include_tasks: ../common/ensure_ad_ous.yml
+
+    - name: Include common groups
+      ansible.builtin.include_tasks: ../common/ensure_ad_groups.yml
+
+    - name: Include artifact directories
+      ansible.builtin.include_tasks: ../common/ensure_artifacts_dirs.yml
+
+    - name: Derive pod number
+      ansible.builtin.set_fact:
+        pod_id: "{{ inventory_hostname | regex_search('p(\\d+)$', '\\1') | first }}"
+
+    - name: Ensure tom.davis exists enabled in Sales OU with group membership
+      ansible.windows.win_powershell:
+        script: |
+          Import-Module ActiveDirectory
+          $domainDN = (Get-ADDomain).DistinguishedName
+          $ouSales = "OU=Sales,OU=Departments,OU=ACS,$domainDN"
+          $pw = ConvertTo-SecureString "{{ seed_user_password }}" -AsPlainText -Force
+          $sam = "tom.davis"
+          $u = Get-ADUser -Filter "SamAccountName -eq '$sam'" -ErrorAction SilentlyContinue
+          if ($u) {
+            Enable-ADAccount $sam
+            Move-ADObject -Identity $u.DistinguishedName -TargetPath $ouSales -ErrorAction SilentlyContinue
+            Write-Host "tom.davis ensured enabled and in Sales OU"
+          } else {
+            New-ADUser -SamAccountName $sam -Name "Tom Davis" -GivenName "Tom" -Surname "Davis" `
+              -DisplayName "Tom Davis" `
+              -UserPrincipalName "$sam@$((Get-ADDomain).DNSRoot)" `
+              -Path $ouSales -AccountPassword $pw -Enabled $true `
+              -PasswordNeverExpires $true -ChangePasswordAtLogon $false
+            Write-Host "Created tom.davis in Sales OU"
+          }
+
+    - name: Ensure tom.davis is a member of SG-ACS-Sales
+      ansible.windows.win_powershell:
+        script: |
+          Import-Module ActiveDirectory
+          Add-ADGroupMember -Identity "SG-ACS-Sales" -Members "tom.davis" -ErrorAction SilentlyContinue
+          Write-Host "tom.davis added to SG-ACS-Sales"
+
+    - name: Ensure Terminated_Users OU exists (student moves user here)
+      ansible.windows.win_powershell:
+        script: |
+          Import-Module ActiveDirectory
+          $domainDN = (Get-ADDomain).DistinguishedName
+          $ouTerminated = "OU=Terminated_Users,OU=Users,OU=ACS,$domainDN"
+          try { Get-ADOrganizationalUnit -Identity $ouTerminated -ErrorAction Stop | Out-Null }
+          catch { New-ADOrganizationalUnit -Name "Terminated_Users" -Path "OU=Users,OU=ACS,$domainDN" }
+          Write-Host "Terminated_Users OU verified"
+
+    - name: Drop lab-ready marker
+      ansible.builtin.include_tasks: ../common/drop_lab_artifacts.yml
+      vars:
+        lab_id: "IA-M1-L2"

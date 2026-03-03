@@ -1,0 +1,46 @@
+---
+- name: Derive pod number and domain
+  ansible.builtin.set_fact:
+    pod_id: "{{ inventory_hostname | regex_search('p(\\d+)$', '\\1') | first }}"
+
+- name: Set domain variables
+  ansible.builtin.set_fact:
+    domain_name: "acs-p{{ pod_id }}.local"
+    domain_dn: "DC=acs-p{{ pod_id }},DC=local"
+
+- name: Ensure OU=ACS exists
+  ansible.windows.win_powershell:
+    script: |
+      Import-Module ActiveDirectory
+      $domainDN = (Get-ADDomain).DistinguishedName
+      $ouACS = "OU=ACS,$domainDN"
+      try { Get-ADOrganizationalUnit -Identity $ouACS -ErrorAction Stop | Out-Null }
+      catch { New-ADOrganizationalUnit -Name "ACS" -Path $domainDN }
+      $ouUsers = "OU=Users,$ouACS"
+      try { Get-ADOrganizationalUnit -Identity $ouUsers -ErrorAction Stop | Out-Null }
+      catch { New-ADOrganizationalUnit -Name "Users" -Path $ouACS }
+      $ouStaff = "OU=Staff,$ouUsers"
+      try { Get-ADOrganizationalUnit -Identity $ouStaff -ErrorAction Stop | Out-Null }
+      catch { New-ADOrganizationalUnit -Name "Staff" -Path $ouUsers }
+      $ouAdmins = "OU=Admins,$ouUsers"
+      try { Get-ADOrganizationalUnit -Identity $ouAdmins -ErrorAction Stop | Out-Null }
+      catch { New-ADOrganizationalUnit -Name "Admins" -Path $ouUsers }
+      $ouTerminated = "OU=Terminated_Users,$ouUsers"
+      try { Get-ADOrganizationalUnit -Identity $ouTerminated -ErrorAction Stop | Out-Null }
+      catch { New-ADOrganizationalUnit -Name "Terminated_Users" -Path $ouUsers }
+      $ouDepartments = "OU=Departments,$ouACS"
+      try { Get-ADOrganizationalUnit -Identity $ouDepartments -ErrorAction Stop | Out-Null }
+      catch { New-ADOrganizationalUnit -Name "Departments" -Path $ouACS }
+      foreach ($dept in @("Executive","IT","Finance","HR","Consulting","Sales")) {
+        $ouDept = "OU=$dept,$ouDepartments"
+        try { Get-ADOrganizationalUnit -Identity $ouDept -ErrorAction Stop | Out-Null }
+        catch { New-ADOrganizationalUnit -Name $dept -Path $ouDepartments }
+      }
+      $ouGroups = "OU=Groups,$ouACS"
+      try { Get-ADOrganizationalUnit -Identity $ouGroups -ErrorAction Stop | Out-Null }
+      catch { New-ADOrganizationalUnit -Name "Groups" -Path $ouACS }
+      $ouSecurity = "OU=Security,$ouGroups"
+      try { Get-ADOrganizationalUnit -Identity $ouSecurity -ErrorAction Stop | Out-Null }
+      catch { New-ADOrganizationalUnit -Name "Security" -Path $ouGroups }
+      Write-Host "OUs verified"
+  tags: [ia, seed, ous]

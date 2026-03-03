@@ -1,0 +1,31 @@
+ACS Corporation — System Hardening Standard
+Document Version: 1.2
+Last Updated: 2026-01-10
+Domain: acs-p{{ pod_id }}.local
+
+1. OPERATING SYSTEM HARDENING
+   - All servers must run supported OS versions
+   - Automatic updates must be enabled
+   - Unnecessary services must be disabled
+
+2. NETWORK SECURITY
+   - Firewalls must be enabled on all endpoints
+   - Only required ports shall be open
+   - SNMP must use complex community strings
+
+3. ACCOUNT SECURITY
+   - All accounts must have unique passwords
+   - Service accounts must use managed passwords
+   - Inactive accounts must be disabled after 30 days
+
+4. LOGGING AND MONITORING
+   - All authentication events must be logged
+   - Logs must be retained for 90 days minimum
+   - Failed login attempts must trigger alerts after 5 failures
+
+5. PHYSICAL SECURITY
+   - Server rooms must use badge access
+   - Visitor access must be logged
+
+NOTE: This document is incomplete. Additional hardening requirements
+may need to be added per CMMC Level 1 controls.

@@ -1,0 +1,73 @@
+---
+- name: "Seed IA M1-L1: Shared Reception Account"
+  hosts: crc_dcs
+  gather_facts: true
+  strategy: free
+  tags: [ia, seed, m1]
+
+  tasks:
+    - name: Include common OUs
+      ansible.builtin.include_tasks: ../common/ensure_ad_ous.yml
+
+    - name: Include common groups
+      ansible.builtin.include_tasks: ../common/ensure_ad_groups.yml
+
+    - name: Include artifact directories
+      ansible.builtin.include_tasks: ../common/ensure_artifacts_dirs.yml
+
+    - name: Derive pod number
+      ansible.builtin.set_fact:
+        pod_id: "{{ inventory_hostname | regex_search('p(\\d+)$', '\\1') | first }}"
+
+    - name: Ensure FrontDesk user exists and is enabled
+      ansible.windows.win_powershell:
+        script: |
+          Import-Module ActiveDirectory
+          $domainDN = (Get-ADDomain).DistinguishedName
+          $ouStaff = "OU=Staff,OU=Users,OU=ACS,$domainDN"
+          $pw = ConvertTo-SecureString "{{ seed_user_password }}" -AsPlainText -Force
+          $sam = "FrontDesk"
+          if (-not (Get-ADUser -Filter "SamAccountName -eq '$sam'" -ErrorAction SilentlyContinue)) {
+            New-ADUser -SamAccountName $sam -Name "Front Desk" -DisplayName "Front Desk" `
+              -UserPrincipalName "$sam@$((Get-ADDomain).DNSRoot)" `
+              -Path $ouStaff -AccountPassword $pw -Enabled $true `
+              -PasswordNeverExpires $true -ChangePasswordAtLogon $false
+            Write-Host "Created FrontDesk user"
+          } else {
+            Enable-ADAccount $sam -ErrorAction SilentlyContinue
+            Write-Host "FrontDesk user already exists, ensured enabled"
+          }
+
+    - name: Ensure k.omalley does NOT exist
+      ansible.windows.win_powershell:
+        script: |
+          Import-Module ActiveDirectory
+          $u = Get-ADUser -Filter "SamAccountName -eq 'k.omalley'" -ErrorAction SilentlyContinue
+          if ($u) {
+            Remove-ADUser -Identity $u -Confirm:$false
+            Write-Host "Removed k.omalley"
+          } else {
+            Write-Host "k.omalley already absent"
+          }
+
+    - name: Ensure temp.agency01 does NOT exist
+      ansible.windows.win_powershell:
+        script: |
+          Import-Module ActiveDirectory
+          $u = Get-ADUser -Filter "SamAccountName -eq 'temp.agency01'" -ErrorAction SilentlyContinue
+          if ($u) {
+            Remove-ADUser -Identity $u -Confirm:$false
+            Write-Host "Removed temp.agency01"
+          } else {
+            Write-Host "temp.agency01 already absent"
+          }
+
+    - name: Ensure M1-L1 evidence file does NOT exist
+      ansible.windows.win_file:
+        path: "{{ evidence_root }}\\M1-L1.txt"
+        state: absent
+
+    - name: Drop lab-ready marker
+      ansible.builtin.include_tasks: ../common/drop_lab_artifacts.yml
+      vars:
+        lab_id: "IA-M1-L1"
