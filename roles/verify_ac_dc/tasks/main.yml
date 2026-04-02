@@ -190,7 +190,67 @@
       }
   register: v_l41
 
-- name: Consolidate DC results
+# --- Converted from workstation labs (now run on DC) ---
+
+- name: "L3.2 - Check Administrators contains SG-ACS-IT-Admins and not SG-ACS-All-Staff"
+  ansible.windows.win_powershell:
+    script: |
+      try {
+        $admins = Get-ADGroupMember -Identity "Administrators" -ErrorAction Stop | Select-Object -ExpandProperty Name
+        $hasITAdmins = $admins -contains "SG-ACS-IT-Admins"
+        $hasAllStaff = $admins -contains "SG-ACS-All-Staff"
+        if ($hasITAdmins -and (-not $hasAllStaff)) {
+          @{ pass = $true; reason = "SG-ACS-IT-Admins in Administrators, SG-ACS-All-Staff removed" }
+        } else {
+          $reasons = @()
+          if (-not $hasITAdmins) { $reasons += "SG-ACS-IT-Admins missing from Administrators" }
+          if ($hasAllStaff) { $reasons += "SG-ACS-All-Staff still in Administrators" }
+          @{ pass = $false; reason = ($reasons -join ", ") }
+        }
+      } catch {
+        @{ pass = $false; reason = "Administrators group check error: $_" }
+      }
+  register: v_l32
+
+- name: "L4.2 - Check C:\\CyberLab\\Lab4-2\\review.csv exists and non-empty"
+  ansible.windows.win_powershell:
+    script: |
+      $path = "C:\CyberLab\Lab4-2\review.csv"
+      if (Test-Path $path) {
+        $size = (Get-Item $path).Length
+        if ($size -gt 0) {
+          @{ pass = $true; reason = "review.csv exists, size=${size} bytes" }
+        } else {
+          @{ pass = $false; reason = "review.csv exists but is empty" }
+        }
+      } else {
+        @{ pass = $false; reason = "review.csv not found at $path" }
+      }
+  register: v_l42
+
+- name: "L4.3 - Check C:\\CyberLab\\Lab4-3\\ exists with required files non-empty"
+  ansible.windows.win_powershell:
+    script: |
+      $dir = "C:\CyberLab\Lab4-3"
+      if (Test-Path $dir) {
+        $files = Get-ChildItem -Path $dir -File
+        if ($files.Count -gt 0) {
+          $nonEmpty = @($files | Where-Object { $_.Length -gt 0 })
+          $empty = @($files | Where-Object { $_.Length -eq 0 })
+          if ($empty.Count -eq 0) {
+            @{ pass = $true; reason = "Lab4-3 dir exists with $($nonEmpty.Count) non-empty file(s)" }
+          } else {
+            @{ pass = $false; reason = "Lab4-3 has $($empty.Count) empty file(s): $($empty.Name -join ',')" }
+          }
+        } else {
+          @{ pass = $false; reason = "Lab4-3 directory exists but contains no files" }
+        }
+      } else {
+        @{ pass = $false; reason = "Lab4-3 directory not found at $dir" }
+      }
+  register: v_l43
+
+- name: Consolidate all results (DC + converted WS)
   ansible.builtin.set_fact:
     dc_results:
       L1.1: "{{ v_l11.output[0] }}"
@@ -200,5 +260,8 @@
       L2.2: "{{ v_l22.output[0] }}"
       L2.3: "{{ v_l23.output[0] }}"
       L3.1: "{{ v_l31.output[0] }}"
+      L3.2: "{{ v_l32.output[0] }}"
       L3.3: "{{ v_l33.output[0] }}"
       L4.1: "{{ v_l41.output[0] }}"
+      L4.2: "{{ v_l42.output[0] }}"
+      L4.3: "{{ v_l43.output[0] }}"
