@@ -3,8 +3,8 @@ param(
   [ValidateSet(
     "L1.1","L1.2","L1.3",
     "L2.1","L2.2","L2.3",
-    "L3.1","L3.3",
-    "L4.1",
+    "L3.1","L3.2","L3.3",
+    "L4.1","L4.2","L4.3",
     "ALL"
   )]
   [string]$LabId,
@@ -95,13 +95,43 @@ function Apply-Lab($id) {
       Set-ADUser "contractor.user1" -Description "L4.1: Contractor access should be disabled/expired per policy" -ErrorAction SilentlyContinue
       Write-Host "  L4.1 seeded: contractor.user1 enabled with no expiry"
     }
+
+    # --- Converted from workstation labs (now run on DC) ---
+
+    "L3.2" {
+      # OLD (WS): Add SG-ACS-All-Staff to local Administrators
+      # NEW (DC): Add SG-ACS-All-Staff to Administrators AD group
+      Add-ADGroupMember -Identity "Administrators" -Members "SG-ACS-All-Staff" -ErrorAction SilentlyContinue
+      Write-Host "  L3.2 seeded: SG-ACS-All-Staff added to Administrators group"
+    }
+
+    "L4.2" {
+      # OLD (WS): Create empty C:\LabEvidence\Lab4-2
+      # NEW (DC): Use C:\CyberLab scope
+      $cyberLab = "C:\CyberLab"
+      New-Item -ItemType Directory -Path $cyberLab -Force | Out-Null
+      Remove-Item -Recurse -Force "$cyberLab\Lab4-2" -ErrorAction SilentlyContinue
+      New-Item -ItemType Directory -Path "$cyberLab\Lab4-2" -Force | Out-Null
+      Write-Host "  L4.2 seeded: Lab4-2 evidence folder created (empty) under C:\CyberLab"
+    }
+
+    "L4.3" {
+      # OLD (WS): Create C:\LabEvidence\Lab4-3 with placeholder files
+      # NEW (DC): Use C:\CyberLab scope
+      $cyberLab = "C:\CyberLab"
+      New-Item -ItemType Directory -Path $cyberLab -Force | Out-Null
+      Remove-Item -Recurse -Force "$cyberLab\Lab4-3" -ErrorAction SilentlyContinue
+      New-Item -ItemType Directory -Path "$cyberLab\Lab4-3" -Force | Out-Null
+      Set-Content -Path "$cyberLab\Lab4-3\enabled_users.csv" -Value "placeholder"
+      Write-Host "  L4.3 seeded: Lab4-3 evidence folder created (incomplete files) under C:\CyberLab"
+    }
   }
 }
 
 if ($LabId -eq "ALL") {
-  $allLabs = @("L1.1","L1.2","L1.3","L2.1","L2.2","L2.3","L3.1","L3.3","L4.1")
+  $allLabs = @("L1.1","L1.2","L1.3","L2.1","L2.2","L2.3","L3.1","L3.2","L3.3","L4.1","L4.2","L4.3")
   foreach ($lab in $allLabs) { Apply-Lab $lab }
-  Write-Host "All DC labs seeded on $((Get-ADDomain).DNSRoot)"
+  Write-Host "All labs seeded on $((Get-ADDomain).DNSRoot) (DC-only mode)"
 } else {
   Apply-Lab $LabId
   Write-Host "Lab $LabId seeded on $((Get-ADDomain).DNSRoot)"

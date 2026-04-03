@@ -1,0 +1,6 @@
+---
+- name: "Drop lab-ready marker for {{ lab_id }}"
+  ansible.windows.win_copy:
+    content: "Lab {{ lab_id }} seeded at {{ ansible_date_time.iso8601 | default('unknown') }}. Students must remediate to PASS.\r\n"
+    dest: "{{ evidence_root }}\\_LAB_READY_{{ lab_id }}.txt"
+  tags: [ia, seed, artifacts]

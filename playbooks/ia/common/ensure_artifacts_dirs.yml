@@ -1,0 +1,13 @@
+---
+- name: Ensure evidence directories exist
+  ansible.windows.win_file:
+    path: "{{ item }}"
+    state: directory
+  loop:
+    - "{{ evidence_root }}"
+    - "{{ ia_artifacts_dir }}"
+    - "{{ lab_artifacts_root }}"
+    - "{{ lab_scripts_dir }}"
+    - "{{ lab_scans_dir }}"
+    - "{{ vault_dir }}"
+  tags: [ia, seed, artifacts]

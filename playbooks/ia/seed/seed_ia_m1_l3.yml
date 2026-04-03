@@ -1,0 +1,56 @@
+---
+- name: "Seed IA M1-L3: Generic Accounts Exist (Admin/User1/Test)"
+  hosts: crc_dcs
+  gather_facts: true
+  strategy: free
+  tags: [ia, seed, m1]
+
+  tasks:
+    - name: Include common OUs
+      ansible.builtin.include_tasks: ../common/ensure_ad_ous.yml
+
+    - name: Include common groups
+      ansible.builtin.include_tasks: ../common/ensure_ad_groups.yml
+
+    - name: Include artifact directories
+      ansible.builtin.include_tasks: ../common/ensure_artifacts_dirs.yml
+
+    - name: Derive pod number
+      ansible.builtin.set_fact:
+        pod_id: "{{ inventory_hostname | regex_search('p(\\d+)$', '\\1') | first }}"
+
+    - name: Ensure generic accounts (Admin, User1, Test) exist and are enabled
+      ansible.windows.win_powershell:
+        script: |
+          Import-Module ActiveDirectory
+          $domainDN = (Get-ADDomain).DistinguishedName
+          $ouUsers = "OU=Users,OU=ACS,$domainDN"
+          $pw = ConvertTo-SecureString "{{ seed_user_password }}" -AsPlainText -Force
+          $generics = @(
+            @{Sam="Admin";  Name="Admin Account";  Display="Admin"},
+            @{Sam="User1";  Name="User1 Account";  Display="User1"},
+            @{Sam="Test";   Name="Test Account";   Display="Test"}
+          )
+          foreach ($g in $generics) {
+            $u = Get-ADUser -Filter "SamAccountName -eq '$($g.Sam)'" -ErrorAction SilentlyContinue
+            if ($u) {
+              Enable-ADAccount $g.Sam
+              Write-Host "$($g.Sam) already exists, ensured enabled"
+            } else {
+              New-ADUser -SamAccountName $g.Sam -Name $g.Name -DisplayName $g.Display `
+                -UserPrincipalName "$($g.Sam)@$((Get-ADDomain).DNSRoot)" `
+                -Path $ouUsers -AccountPassword $pw -Enabled $true `
+                -PasswordNeverExpires $true -ChangePasswordAtLogon $false
+              Write-Host "Created $($g.Sam)"
+            }
+          }
+
+    - name: Ensure Authorized_User_Inventory.csv does NOT exist
+      ansible.windows.win_file:
+        path: "{{ ia_artifacts_dir }}\\Authorized_User_Inventory.csv"
+        state: absent
+
+    - name: Drop lab-ready marker
+      ansible.builtin.include_tasks: ../common/drop_lab_artifacts.yml
+      vars:
+        lab_id: "IA-M1-L3"
