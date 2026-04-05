@@ -12,6 +12,12 @@ vault_dir: "C:\\CyberLab\\IA-Artifacts\\Vault"
 # Seed user password (passed via AWX extra vars or environment)
 seed_user_password: "{{ seed_user_password | default(lookup('env', 'SEED_USER_PASSWORD')) | default('Welcome!2026') }}"
 
-# Domain naming pattern
+# Shared DC configuration (pods 1-10 share acs-p01.local with OU isolation)
+shared_domain: "acs-p01.local"
+shared_domain_dn: "DC=acs-p01,DC=local"
+students_ou: "OU=Students,DC=acs-p01,DC=local"
+pod_count: 10
+
+# Legacy domain naming pattern (per-pod DCs, deprecated)
 # Pod number derived from inventory hostname (e.g., dc01-p01 -> 01)
 # Domain: acs-p{{ pod_id }}.local

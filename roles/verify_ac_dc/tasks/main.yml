@@ -1,159 +1,177 @@
 ---
-- name: Derive pod number from inventory_name
-  ansible.builtin.set_fact:
-    pod_number: "{{ inventory_hostname | regex_search('p(\\d+)$', '\\1') | first }}"
-    domain_prefix: "acs-p{{ inventory_hostname | regex_search('p(\\d+)$', '\\1') | first }}"
-
-- name: Set domain name
-  ansible.builtin.set_fact:
-    domain_name: "{{ domain_prefix }}.local"
-
-- name: "L1.1 - Check ex.employee exists, disabled, not in Finance"
+# Verify tasks for shared DC mode (OU-based pod isolation)
+# Expects variables: pod_id (int), prefix (e.g. "P01")
+- name: "Pod{{ '%02d' | format(pod_id) }} L1.1 - Check ex.employee exists, disabled, not in Finance"
   ansible.windows.win_powershell:
     script: |
+      $p = "{{ prefix }}"
       try {
-        $u = Get-ADUser -Identity "ex.employee" -Properties Enabled,MemberOf -ErrorAction Stop
-        $inFinance = ($u.MemberOf | ForEach-Object { (Get-ADGroup $_).Name }) -contains "SG-ACS-Finance"
+        $u = Get-ADUser -Identity "$p-ex.employee" -Properties Enabled,MemberOf -ErrorAction Stop
+        $inFinance = ($u.MemberOf | ForEach-Object { (Get-ADGroup $_).Name }) -contains "$p-SG-ACS-Finance"
         if ($u -and (-not $u.Enabled) -and (-not $inFinance)) {
-          @{ pass = $true; reason = "ex.employee exists, disabled, not in Finance" }
+          @{ completed = $true; reason = "$p-ex.employee exists, disabled, not in Finance" }
         } else {
           $reasons = @()
           if ($u.Enabled) { $reasons += "still enabled" }
           if ($inFinance) { $reasons += "still in Finance" }
-          @{ pass = $false; reason = "ex.employee: " + ($reasons -join ", ") }
+          @{ completed = $false; reason = "$p-ex.employee: " + ($reasons -join ", ") }
         }
       } catch {
-        @{ pass = $false; reason = "ex.employee not found: $_" }
+        @{ completed = $false; reason = "$p-ex.employee not found: $_" }
       }
   register: v_l11
 
-- name: "L1.2 - Check hr.user1 not in Finance, in HR"
+- name: "Pod{{ '%02d' | format(pod_id) }} L1.2 - Check hr.user1 not in Finance, in HR"
   ansible.windows.win_powershell:
     script: |
+      $p = "{{ prefix }}"
       try {
-        $u = Get-ADUser -Identity "hr.user1" -Properties MemberOf -ErrorAction Stop
+        $u = Get-ADUser -Identity "$p-hr.user1" -Properties MemberOf -ErrorAction Stop
         $groups = $u.MemberOf | ForEach-Object { (Get-ADGroup $_).Name }
-        $inFinance = $groups -contains "SG-ACS-Finance"
-        $inHR = $groups -contains "SG-ACS-HR"
+        $inFinance = $groups -contains "$p-SG-ACS-Finance"
+        $inHR = $groups -contains "$p-SG-ACS-HR"
         if ((-not $inFinance) -and $inHR) {
-          @{ pass = $true; reason = "hr.user1 not in Finance, in HR" }
+          @{ completed = $true; reason = "$p-hr.user1 not in Finance, in HR" }
         } else {
           $reasons = @()
           if ($inFinance) { $reasons += "still in Finance" }
           if (-not $inHR) { $reasons += "not in HR" }
-          @{ pass = $false; reason = "hr.user1: " + ($reasons -join ", ") }
+          @{ completed = $false; reason = "$p-hr.user1: " + ($reasons -join ", ") }
         }
       } catch {
-        @{ pass = $false; reason = "hr.user1 not found: $_" }
+        @{ completed = $false; reason = "$p-hr.user1 not found: $_" }
       }
   register: v_l12
 
-- name: "L1.3 - Check it.helpdesk not in Domain Admins"
+- name: "Pod{{ '%02d' | format(pod_id) }} L1.3 - Check it.helpdesk not in IT-Admins"
   ansible.windows.win_powershell:
     script: |
+      $p = "{{ prefix }}"
       try {
-        $u = Get-ADUser -Identity "it.helpdesk" -Properties MemberOf -ErrorAction Stop
+        $u = Get-ADUser -Identity "$p-it.helpdesk" -Properties MemberOf -ErrorAction Stop
         $groups = $u.MemberOf | ForEach-Object { (Get-ADGroup $_).Name }
-        $inDA = $groups -contains "Domain Admins"
-        if (-not $inDA) {
-          @{ pass = $true; reason = "it.helpdesk not in Domain Admins" }
+        $inITAdmins = $groups -contains "$p-SG-ACS-IT-Admins"
+        if (-not $inITAdmins) {
+          @{ completed = $true; reason = "$p-it.helpdesk not in IT-Admins" }
         } else {
-          @{ pass = $false; reason = "it.helpdesk still in Domain Admins" }
+          @{ completed = $false; reason = "$p-it.helpdesk still in IT-Admins" }
         }
       } catch {
-        @{ pass = $false; reason = "it.helpdesk not found: $_" }
+        @{ completed = $false; reason = "$p-it.helpdesk not found: $_" }
       }
   register: v_l13
 
-- name: "L2.1 - Check new.user1 exists, enabled"
+- name: "Pod{{ '%02d' | format(pod_id) }} L2.1 - Check new.user1 exists, enabled"
   ansible.windows.win_powershell:
     script: |
+      $p = "{{ prefix }}"
       try {
-        $u = Get-ADUser -Identity "new.user1" -Properties Enabled,DistinguishedName,MemberOf -ErrorAction Stop
-        $enabled = $u.Enabled
-        if ($u -and $enabled) {
-          @{ pass = $true; reason = "new.user1 exists, enabled, DN=$($u.DistinguishedName)" }
+        $u = Get-ADUser -Identity "$p-new.user1" -Properties Enabled,DistinguishedName -ErrorAction Stop
+        if ($u -and $u.Enabled) {
+          @{ completed = $true; reason = "$p-new.user1 exists, enabled, DN=$($u.DistinguishedName)" }
         } else {
-          @{ pass = $false; reason = "new.user1 exists but disabled" }
+          @{ completed = $false; reason = "$p-new.user1 exists but disabled" }
         }
       } catch {
-        @{ pass = $false; reason = "new.user1 not found: $_" }
+        @{ completed = $false; reason = "$p-new.user1 not found: $_" }
       }
   register: v_l21
 
-- name: "L2.2 - Check consult.user1 removed from Consulting, added to Sales"
+- name: "Pod{{ '%02d' | format(pod_id) }} L2.2 - Check consult.user1 removed from Consulting, in Sales"
   ansible.windows.win_powershell:
     script: |
+      $p = "{{ prefix }}"
       try {
-        $u = Get-ADUser -Identity "consult.user1" -Properties MemberOf -ErrorAction Stop
+        $u = Get-ADUser -Identity "$p-consult.user1" -Properties MemberOf -ErrorAction Stop
         $groups = $u.MemberOf | ForEach-Object { (Get-ADGroup $_).Name }
-        $inConsulting = $groups -contains "SG-ACS-Consulting"
-        $inSales = $groups -contains "SG-ACS-Sales"
+        $inConsulting = $groups -contains "$p-SG-ACS-Consulting"
+        $inSales = $groups -contains "$p-SG-ACS-Sales"
         if ((-not $inConsulting) -and $inSales) {
-          @{ pass = $true; reason = "consult.user1 not in Consulting, in Sales" }
+          @{ completed = $true; reason = "$p-consult.user1 not in Consulting, in Sales" }
         } else {
           $reasons = @()
           if ($inConsulting) { $reasons += "still in Consulting" }
           if (-not $inSales) { $reasons += "not in Sales" }
-          @{ pass = $false; reason = "consult.user1: " + ($reasons -join ", ") }
+          @{ completed = $false; reason = "$p-consult.user1: " + ($reasons -join ", ") }
         }
       } catch {
-        @{ pass = $false; reason = "consult.user1 not found: $_" }
+        @{ completed = $false; reason = "$p-consult.user1 not found: $_" }
       }
   register: v_l22
 
-- name: "L2.3 - Check fin.user1 disabled, in Terminated OU, stripped groups"
+- name: "Pod{{ '%02d' | format(pod_id) }} L2.3 - Check fin.user1 disabled, in Terminated OU, stripped groups"
   ansible.windows.win_powershell:
     script: |
+      $p = "{{ prefix }}"
       try {
-        $u = Get-ADUser -Identity "fin.user1" -Properties Enabled,DistinguishedName,MemberOf -ErrorAction Stop
+        $u = Get-ADUser -Identity "$p-fin.user1" -Properties Enabled,DistinguishedName,MemberOf -ErrorAction Stop
         $disabled = -not $u.Enabled
         $inTermOU = $u.DistinguishedName -match "OU=Terminated"
         $groups = @($u.MemberOf | ForEach-Object { (Get-ADGroup $_).Name } | Where-Object { $_ -ne "Domain Users" })
         $stripped = $groups.Count -eq 0
         if ($disabled -and $inTermOU -and $stripped) {
-          @{ pass = $true; reason = "fin.user1 disabled, in Terminated OU, groups stripped" }
+          @{ completed = $true; reason = "$p-fin.user1 disabled, in Terminated OU, groups stripped" }
         } else {
           $reasons = @()
           if (-not $disabled) { $reasons += "still enabled" }
           if (-not $inTermOU) { $reasons += "not in Terminated OU (DN=$($u.DistinguishedName))" }
           if (-not $stripped) { $reasons += "still has groups: $($groups -join ',')" }
-          @{ pass = $false; reason = "fin.user1: " + ($reasons -join ", ") }
+          @{ completed = $false; reason = "$p-fin.user1: " + ($reasons -join ", ") }
         }
       } catch {
-        @{ pass = $false; reason = "fin.user1 not found: $_" }
+        @{ completed = $false; reason = "$p-fin.user1 not found: $_" }
       }
   register: v_l23
 
-- name: "L3.1 - Check sales.user1 in correct Sales OU"
+- name: "Pod{{ '%02d' | format(pod_id) }} L3.1 - Check sales.user1 in correct Sales OU"
   ansible.windows.win_powershell:
     script: |
+      $p = "{{ prefix }}"
       try {
-        $u = Get-ADUser -Identity "sales.user1" -Properties DistinguishedName -ErrorAction Stop
+        $u = Get-ADUser -Identity "$p-sales.user1" -Properties DistinguishedName -ErrorAction Stop
         $inSalesOU = $u.DistinguishedName -match "OU=Sales"
         if ($inSalesOU) {
-          @{ pass = $true; reason = "sales.user1 in Sales OU: $($u.DistinguishedName)" }
+          @{ completed = $true; reason = "$p-sales.user1 in Sales OU: $($u.DistinguishedName)" }
         } else {
-          @{ pass = $false; reason = "sales.user1 not in Sales OU: $($u.DistinguishedName)" }
+          @{ completed = $false; reason = "$p-sales.user1 not in Sales OU: $($u.DistinguishedName)" }
         }
       } catch {
-        @{ pass = $false; reason = "sales.user1 not found: $_" }
+        @{ completed = $false; reason = "$p-sales.user1 not found: $_" }
       }
   register: v_l31
 
-- name: "L3.3 - Check delegation (password reset on Staff OU)"
+- name: "Pod{{ '%02d' | format(pod_id) }} L3.2 - Check IT-Admins does not contain All-Staff"
   ansible.windows.win_powershell:
     script: |
+      $p = "{{ prefix }}"
+      try {
+        $members = Get-ADGroupMember -Identity "$p-SG-ACS-IT-Admins" -ErrorAction Stop | Select-Object -ExpandProperty Name
+        $hasAllStaff = $members -contains "$p-SG-ACS-All-Staff"
+        if (-not $hasAllStaff) {
+          @{ completed = $true; reason = "$p-SG-ACS-All-Staff removed from IT-Admins" }
+        } else {
+          @{ completed = $false; reason = "$p-SG-ACS-All-Staff still nested in IT-Admins" }
+        }
+      } catch {
+        @{ completed = $false; reason = "IT-Admins group check error: $_" }
+      }
+  register: v_l32
+
+- name: "Pod{{ '%02d' | format(pod_id) }} L3.3 - Check delegation (password reset on Staff OU)"
+  ansible.windows.win_powershell:
+    script: |
+      $p = "{{ prefix }}"
+      $podName = "Pod{{ '%02d' | format(pod_id) }}"
       try {
         $domainDN = (Get-ADDomain).DistinguishedName
-        $staffOU = "OU=Staff,OU=Users,OU=ACS,$domainDN"
+        $staffOU = "OU=Staff,OU=Users,OU=$podName,OU=Students,$domainDN"
         $acl = Get-Acl "AD:\$staffOU"
-        $helpdesk = Get-ADUser "it.helpdesk" -ErrorAction Stop
+        $helpdesk = Get-ADUser "$p-it.helpdesk" -ErrorAction Stop
         $helpdeskSID = $helpdesk.SID
         $resetPwdGuid = [guid]"00299570-246d-11d0-a768-00aa006e0529"
         $hasDelegation = $false
         foreach ($ace in $acl.Access) {
-          if ($ace.IdentityReference -match "it\.helpdesk" -or $ace.IdentityReference -match $helpdeskSID) {
+          if ($ace.IdentityReference -match [regex]::Escape("$p-it.helpdesk") -or $ace.IdentityReference -match $helpdeskSID) {
             if ($ace.ObjectType -eq $resetPwdGuid -and $ace.AccessControlType -eq "Allow") {
               $hasDelegation = $true
               break
@@ -161,98 +179,79 @@
           }
         }
         if ($hasDelegation) {
-          @{ pass = $true; reason = "it.helpdesk has password reset delegation on Staff OU" }
+          @{ completed = $true; reason = "$p-it.helpdesk has password reset delegation on Staff OU" }
         } else {
-          @{ pass = $false; reason = "it.helpdesk missing password reset delegation on Staff OU" }
+          @{ completed = $false; reason = "$p-it.helpdesk missing password reset delegation on Staff OU" }
         }
       } catch {
-        @{ pass = $false; reason = "Delegation check error: $_" }
+        @{ completed = $false; reason = "Delegation check error: $_" }
       }
   register: v_l33
 
-- name: "L4.1 - Check contractor.user1 disabled or expiration set"
+- name: "Pod{{ '%02d' | format(pod_id) }} L4.1 - Check contractor.user1 disabled or expiration set"
   ansible.windows.win_powershell:
     script: |
+      $p = "{{ prefix }}"
       try {
-        $u = Get-ADUser -Identity "contractor.user1" -Properties Enabled,AccountExpirationDate -ErrorAction Stop
+        $u = Get-ADUser -Identity "$p-contractor.user1" -Properties Enabled,AccountExpirationDate -ErrorAction Stop
         $disabled = -not $u.Enabled
         $hasExpiry = $null -ne $u.AccountExpirationDate
         if ($disabled -or $hasExpiry) {
           $reasons = @()
           if ($disabled) { $reasons += "disabled" }
           if ($hasExpiry) { $reasons += "expiry=$($u.AccountExpirationDate)" }
-          @{ pass = $true; reason = "contractor.user1: " + ($reasons -join ", ") }
+          @{ completed = $true; reason = "$p-contractor.user1: " + ($reasons -join ", ") }
         } else {
-          @{ pass = $false; reason = "contractor.user1 still enabled with no expiry" }
+          @{ completed = $false; reason = "$p-contractor.user1 still enabled with no expiry" }
         }
       } catch {
-        @{ pass = $false; reason = "contractor.user1 not found: $_" }
+        @{ completed = $false; reason = "$p-contractor.user1 not found: $_" }
       }
   register: v_l41
 
-# --- Converted from workstation labs (now run on DC) ---
-
-- name: "L3.2 - Check Administrators contains SG-ACS-IT-Admins and not SG-ACS-All-Staff"
+- name: "Pod{{ '%02d' | format(pod_id) }} L4.2 - Check review.csv exists and non-empty"
   ansible.windows.win_powershell:
     script: |
-      try {
-        $admins = Get-ADGroupMember -Identity "Administrators" -ErrorAction Stop | Select-Object -ExpandProperty Name
-        $hasITAdmins = $admins -contains "SG-ACS-IT-Admins"
-        $hasAllStaff = $admins -contains "SG-ACS-All-Staff"
-        if ($hasITAdmins -and (-not $hasAllStaff)) {
-          @{ pass = $true; reason = "SG-ACS-IT-Admins in Administrators, SG-ACS-All-Staff removed" }
-        } else {
-          $reasons = @()
-          if (-not $hasITAdmins) { $reasons += "SG-ACS-IT-Admins missing from Administrators" }
-          if ($hasAllStaff) { $reasons += "SG-ACS-All-Staff still in Administrators" }
-          @{ pass = $false; reason = ($reasons -join ", ") }
-        }
-      } catch {
-        @{ pass = $false; reason = "Administrators group check error: $_" }
-      }
-  register: v_l32
-
-- name: "L4.2 - Check C:\\CyberLab\\Lab4-2\\review.csv exists and non-empty"
-  ansible.windows.win_powershell:
-    script: |
-      $path = "C:\CyberLab\Lab4-2\review.csv"
+      $podName = "Pod{{ '%02d' | format(pod_id) }}"
+      $path = "C:\CyberLab\$podName\Lab4-2\review.csv"
       if (Test-Path $path) {
         $size = (Get-Item $path).Length
         if ($size -gt 0) {
-          @{ pass = $true; reason = "review.csv exists, size=${size} bytes" }
+          @{ completed = $true; reason = "review.csv exists, size=${size} bytes" }
         } else {
-          @{ pass = $false; reason = "review.csv exists but is empty" }
+          @{ completed = $false; reason = "review.csv exists but is empty" }
         }
       } else {
-        @{ pass = $false; reason = "review.csv not found at $path" }
+        @{ completed = $false; reason = "review.csv not found at $path" }
       }
   register: v_l42
 
-- name: "L4.3 - Check C:\\CyberLab\\Lab4-3\\ exists with required files non-empty"
+- name: "Pod{{ '%02d' | format(pod_id) }} L4.3 - Check Lab4-3 exists with required files non-empty"
   ansible.windows.win_powershell:
     script: |
-      $dir = "C:\CyberLab\Lab4-3"
+      $podName = "Pod{{ '%02d' | format(pod_id) }}"
+      $dir = "C:\CyberLab\$podName\Lab4-3"
       if (Test-Path $dir) {
         $files = Get-ChildItem -Path $dir -File
         if ($files.Count -gt 0) {
           $nonEmpty = @($files | Where-Object { $_.Length -gt 0 })
           $empty = @($files | Where-Object { $_.Length -eq 0 })
           if ($empty.Count -eq 0) {
-            @{ pass = $true; reason = "Lab4-3 dir exists with $($nonEmpty.Count) non-empty file(s)" }
+            @{ completed = $true; reason = "Lab4-3 dir exists with $($nonEmpty.Count) non-empty file(s)" }
           } else {
-            @{ pass = $false; reason = "Lab4-3 has $($empty.Count) empty file(s): $($empty.Name -join ',')" }
+            @{ completed = $false; reason = "Lab4-3 has $($empty.Count) empty file(s): $($empty.Name -join ',')" }
           }
         } else {
-          @{ pass = $false; reason = "Lab4-3 directory exists but contains no files" }
+          @{ completed = $false; reason = "Lab4-3 directory exists but contains no files" }
         }
       } else {
-        @{ pass = $false; reason = "Lab4-3 directory not found at $dir" }
+        @{ completed = $false; reason = "Lab4-3 directory not found at $dir" }
       }
   register: v_l43
 
-- name: Consolidate all results (DC + converted WS)
+- name: "Consolidate Pod{{ '%02d' | format(pod_id) }} results"
   ansible.builtin.set_fact:
-    dc_results:
+    "pod{{ '%02d' | format(pod_id) }}_results":
       L1.1: "{{ v_l11.output[0] }}"
       L1.2: "{{ v_l12.output[0] }}"
       L1.3: "{{ v_l13.output[0] }}"

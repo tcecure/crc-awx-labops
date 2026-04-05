@@ -1,11 +1,18 @@
 ---
-# All labs now execute entirely on DCs (workstation labs converted)
-- name: "Verify Labs: CMMC Level 1 Access Control (AC) - All on DCs"
-  hosts: crc_dcs
+# Shared DC mode: verify all 10 pods on the shared DCs using OU-based isolation
+- name: "Verify Labs: CMMC Level 1 Access Control (AC) - Shared DC"
+  hosts: crc_shared_dcs[0]
   gather_facts: false
-  strategy: free
-  roles:
-    - verify_ac_dc
+  vars:
+    pod_list: "{{ range(1, (pod_count | default(10) | int) + 1) | list }}"
+  tasks:
+    - name: "Verify Pod{{ '%02d' | format(item) }}"
+      ansible.builtin.include_role:
+        name: verify_ac_dc
+      vars:
+        pod_id: "{{ item }}"
+        prefix: "P{{ '%02d' | format(item) }}"
+      loop: "{{ pod_list }}"
 
 - name: Consolidate results and produce report
   hosts: localhost
@@ -17,31 +24,32 @@
       ansible.builtin.set_fact:
         pod_results: >-
           {%- set pods = {} -%}
+          {%- set dc_host = groups['crc_shared_dcs'][0] -%}
           {%- for i in range(1, 11) -%}
             {%- set pad = '%02d' | format(i) -%}
-            {%- set dc_host = 'dc01-p' ~ pad -%}
-            {%- set dc = hostvars[dc_host]['dc_results'] | default({}) -%}
-            {%- set _ = pods.update({'pod' ~ pad: dc}) -%}
+            {%- set key = 'pod' ~ pad ~ '_results' -%}
+            {%- set pod_data = hostvars[dc_host][key] | default({}) -%}
+            {%- set _ = pods.update({'pod' ~ pad: pod_data}) -%}
           {%- endfor -%}
           {{ pods }}
 
     - name: Compute totals
       ansible.builtin.set_fact:
-        total_passed: >-
+        total_completed: >-
           {%- set count = [0] -%}
           {%- for pod_key, pod_val in pod_results.items() -%}
             {%- for lab_key, lab_val in pod_val.items() -%}
-              {%- if lab_val.pass | default(false) -%}
+              {%- if lab_val.completed | default(false) -%}
                 {%- set _ = count.append(count.pop() + 1) -%}
               {%- endif -%}
             {%- endfor -%}
           {%- endfor -%}
           {{ count[0] }}
-        total_failed: >-
+        total_incomplete: >-
           {%- set count = [0] -%}
           {%- for pod_key, pod_val in pod_results.items() -%}
             {%- for lab_key, lab_val in pod_val.items() -%}
-              {%- if not (lab_val.pass | default(false)) -%}
+              {%- if not (lab_val.completed | default(false)) -%}
                 {%- set _ = count.append(count.pop() + 1) -%}
               {%- endif -%}
             {%- endfor -%}
@@ -50,17 +58,17 @@
 
     - name: Write JSON artifact
       ansible.builtin.copy:
-        content: "{{ {'course': 'CMMC Level 1 Access Control (AC)', 'pods': pod_results, 'totals': {'passed': total_passed | int, 'failed': total_failed | int}} | to_nice_json }}"
+        content: "{{ {'course': 'CMMC Level 1 Access Control (AC)', 'pods': pod_results, 'totals': {'completed': total_completed | int, 'incomplete': total_incomplete | int}} | to_nice_json }}"
         dest: /runner/artifacts/auto-verify.json
       delegate_to: localhost
 
-    - name: Print PASS/FAIL matrix
+    - name: Print Completed/Incomplete matrix
       ansible.builtin.debug:
         msg: |
-          === CMMC Level 1 Access Control (AC) — Lab Results (DC-only) ===
+          === CMMC Level 1 Access Control (AC) — Lab Results (Shared DC) ===
           {% for i in range(1, 11) %}
           {%- set pad = '%02d' | format(i) -%}
           {%- set pod = pod_results['pod' ~ pad] -%}
-          POD{{ pad }}: L1 [1.1 {{ 'P' if pod['L1.1'].pass | default(false) else 'F' }} | 1.2 {{ 'P' if pod['L1.2'].pass | default(false) else 'F' }} | 1.3 {{ 'P' if pod['L1.3'].pass | default(false) else 'F' }}]  L2 [2.1 {{ 'P' if pod['L2.1'].pass | default(false) else 'F' }} | 2.2 {{ 'P' if pod['L2.2'].pass | default(false) else 'F' }} | 2.3 {{ 'P' if pod['L2.3'].pass | default(false) else 'F' }}]  L3 [3.1 {{ 'P' if pod['L3.1'].pass | default(false) else 'F' }} | 3.2 {{ 'P' if pod['L3.2'].pass | default(false) else 'F' }} | 3.3 {{ 'P' if pod['L3.3'].pass | default(false) else 'F' }}]  L4 [4.1 {{ 'P' if pod['L4.1'].pass | default(false) else 'F' }} | 4.2 {{ 'P' if pod['L4.2'].pass | default(false) else 'F' }} | 4.3 {{ 'P' if pod['L4.3'].pass | default(false) else 'F' }}]
+          POD{{ pad }}: L1 [1.1 {{ 'C' if pod['L1.1'].completed | default(false) else 'I' }} | 1.2 {{ 'C' if pod['L1.2'].completed | default(false) else 'I' }} | 1.3 {{ 'C' if pod['L1.3'].completed | default(false) else 'I' }}]  L2 [2.1 {{ 'C' if pod['L2.1'].completed | default(false) else 'I' }} | 2.2 {{ 'C' if pod['L2.2'].completed | default(false) else 'I' }} | 2.3 {{ 'C' if pod['L2.3'].completed | default(false) else 'I' }}]  L3 [3.1 {{ 'C' if pod['L3.1'].completed | default(false) else 'I' }} | 3.2 {{ 'C' if pod['L3.2'].completed | default(false) else 'I' }} | 3.3 {{ 'C' if pod['L3.3'].completed | default(false) else 'I' }}]  L4 [4.1 {{ 'C' if pod['L4.1'].completed | default(false) else 'I' }} | 4.2 {{ 'C' if pod['L4.2'].completed | default(false) else 'I' }} | 4.3 {{ 'C' if pod['L4.3'].completed | default(false) else 'I' }}]
           {% endfor %}
-          TOTAL: passed={{ total_passed }} failed={{ total_failed }}
+          TOTAL: completed={{ total_completed }} incomplete={{ total_incomplete }}
