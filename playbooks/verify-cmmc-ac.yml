@@ -1,5 +1,5 @@
 ---
-# Shared DC mode: verify all 10 pods on the shared DCs using OU-based isolation
+# Shared DC mode: verify all pods on the shared DCs using OU-based isolation
 - name: "Verify Labs: CMMC Level 1 Access Control (AC) - Shared DC"
   hosts: crc_shared_dcs[0]
   gather_facts: false
@@ -25,7 +25,7 @@
         pod_results: >-
           {%- set pods = {} -%}
           {%- set dc_host = groups['crc_shared_dcs'][0] -%}
-          {%- for i in range(1, 11) -%}
+          {%- for i in range(1, (pod_count | default(20) | int) + 1) -%}
             {%- set pad = '%02d' | format(i) -%}
             {%- set key = 'pod' ~ pad ~ '_results' -%}
             {%- set pod_data = hostvars[dc_host][key] | default({}) -%}
@@ -66,7 +66,7 @@
       ansible.builtin.debug:
         msg: |
           === CMMC Level 1 Access Control (AC) — Lab Results (Shared DC) ===
-          {% for i in range(1, 11) %}
+          {% for i in range(1, (pod_count | default(20) | int) + 1) %}
           {%- set pad = '%02d' | format(i) -%}
           {%- set pod = pod_results['pod' ~ pad] -%}
           POD{{ pad }}: L1 [1.1 {{ 'C' if pod['L1.1'].completed | default(false) else 'I' }} | 1.2 {{ 'C' if pod['L1.2'].completed | default(false) else 'I' }} | 1.3 {{ 'C' if pod['L1.3'].completed | default(false) else 'I' }}]  L2 [2.1 {{ 'C' if pod['L2.1'].completed | default(false) else 'I' }} | 2.2 {{ 'C' if pod['L2.2'].completed | default(false) else 'I' }} | 2.3 {{ 'C' if pod['L2.3'].completed | default(false) else 'I' }}]  L3 [3.1 {{ 'C' if pod['L3.1'].completed | default(false) else 'I' }} | 3.2 {{ 'C' if pod['L3.2'].completed | default(false) else 'I' }} | 3.3 {{ 'C' if pod['L3.3'].completed | default(false) else 'I' }}]  L4 [4.1 {{ 'C' if pod['L4.1'].completed | default(false) else 'I' }} | 4.2 {{ 'C' if pod['L4.2'].completed | default(false) else 'I' }} | 4.3 {{ 'C' if pod['L4.3'].completed | default(false) else 'I' }}]

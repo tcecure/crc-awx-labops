@@ -1,5 +1,5 @@
 ---
-# Shared DC mode: seed all 10 pods on the shared DCs using OU-based isolation
+# Shared DC mode: seed all pods on the shared DCs using OU-based isolation
 - name: "Seed Labs: CMMC Level 1 Access Control (AC) - Shared DC"
   hosts: crc_shared_dcs[0]
   gather_facts: false
