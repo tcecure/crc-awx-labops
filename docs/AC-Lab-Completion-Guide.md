@@ -24,8 +24,8 @@ This guide provides step-by-step instructions for completing all 12 Access Contr
 ### What You Need
 
 - Your **Pod number** (your instructor will assign this, e.g., Pod01, Pod05, Pod12)
-- The **lab user password** (your instructor will provide this)
-- A computer with Remote Desktop Connection (RDP) or access to the lab portal
+- Your **Guacamole login credentials** (your instructor will provide your username and password)
+- A computer with a web browser (Chrome, Firefox, or Edge) — no special software needed
 
 ### What You Will Be Doing
 
@@ -43,17 +43,41 @@ These labs align with **CMMC Level 1 Access Control (AC)** requirements:
 
 ## How to Connect to the Lab Environment
 
-1. Open **Remote Desktop Connection** on your computer
-   - On Windows: Press the **Windows key**, type `Remote Desktop Connection`, and press Enter
-   - On Mac: Download and open **Microsoft Remote Desktop** from the App Store
-2. Connect to the domain controller:
-   - **Computer:** Enter the DC address provided by your instructor
-   - **Username:** `acs-p01\Administrator` (or the admin account your instructor provides)
-   - **Password:** Enter the password provided by your instructor
-3. Click **Connect**
-4. If you see a certificate warning, click **Yes** to continue
+You will connect to the lab through **Apache Guacamole** — a web-based remote desktop gateway. There is nothing to install; everything runs in your web browser.
 
-You should now see the Windows Server desktop.
+### Step 1: Open the Guacamole Gateway
+
+1. Open your web browser (Chrome, Firefox, or Edge)
+2. Go to: **https://crc.guac.01.tcecure.com/#/**
+3. You will see a login screen
+
+### Step 2: Log In with Your Student Credentials
+
+1. Enter your **Username** — this matches your pod number:
+   - Pod 01 → `student01`
+   - Pod 02 → `student02`
+   - Pod 05 → `student05`
+   - Pod 12 → `student12`
+   - *(and so on — the number matches your assigned pod)*
+2. Enter your **Password** (provided by your instructor)
+3. Click **Login**
+
+### Step 3: Connect to the Domain Controller
+
+After logging in, you will see a list of available connections. Each student has two pre-configured connections:
+
+| Connection Name | What It Is |
+|---|---|
+| **PODXX-DC** | Domain Controller — **use this for all AC labs** |
+| **PODXX-WS01** | Workstation (used for other lab families) |
+
+1. Click on **PODXX-DC** (where XX is your pod number, e.g., **POD03-DC**)
+2. The remote desktop session will open directly in your browser — no extra login is needed (credentials are pre-configured)
+3. Wait a few seconds for the Windows Server desktop to appear
+
+> **Tip:** To return to the Guacamole home screen (for example, to switch connections), press **Ctrl+Alt+Shift** to open the Guacamole side menu, then click **Home**.
+
+You should now see the Windows Server desktop in your browser.
 
 ---
 
