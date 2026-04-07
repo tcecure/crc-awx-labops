@@ -1,71 +1,46 @@
 ---
-# Full VM-level reset: rolls back all pod DC VMs to a clean Proxmox snapshot.
-# This is the "nuclear" option — resets EVERYTHING on the DCs including any
-# student work and AD changes. Use reset-ac-labs.yml for surgical AC-only cleanup.
+# Reset all lab families back to clean baseline on the shared DCs.
+# In the 2-DC shared model (acs-p01.local), there are no per-pod VMs.
+# All 20 pods share dc01/dc02 with OU-based isolation.
+#
+# This playbook runs the AD-level reset for each lab family, removing
+# all lab-created artifacts (users, group changes, OU moves, evidence
+# folders) while preserving the baseline OU structure.
+#
+# For a full DC VM snapshot rollback (e.g., between course cohorts),
+# use Proxmox directly to rollback the dc01/dc02 VM snapshots.
 #
 # Requirements:
-#   - Inventory: CRC-Proxmox (must contain 'pve' group with PVE hosts)
-#   - Credential: crc-awx-to-pve1 (SSH to PVE hosts)
-#   - Snapshot "Student-Baseline" must exist on all target VMs
-#
-# Override variables at launch:
-#   snapshot_name: name of snapshot to rollback to (default: Student-Baseline)
-#   vm_ids: list of VM IDs to rollback (default: 200-219 for pods 1-20)
-- name: "Reset Labs: Roll Back to Clean Baseline (Full VM Reset)"
-  hosts: pve
+#   - Inventory: CRC-LabPods (must contain 'crc_shared_dcs' group)
+#   - Credential: CRC WinRM Verifier (Administrator on DCs)
+- name: "Reset Labs: Roll Back to Clean Baseline (AD-Level)"
+  hosts: crc_shared_dcs[0]
   gather_facts: false
   vars:
-    snapshot_name: "{{ snapshot_name | default('Student-Baseline') }}"
-    vm_ids: "{{ vm_ids | default(range(200, 220) | list) }}"
-
+    pod_list: "{{ range(1, (pod_count | default(20) | int) + 1) | list }}"
   tasks:
-    - name: Verify snapshot exists on each VM
-      ansible.builtin.shell: |
-        qm listsnapshot {{ item }} 2>/dev/null | awk '{print $1}' | grep -qx "{{ snapshot_name }}" && echo "OK" || echo "MISSING"
-      args:
-        executable: /bin/bash
-      register: snap_check
-      changed_when: false
-      failed_when: "'MISSING' in snap_check.stdout"
-      loop: "{{ vm_ids }}"
-      ignore_errors: true
+    - name: Copy reset-ac-labs.ps1
+      ansible.windows.win_copy:
+        src: "{{ playbook_dir }}/../roles/seed_ac_dc/files/reset-ac-labs.ps1"
+        dest: C:\Windows\Temp\reset-ac-labs.ps1
 
-    - name: Report missing snapshots
+    - name: "Reset AC labs for Pod{{ '%02d' | format(item) }}"
+      ansible.windows.win_shell: >
+        powershell.exe -ExecutionPolicy Bypass -File C:\Windows\Temp\reset-ac-labs.ps1
+        -PodId {{ item }}
+      loop: "{{ pod_list }}"
+      register: reset_results
+
+    - name: Show reset results
       ansible.builtin.debug:
-        msg: "WARNING: Snapshot '{{ snapshot_name }}' missing on VM {{ item.item }} — skipping"
-      loop: "{{ snap_check.results }}"
-      when: item.failed | default(false)
+        msg: "{{ item.stdout_lines | default([]) }}"
+      loop: "{{ reset_results.results }}"
       loop_control:
-        label: "VM {{ item.item }}"
-
-    - name: Build list of VMs with valid snapshots
-      ansible.builtin.set_fact:
-        valid_vm_ids: "{{ snap_check.results | rejectattr('failed') | map(attribute='item') | list }}"
-
-    - name: Stop VMs before rollback
-      ansible.builtin.shell: "qm stop {{ item }} --skiplock 1 2>/dev/null || true"
-      loop: "{{ valid_vm_ids }}"
-      changed_when: false
-
-    - name: Wait for VMs to fully stop
-      ansible.builtin.pause:
-        seconds: 15
-
-    - name: Rollback to snapshot
-      ansible.builtin.shell: "qm rollback {{ item }} {{ snapshot_name }} --skiplock 1"
-      loop: "{{ valid_vm_ids }}"
-
-    - name: Start VMs after rollback
-      ansible.builtin.shell: "qm start {{ item }} --skiplock 1"
-      loop: "{{ valid_vm_ids }}"
-
-    - name: Wait for VMs to boot
-      ansible.builtin.pause:
-        seconds: 45
+        label: "Pod{{ '%02d' | format(item.item) }}"
 
     - name: Summary
       ansible.builtin.debug:
         msg: >-
-          Rollback complete. {{ valid_vm_ids | length }} VMs rolled back to
-          '{{ snapshot_name }}'. Skipped {{ vm_ids | length - valid_vm_ids | length }} VMs
-          (missing snapshot).
+          Baseline reset complete for {{ pod_list | length }} pods on
+          {{ inventory_hostname }}. All AC lab artifacts removed.
+          Ready to re-seed for the next lab family.
