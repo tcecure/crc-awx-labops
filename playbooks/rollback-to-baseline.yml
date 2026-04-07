@@ -1,39 +1,71 @@
 ---
-- name: "Reset Labs: Roll Back to Clean Baseline"
+# Full VM-level reset: rolls back all pod DC VMs to a clean Proxmox snapshot.
+# This is the "nuclear" option — resets EVERYTHING on the DCs including any
+# student work and AD changes. Use reset-ac-labs.yml for surgical AC-only cleanup.
+#
+# Requirements:
+#   - Inventory: CRC-Proxmox (must contain 'pve' group with PVE hosts)
+#   - Credential: crc-awx-to-pve1 (SSH to PVE hosts)
+#   - Snapshot "Student-Baseline" must exist on all target VMs
+#
+# Override variables at launch:
+#   snapshot_name: name of snapshot to rollback to (default: Student-Baseline)
+#   vm_ids: list of VM IDs to rollback (default: 200-219 for pods 1-20)
+- name: "Reset Labs: Roll Back to Clean Baseline (Full VM Reset)"
   hosts: pve
   gather_facts: false
   vars:
-    snapshot_name: "Student-Baseline"
-    vm_ids: [200,201,202,203,204,205,206,207,208,209,210,211,212,213,214,215,216,217,218,219]
+    snapshot_name: "{{ snapshot_name | default('Student-Baseline') }}"
+    vm_ids: "{{ vm_ids | default(range(200, 220) | list) }}"
 
   tasks:
     - name: Verify snapshot exists on each VM
       ansible.builtin.shell: |
-        qm listsnapshot {{ item }} | awk '{print $1}' | grep -x "{{ snapshot_name }}"
+        qm listsnapshot {{ item }} 2>/dev/null | awk '{print $1}' | grep -qx "{{ snapshot_name }}" && echo "OK" || echo "MISSING"
       args:
         executable: /bin/bash
       register: snap_check
       changed_when: false
-      failed_when: snap_check.rc != 0
+      failed_when: "'MISSING' in snap_check.stdout"
       loop: "{{ vm_ids }}"
+      ignore_errors: true
+
+    - name: Report missing snapshots
+      ansible.builtin.debug:
+        msg: "WARNING: Snapshot '{{ snapshot_name }}' missing on VM {{ item.item }} — skipping"
+      loop: "{{ snap_check.results }}"
+      when: item.failed | default(false)
+      loop_control:
+        label: "VM {{ item.item }}"
+
+    - name: Build list of VMs with valid snapshots
+      ansible.builtin.set_fact:
+        valid_vm_ids: "{{ snap_check.results | rejectattr('failed') | map(attribute='item') | list }}"
 
     - name: Stop VMs before rollback
-      ansible.builtin.shell: "qm stop {{ item }} --skiplock 1 || true"
-      loop: "{{ vm_ids }}"
+      ansible.builtin.shell: "qm stop {{ item }} --skiplock 1 2>/dev/null || true"
+      loop: "{{ valid_vm_ids }}"
       changed_when: false
 
     - name: Wait for VMs to fully stop
       ansible.builtin.pause:
-        seconds: 10
+        seconds: 15
 
     - name: Rollback to snapshot
       ansible.builtin.shell: "qm rollback {{ item }} {{ snapshot_name }} --skiplock 1"
-      loop: "{{ vm_ids }}"
+      loop: "{{ valid_vm_ids }}"
 
     - name: Start VMs after rollback
       ansible.builtin.shell: "qm start {{ item }} --skiplock 1"
-      loop: "{{ vm_ids }}"
+      loop: "{{ valid_vm_ids }}"
 
     - name: Wait for VMs to boot
       ansible.builtin.pause:
-        seconds: 30
+        seconds: 45
+
+    - name: Summary
+      ansible.builtin.debug:
+        msg: >-
+          Rollback complete. {{ valid_vm_ids | length }} VMs rolled back to
+          '{{ snapshot_name }}'. Skipped {{ vm_ids | length - valid_vm_ids | length }} VMs
+          (missing snapshot).
