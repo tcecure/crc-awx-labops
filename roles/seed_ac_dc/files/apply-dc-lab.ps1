@@ -9,7 +9,7 @@ param(
   )]
   [string]$LabId,
   [Parameter(Mandatory=$true)]
-  [ValidateRange(1,10)]
+  [ValidateRange(1,20)]
   [int]$PodId,
   [string]$SeedPassword = $env:SEED_USER_PASSWORD
 )
