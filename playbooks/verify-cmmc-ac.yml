@@ -4,7 +4,7 @@
   hosts: crc_shared_dcs[0]
   gather_facts: false
   vars:
-    pod_list: "{{ range(1, (pod_count | default(10) | int) + 1) | list }}"
+    pod_list: "{{ range(1, (pod_count | default(20) | int) + 1) | list }}"
   tasks:
     - name: "Verify Pod{{ '%02d' | format(item) }}"
       ansible.builtin.include_role:
