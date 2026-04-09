@@ -1,54 +1,69 @@
 param(
+  [Parameter(Mandatory=$true)]
+  [ValidateRange(1,20)]
+  [int]$PodId,
   [string]$SeedPassword = $env:SEED_USER_PASSWORD
 )
 
 Import-Module ActiveDirectory
 
 $domainDN = (Get-ADDomain).DistinguishedName
+$podName = "Pod{0:D2}" -f $PodId
+$podOU = "OU=$podName,OU=Students,$domainDN"
 
-$ouACS = "OU=ACS,$domainDN"
-try { Get-ADOrganizationalUnit -Identity $ouACS -ErrorAction Stop | Out-Null }
-catch { New-ADOrganizationalUnit -Name "ACS" -Path $domainDN | Out-Null }
+# Verify pod OU exists (created during Phase 2 OU build)
+try { Get-ADOrganizationalUnit -Identity $podOU -ErrorAction Stop | Out-Null }
+catch { throw "Pod OU not found: $podOU. Run Phase 2 OU build first." }
 
 function Ensure-OU($name, $path) {
   $dn = "OU=$name,$path"
   try { Get-ADOrganizationalUnit -Identity $dn -ErrorAction Stop | Out-Null }
-  catch { New-ADOrganizationalUnit -Name $name -Path $path | Out-Null }
+  catch { New-ADOrganizationalUnit -Name $name -Path $path -ProtectedFromAccidentalDeletion $false | Out-Null }
   return $dn
 }
 
-$ouDepartments  = Ensure-OU "Departments" $ouACS
-$ouUsers        = Ensure-OU "Users" $ouACS
-$ouGroups       = Ensure-OU "Groups" $ouACS
-$ouComputers    = Ensure-OU "Computers" $ouACS
+# Build sub-OU structure under the pod OU
+# OU=PodXX,OU=Students already has Users, Groups, Resources, Policies from Phase 2
+# Add departmental sub-OUs under Resources for lab scenarios
+$ouPodUsers     = "OU=Users,$podOU"
+$ouPodGroups    = "OU=Groups,$podOU"
+$ouPodResources = "OU=Resources,$podOU"
 
-$ouExec         = Ensure-OU "Executive"  $ouDepartments
-$ouIT           = Ensure-OU "IT"         $ouDepartments
-$ouFinance      = Ensure-OU "Finance"    $ouDepartments
-$ouHR           = Ensure-OU "HR"         $ouDepartments
-$ouConsulting   = Ensure-OU "Consulting" $ouDepartments
-$ouSales        = Ensure-OU "Sales"      $ouDepartments
+# Department sub-OUs under Resources (for lab scenarios)
+$ouDepartments  = Ensure-OU "Departments" $ouPodResources
+$ouExec         = Ensure-OU "Executive"   $ouDepartments
+$ouIT           = Ensure-OU "IT"          $ouDepartments
+$ouFinance      = Ensure-OU "Finance"     $ouDepartments
+$ouHR           = Ensure-OU "HR"          $ouDepartments
+$ouConsulting   = Ensure-OU "Consulting"  $ouDepartments
+$ouSales        = Ensure-OU "Sales"       $ouDepartments
 
-$ouAdmins       = Ensure-OU "Admins" $ouUsers
-$ouStaff        = Ensure-OU "Staff"  $ouUsers
+# User sub-OUs
+$ouAdmins       = Ensure-OU "Admins" $ouPodUsers
+$ouStaff        = Ensure-OU "Staff"  $ouPodUsers
 
-$ouSecGroups    = Ensure-OU "Security"      $ouGroups
-$ouDistGroups   = Ensure-OU "Distribution"  $ouGroups
+# Group sub-OUs
+$ouSecGroups    = Ensure-OU "Security"     $ouPodGroups
+$ouDistGroups   = Ensure-OU "Distribution" $ouPodGroups
 
+# Computer sub-OUs
+$ouComputers    = Ensure-OU "Computers"    $ouPodResources
 $ouWorkstations = Ensure-OU "Workstations" $ouComputers
 $ouServers      = Ensure-OU "Servers"      $ouComputers
 
+# Per-pod security groups (prefixed with pod name for isolation)
+$prefix = "P{0:D2}" -f $PodId
 $groups = @(
-  "SG-ACS-Executive",
-  "SG-ACS-IT",
-  "SG-ACS-Finance",
-  "SG-ACS-HR",
-  "SG-ACS-Consulting",
-  "SG-ACS-Sales",
-  "SG-ACS-IT-Admins",
-  "SG-ACS-Helpdesk",
-  "SG-ACS-All-Staff",
-  "SG-ACS-Workstation-Admins"
+  "$prefix-SG-ACS-Executive",
+  "$prefix-SG-ACS-IT",
+  "$prefix-SG-ACS-Finance",
+  "$prefix-SG-ACS-HR",
+  "$prefix-SG-ACS-Consulting",
+  "$prefix-SG-ACS-Sales",
+  "$prefix-SG-ACS-IT-Admins",
+  "$prefix-SG-ACS-Helpdesk",
+  "$prefix-SG-ACS-All-Staff",
+  "$prefix-SG-ACS-Workstation-Admins"
 )
 
 foreach ($g in $groups) {
@@ -77,21 +92,13 @@ function Ensure-User($sam, $display, $path, $memberOf) {
   }
 }
 
-Ensure-User "ceo.acs"        "ACS CEO"         $ouStaff  @("SG-ACS-Executive","SG-ACS-All-Staff")
-Ensure-User "it.admin"       "ACS IT Admin"    $ouAdmins @("SG-ACS-IT","SG-ACS-IT-Admins","Domain Admins")
-Ensure-User "it.helpdesk"    "ACS Helpdesk"    $ouAdmins @("SG-ACS-IT","SG-ACS-Helpdesk")
-Ensure-User "fin.user1"      "ACS Finance 1"   $ouStaff  @("SG-ACS-Finance","SG-ACS-All-Staff")
-Ensure-User "hr.user1"       "ACS HR 1"        $ouStaff  @("SG-ACS-HR","SG-ACS-All-Staff")
-Ensure-User "consult.user1"  "ACS Consultant"  $ouStaff  @("SG-ACS-Consulting","SG-ACS-All-Staff")
-Ensure-User "sales.user1"    "ACS Sales 1"     $ouStaff  @("SG-ACS-Sales","SG-ACS-All-Staff")
+# Per-pod users (prefixed with pod number for isolation)
+Ensure-User "$prefix-ceo.acs"        "$podName ACS CEO"         $ouStaff  @("$prefix-SG-ACS-Executive","$prefix-SG-ACS-All-Staff")
+Ensure-User "$prefix-it.admin"       "$podName ACS IT Admin"    $ouAdmins @("$prefix-SG-ACS-IT","$prefix-SG-ACS-IT-Admins")
+Ensure-User "$prefix-it.helpdesk"    "$podName ACS Helpdesk"    $ouAdmins @("$prefix-SG-ACS-IT","$prefix-SG-ACS-Helpdesk")
+Ensure-User "$prefix-fin.user1"      "$podName ACS Finance 1"   $ouStaff  @("$prefix-SG-ACS-Finance","$prefix-SG-ACS-All-Staff")
+Ensure-User "$prefix-hr.user1"       "$podName ACS HR 1"        $ouStaff  @("$prefix-SG-ACS-HR","$prefix-SG-ACS-All-Staff")
+Ensure-User "$prefix-consult.user1"  "$podName ACS Consultant"  $ouStaff  @("$prefix-SG-ACS-Consulting","$prefix-SG-ACS-All-Staff")
+Ensure-User "$prefix-sales.user1"    "$podName ACS Sales 1"     $ouStaff  @("$prefix-SG-ACS-Sales","$prefix-SG-ACS-All-Staff")
 
-Get-ADComputer -Filter * | ForEach-Object {
-  if ($_.Name -like "DC01-*") {
-    Move-ADObject -Identity $_.DistinguishedName -TargetPath $ouServers -ErrorAction SilentlyContinue
-  }
-  elseif ($_.Name -like "WS01-*") {
-    Move-ADObject -Identity $_.DistinguishedName -TargetPath $ouWorkstations -ErrorAction SilentlyContinue
-  }
-}
-
-Write-Host "ACS baseline seed complete on $((Get-ADDomain).DNSRoot)"
+Write-Host "$podName baseline seed complete on $((Get-ADDomain).DNSRoot)"
