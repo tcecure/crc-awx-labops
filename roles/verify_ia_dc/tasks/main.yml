@@ -1,0 +1,224 @@
+---
+# Verify tasks for IA labs — shared DC mode (OU-based pod isolation)
+# Expects variables: pod_id (int), prefix (e.g. "P01")
+
+- name: "Pod{{ '%02d' | format(pod_id) }} M1-L1 — FrontDesk disabled + individual accounts created"
+  ansible.windows.win_powershell:
+    script: |
+      $p = "{{ prefix }}"
+      $domainDN = (Get-ADDomain).DistinguishedName
+      $podName = "Pod{{ '%02d' | format(pod_id) }}"
+      $reasons = @()
+      # FrontDesk should be disabled
+      $fd = Get-ADUser -Filter "SamAccountName -eq '$p-frontdesk'" -Properties Enabled -ErrorAction SilentlyContinue
+      if (-not $fd) { $reasons += "$p-frontdesk not found" }
+      elseif ($fd.Enabled) { $reasons += "$p-frontdesk still enabled" }
+      # k.omalley should exist
+      $ko = Get-ADUser -Filter "SamAccountName -eq '$p-k.omalley'" -ErrorAction SilentlyContinue
+      if (-not $ko) { $reasons += "$p-k.omalley not created" }
+      # temp.agency01 should exist
+      $ta = Get-ADUser -Filter "SamAccountName -eq '$p-temp.agency01'" -ErrorAction SilentlyContinue
+      if (-not $ta) { $reasons += "$p-temp.agency01 not created" }
+      # Evidence file
+      $ev = Test-Path "C:\CyberLab\$podName\M1-L1.txt"
+      if (-not $ev) { $reasons += "M1-L1.txt not found" }
+      if ($reasons.Count -eq 0) { @{ completed=$true; reason="FrontDesk disabled, individual accounts created, evidence present" } }
+      else { @{ completed=$false; reason=($reasons -join "; ") } }
+  register: v_m1l1
+
+- name: "Pod{{ '%02d' | format(pod_id) }} M1-L2 — tom.davis disabled, stripped, in Terminated OU"
+  ansible.windows.win_powershell:
+    script: |
+      $p = "{{ prefix }}"
+      $reasons = @()
+      try {
+        $u = Get-ADUser -Identity "$p-tom.davis" -Properties Enabled,MemberOf,DistinguishedName -ErrorAction Stop
+        if ($u.Enabled) { $reasons += "still enabled" }
+        if ($u.DistinguishedName -notmatch "OU=Terminated") { $reasons += "not in Terminated OU" }
+        $groups = @($u.MemberOf | ForEach-Object { (Get-ADGroup $_).Name } | Where-Object { $_ -ne "Domain Users" })
+        if ($groups.Count -gt 0) { $reasons += "still has groups: $($groups -join ',')" }
+      } catch { $reasons += "$p-tom.davis not found" }
+      if ($reasons.Count -eq 0) { @{ completed=$true; reason="$p-tom.davis disabled, stripped, in Terminated" } }
+      else { @{ completed=$false; reason=($reasons -join "; ") } }
+  register: v_m1l2
+
+- name: "Pod{{ '%02d' | format(pod_id) }} M1-L3 — Generic accounts disabled + inventory CSV created"
+  ansible.windows.win_powershell:
+    script: |
+      $p = "{{ prefix }}"
+      $podName = "Pod{{ '%02d' | format(pod_id) }}"
+      $reasons = @()
+      foreach ($sam in @("$p-admin","$p-user1","$p-test")) {
+        $u = Get-ADUser -Filter "SamAccountName -eq '$sam'" -Properties Enabled -ErrorAction SilentlyContinue
+        if ($u -and $u.Enabled) { $reasons += "$sam still enabled" }
+      }
+      $csv = "C:\CyberLab\$podName\IA-Artifacts\Authorized_User_Inventory.csv"
+      if (-not (Test-Path $csv)) { $reasons += "Authorized_User_Inventory.csv not found" }
+      elseif ((Get-Item $csv).Length -eq 0) { $reasons += "CSV is empty" }
+      if ($reasons.Count -eq 0) { @{ completed=$true; reason="Generic accounts disabled, inventory CSV present" } }
+      else { @{ completed=$false; reason=($reasons -join "; ") } }
+  register: v_m1l3
+
+- name: "Pod{{ '%02d' | format(pod_id) }} M2-L1 — Task running as service account, not human"
+  ansible.windows.win_powershell:
+    script: |
+      $p = "{{ prefix }}"
+      $podName = "Pod{{ '%02d' | format(pod_id) }}"
+      $reasons = @()
+      $taskName = "$podName ACS Nightly Backup"
+      try {
+        $task = Get-ScheduledTask -TaskName $taskName -ErrorAction Stop
+        $principal = $task.Principal.UserId
+        if ($principal -match [regex]::Escape("$p-s.jenkins")) { $reasons += "still running as $p-s.jenkins" }
+        elseif ($principal -notmatch "svc") { $reasons += "principal '$principal' does not appear to be a service account" }
+      } catch { $reasons += "task '$taskName' not found" }
+      # svc_backup should exist
+      $svc = Get-ADUser -Filter "SamAccountName -eq '$p-svc_backup'" -ErrorAction SilentlyContinue
+      if (-not $svc) { $reasons += "$p-svc_backup not created" }
+      if ($reasons.Count -eq 0) { @{ completed=$true; reason="Task running as service account" } }
+      else { @{ completed=$false; reason=($reasons -join "; ") } }
+  register: v_m2l1
+
+- name: "Pod{{ '%02d' | format(pod_id) }} M2-L2 — Device list updated + config record created"
+  ansible.windows.win_powershell:
+    script: |
+      $podName = "Pod{{ '%02d' | format(pod_id) }}"
+      $reasons = @()
+      $devList = "C:\CyberLab\$podName\IA-Artifacts\Authorized_Device_List.csv"
+      if (Test-Path $devList) {
+        $content = Get-Content $devList -Raw
+        if ($content -notmatch "AA-BB-CC-11-22-33") { $reasons += "rogue MAC not added to device list" }
+        if ($content -notmatch "UNAUTHORIZED") { $reasons += "device not marked UNAUTHORIZED" }
+      } else { $reasons += "Authorized_Device_List.csv not found" }
+      $cfg = "C:\CyberLab\$podName\IA-Artifacts\Device_Config_Record.csv"
+      if (-not (Test-Path $cfg)) { $reasons += "Device_Config_Record.csv not found" }
+      elseif ((Get-Item $cfg).Length -eq 0) { $reasons += "Device_Config_Record.csv is empty" }
+      if ($reasons.Count -eq 0) { @{ completed=$true; reason="Device list updated, config record created" } }
+      else { @{ completed=$false; reason=($reasons -join "; ") } }
+  register: v_m2l2
+
+- name: "Pod{{ '%02d' | format(pod_id) }} M2-L3 — Service account descriptions populated + matrix CSV"
+  ansible.windows.win_powershell:
+    script: |
+      $p = "{{ prefix }}"
+      $podName = "Pod{{ '%02d' | format(pod_id) }}"
+      $reasons = @()
+      foreach ($sam in @("$p-svc_backup","$p-svc_web","$p-svc_print")) {
+        $u = Get-ADUser -Filter "SamAccountName -eq '$sam'" -Properties Description -ErrorAction SilentlyContinue
+        if (-not $u) { $reasons += "$sam not found" }
+        elseif ([string]::IsNullOrWhiteSpace($u.Description)) { $reasons += "$sam still has empty description" }
+      }
+      $csv = "C:\CyberLab\$podName\IA-Artifacts\Service_Account_Matrix.csv"
+      if (-not (Test-Path $csv)) { $reasons += "Service_Account_Matrix.csv not found" }
+      elseif ((Get-Item $csv).Length -eq 0) { $reasons += "CSV is empty" }
+      if ($reasons.Count -eq 0) { @{ completed=$true; reason="Service account descriptions set, matrix CSV present" } }
+      else { @{ completed=$false; reason=($reasons -join "; ") } }
+  register: v_m2l3
+
+- name: "Pod{{ '%02d' | format(pod_id) }} M3-L1 — Password policy report + evidence file"
+  ansible.windows.win_powershell:
+    script: |
+      $podName = "Pod{{ '%02d' | format(pod_id) }}"
+      $reasons = @()
+      $report = "C:\CyberLab\$podName\IA-Artifacts\PasswordPolicy_Report.html"
+      if (-not (Test-Path $report)) { $reasons += "PasswordPolicy_Report.html not found" }
+      elseif ((Get-Item $report).Length -eq 0) { $reasons += "report is empty" }
+      $ev = "C:\CyberLab\$podName\M3-L1.txt"
+      if (-not (Test-Path $ev)) { $reasons += "M3-L1.txt evidence not found" }
+      if ($reasons.Count -eq 0) { @{ completed=$true; reason="Policy report exported, evidence file present" } }
+      else { @{ completed=$false; reason=($reasons -join "; ") } }
+  register: v_m3l1
+
+- name: "Pod{{ '%02d' | format(pod_id) }} M3-L2 — Password policy strengthened (domain-wide)"
+  ansible.windows.win_powershell:
+    script: |
+      $reasons = @()
+      $pol = Get-ADDefaultDomainPasswordPolicy
+      if ($pol.MinPasswordLength -lt 12) { $reasons += "MinPasswordLength=$($pol.MinPasswordLength) (need 12+)" }
+      if (-not $pol.ComplexityEnabled) { $reasons += "ComplexityEnabled=False" }
+      if ($pol.LockoutThreshold -lt 10) { $reasons += "LockoutThreshold=$($pol.LockoutThreshold) (need 10+)" }
+      if ($reasons.Count -eq 0) { @{ completed=$true; reason="MinLen=$($pol.MinPasswordLength), Complexity=On, Lockout=$($pol.LockoutThreshold)" } }
+      else { @{ completed=$false; reason=($reasons -join "; ") } }
+  register: v_m3l2
+
+- name: "Pod{{ '%02d' | format(pod_id) }} M3-L3 — d.chen has must-change-password flag set"
+  ansible.windows.win_powershell:
+    script: |
+      $p = "{{ prefix }}"
+      $reasons = @()
+      try {
+        $u = Get-ADUser -Identity "$p-d.chen" -Properties pwdLastSet -ErrorAction Stop
+        if ($u.pwdLastSet -ne 0) { $reasons += "must-change flag not set (pwdLastSet=$($u.pwdLastSet))" }
+      } catch { $reasons += "$p-d.chen not found" }
+      $podName = "Pod{{ '%02d' | format(pod_id) }}"
+      $ev = "C:\CyberLab\$podName\M3-L3.txt"
+      if (-not (Test-Path $ev)) { $reasons += "M3-L3.txt evidence not found" }
+      if ($reasons.Count -eq 0) { @{ completed=$true; reason="$p-d.chen must-change flag set, evidence present" } }
+      else { @{ completed=$false; reason=($reasons -join "; ") } }
+  register: v_m3l3
+
+- name: "Pod{{ '%02d' | format(pod_id) }} M4-L1 — Hardening standard updated + evidence"
+  ansible.windows.win_powershell:
+    script: |
+      $podName = "Pod{{ '%02d' | format(pod_id) }}"
+      $reasons = @()
+      $hs = "C:\CyberLab\$podName\IA-Artifacts\Hardening_Standard.txt"
+      if (Test-Path $hs) {
+        $content = Get-Content $hs -Raw
+        if ($content -notmatch "(?i)default.*(password|credential)") { $reasons += "default password clause not added" }
+      } else { $reasons += "Hardening_Standard.txt not found" }
+      $ev = "C:\CyberLab\$podName\M4-L1.txt"
+      if (-not (Test-Path $ev)) { $reasons += "M4-L1.txt evidence not found" }
+      if ($reasons.Count -eq 0) { @{ completed=$true; reason="Hardening standard updated, evidence present" } }
+      else { @{ completed=$false; reason=($reasons -join "; ") } }
+  register: v_m4l1
+
+- name: "Pod{{ '%02d' | format(pod_id) }} M4-L2 — Device config record for SNMP finding"
+  ansible.windows.win_powershell:
+    script: |
+      $podName = "Pod{{ '%02d' | format(pod_id) }}"
+      $reasons = @()
+      $cfg = "C:\CyberLab\$podName\IA-Artifacts\Device_Config_Record.csv"
+      if (Test-Path $cfg) {
+        $content = Get-Content $cfg -Raw
+        if ($content -notmatch "SNMP") { $reasons += "SNMP finding not documented" }
+      } else { $reasons += "Device_Config_Record.csv not found" }
+      if ($reasons.Count -eq 0) { @{ completed=$true; reason="SNMP device config record created" } }
+      else { @{ completed=$false; reason=($reasons -join "; ") } }
+  register: v_m4l2
+
+- name: "Pod{{ '%02d' | format(pod_id) }} M4-L3 — Hardcoded password replaced + vault entry"
+  ansible.windows.win_powershell:
+    script: |
+      $podName = "Pod{{ '%02d' | format(pod_id) }}"
+      $reasons = @()
+      $script = "C:\CyberLab\$podName\LabArtifacts\Scripts\db_connect.py"
+      if (Test-Path $script) {
+        $content = Get-Content $script -Raw
+        if ($content -match "password123") { $reasons += "hardcoded password still present" }
+        if ($content -notmatch "VAULT_REF") { $reasons += "vault reference not added" }
+      } else { $reasons += "db_connect.py not found" }
+      $vault = "C:\CyberLab\$podName\IA-Artifacts\Vault\Vault_Entries.txt"
+      if (-not (Test-Path $vault)) { $reasons += "Vault_Entries.txt not found" }
+      elseif ((Get-Item $vault).Length -eq 0) { $reasons += "Vault_Entries.txt is empty" }
+      $ev = "C:\CyberLab\$podName\M4-L3.txt"
+      if (-not (Test-Path $ev)) { $reasons += "M4-L3.txt evidence not found" }
+      if ($reasons.Count -eq 0) { @{ completed=$true; reason="Password replaced with vault ref, vault entry + evidence present" } }
+      else { @{ completed=$false; reason=($reasons -join "; ") } }
+  register: v_m4l3
+
+- name: "Consolidate Pod{{ '%02d' | format(pod_id) }} IA results"
+  ansible.builtin.set_fact:
+    "pod{{ '%02d' | format(pod_id) }}_ia_results":
+      M1-L1: "{{ v_m1l1.output[0] }}"
+      M1-L2: "{{ v_m1l2.output[0] }}"
+      M1-L3: "{{ v_m1l3.output[0] }}"
+      M2-L1: "{{ v_m2l1.output[0] }}"
+      M2-L2: "{{ v_m2l2.output[0] }}"
+      M2-L3: "{{ v_m2l3.output[0] }}"
+      M3-L1: "{{ v_m3l1.output[0] }}"
+      M3-L2: "{{ v_m3l2.output[0] }}"
+      M3-L3: "{{ v_m3l3.output[0] }}"
+      M4-L1: "{{ v_m4l1.output[0] }}"
+      M4-L2: "{{ v_m4l2.output[0] }}"
+      M4-L3: "{{ v_m4l3.output[0] }}"
