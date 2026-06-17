@@ -133,12 +133,10 @@ function Apply-Lab($id) {
 
       $taskName = "$podName ACS Nightly Backup"
       Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
-      $action    = New-ScheduledTaskAction -Execute "powershell.exe" `
-        -Argument "-ExecutionPolicy Bypass -Command `"Write-Output 'Backup started'; Copy-Item C:\Data\* C:\Backups\ -Recurse -ErrorAction SilentlyContinue`""
-      $trigger   = New-ScheduledTaskTrigger -Daily -At "2:00AM"
-      $principal = New-ScheduledTaskPrincipal -UserId "$netBIOS\$prefix-s.jenkins" -LogonType Password -RunLevel Highest
-      Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal `
-        -Description "Nightly backup — currently running as human account (FAIL state)" -Force | Out-Null
+      # Use schtasks.exe for reliable task creation on DCs
+      schtasks.exe /Create /TN $taskName /SC DAILY /ST 02:00 `
+        /TR "powershell.exe -ExecutionPolicy Bypass -Command Write-Output 'Backup started'" `
+        /RU "$netBIOS\$prefix-s.jenkins" /RP $SeedPassword /RL HIGHEST /F | Out-Null
       Drop-Marker "IA-M2-L1"
       Write-Host "  M2-L1 seeded: task '$taskName' running as $prefix-s.jenkins"
     }
@@ -186,21 +184,15 @@ PRINT-P01,00-15-5D-01-01-30,10.50.1.30,AUTHORIZED,Facilities,2026-01-15
 
     "M3-L2" {
       # Weak password policy (domain-wide — affects all pods)
-      $cfgPath = "C:\Windows\Temp\ia_m3l2_weak.cfg"
-      $dbPath  = "C:\Windows\Temp\ia_m3l2_weak.sdb"
-      @"
-[Unicode]
-Unicode=yes
-[System Access]
-MinimumPasswordLength = 6
-PasswordComplexity = 0
-LockoutBadCount = 0
-PasswordHistorySize = 0
-MaximumPasswordAge = 90
-MinimumPasswordAge = 0
-"@ | Set-Content -Path $cfgPath -Encoding Unicode
-      secedit /configure /db $dbPath /cfg $cfgPath /areas SECURITYPOLICY /quiet
-      gpupdate /force | Out-Null
+      # Set weak password policy via AD cmdlets (domain-level)
+      Set-ADDefaultDomainPasswordPolicy -Identity $dnsRoot `
+        -MinPasswordLength 6 `
+        -ComplexityEnabled $false `
+        -LockoutThreshold 0 `
+        -PasswordHistoryCount 0 `
+        -MaxPasswordAge (New-TimeSpan -Days 90) `
+        -MinPasswordAge (New-TimeSpan -Days 0) `
+        -ErrorAction SilentlyContinue
       Drop-Marker "IA-M3-L2"
       Write-Host "  M3-L2 seeded: weak password policy applied (domain-wide)"
     }
