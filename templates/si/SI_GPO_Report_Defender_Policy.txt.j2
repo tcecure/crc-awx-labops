@@ -1,0 +1,90 @@
+====================================================================
+  GROUP POLICY OBJECT REPORT
+  GPO Name: {{ prefix }}-SI-Defender-Policy
+  Domain:   acs-p01.local
+  Created:  2026-01-15 09:30:00
+  Modified: 2026-05-01 14:22:33
+====================================================================
+
+GENERAL INFORMATION
+-------------------
+GPO Status:         Enabled
+Link:               OU=Pod{{ pod_id_padded }},OU=Students,DC=acs-p01,DC=local
+Link Enabled:       Yes
+Enforced:           No
+WMI Filter:         None
+
+COMPUTER CONFIGURATION
+=======================
+
+Policies > Administrative Templates > Windows Components >
+Microsoft Defender Antivirus
+--------------------------------------------------------------
+
+  Setting                                          State
+  -----------------------------------------------------------
+  Turn off Microsoft Defender Antivirus            Disabled
+  Allow antimalware service to start with
+    normal priority                                Enabled
+  Turn off routine remediation                     Disabled
+
+Policies > Administrative Templates > Windows Components >
+Microsoft Defender Antivirus > Real-Time Protection
+--------------------------------------------------------------
+
+  Setting                                          State
+  -----------------------------------------------------------
+  Turn off real-time protection                    Disabled
+  Monitor file and program activity on your
+    computer                                       Enabled
+  Scan all downloaded files and attachments        Enabled
+  Turn on behavior monitoring                      Enabled
+
+Policies > Administrative Templates > Windows Components >
+Microsoft Defender Antivirus > Signature Updates
+--------------------------------------------------------------
+
+  Setting                                          State
+  -----------------------------------------------------------
+  Define the number of days before spyware
+    definitions are considered out of date         7
+  Define the number of days before virus
+    definitions are considered out of date         7
+  Specify the interval to check for definition
+    updates                                        1 (hours)
+  Check for the latest virus and spyware
+    definitions on startup                         Enabled
+
+Policies > Administrative Templates > Windows Components >
+Microsoft Defender Antivirus > Scan
+--------------------------------------------------------------
+
+  Setting                                          State
+  -----------------------------------------------------------
+  Specify the scan type to use for a
+    scheduled scan                                 Full Scan
+  Specify the day of the week to run a
+    scheduled scan                                 0 (Every day)
+  Specify the time of day to run a
+    scheduled scan                                 120 (02:00 AM)
+
+Policies > Administrative Templates > Windows Components >
+Microsoft Defender Antivirus > Tamper Protection
+--------------------------------------------------------------
+
+  Setting                                          State
+  -----------------------------------------------------------
+  [NOTE: Tamper Protection is managed via
+   Microsoft Security Center, not GPO.
+   Current status must be verified via:
+   Get-MpPreference | Select IsTamperProtected]   NOT CONFIGURED IN GPO
+
+====================================================================
+STUDENT REVIEW CHECKLIST:
+  [  ] Turn off Defender = Disabled (protection CANNOT be turned off)
+  [  ] Real-Time Protection = Active (not disabled)
+  [  ] Tamper Protection = Document requirement and verify method
+  [  ] Weekly full scan = Configured
+  [  ] Daily signature updates = Configured (1-hour interval)
+  [  ] Identify any MISSING configuration (see Tamper Protection note)
+====================================================================

@@ -1,0 +1,206 @@
+---
+# Verify tasks for SI labs — shared DC mode (OU-based pod isolation)
+# Expects variables: pod_id (int), prefix (e.g. "P01")
+
+- name: "Pod{{ '%02d' | format(pod_id) }} SI M1-L1 — Flaw classification completed"
+  ansible.windows.win_powershell:
+    script: |
+      $podName = "Pod{{ '%02d' | format(pod_id) }}"
+      $artifactDir = "C:\CyberLab\$podName\SI-Artifacts"
+      $reasons = @()
+      # Lab marker must exist (means lab was seeded)
+      $marker = Join-Path $artifactDir "_LAB_READY_SI-M1-L1.txt"
+      if (-not (Test-Path $marker)) { $reasons += "lab not seeded (marker missing)" }
+      # Student should have created completion file
+      $completed = Join-Path $artifactDir "SI-M1-L1_Completed.txt"
+      if (-not (Test-Path $completed)) { $reasons += "SI-M1-L1_Completed.txt not found" }
+      elseif ((Get-Item $completed).Length -lt 100) { $reasons += "completion file too short (incomplete)" }
+      if ($reasons.Count -eq 0) { @{ completed=$true; reason="Flaw classification worksheet submitted" } }
+      else { @{ completed=$false; reason=($reasons -join "; ") } }
+  register: v_m1l1
+
+- name: "Pod{{ '%02d' | format(pod_id) }} SI M1-L2 — Source classification completed"
+  ansible.windows.win_powershell:
+    script: |
+      $podName = "Pod{{ '%02d' | format(pod_id) }}"
+      $artifactDir = "C:\CyberLab\$podName\SI-Artifacts"
+      $reasons = @()
+      $marker = Join-Path $artifactDir "_LAB_READY_SI-M1-L2.txt"
+      if (-not (Test-Path $marker)) { $reasons += "lab not seeded (marker missing)" }
+      $completed = Join-Path $artifactDir "SI-M1-L2_Completed.txt"
+      if (-not (Test-Path $completed)) { $reasons += "SI-M1-L2_Completed.txt not found" }
+      elseif ((Get-Item $completed).Length -lt 100) { $reasons += "completion file too short (incomplete)" }
+      if ($reasons.Count -eq 0) { @{ completed=$true; reason="Source classification worksheet submitted" } }
+      else { @{ completed=$false; reason=($reasons -join "; ") } }
+  register: v_m1l2
+
+- name: "Pod{{ '%02d' | format(pod_id) }} SI M1-L3 — Exposure calculation completed"
+  ansible.windows.win_powershell:
+    script: |
+      $podName = "Pod{{ '%02d' | format(pod_id) }}"
+      $artifactDir = "C:\CyberLab\$podName\SI-Artifacts"
+      $reasons = @()
+      $marker = Join-Path $artifactDir "_LAB_READY_SI-M1-L3.txt"
+      if (-not (Test-Path $marker)) { $reasons += "lab not seeded (marker missing)" }
+      # Student should create a completed exposure worksheet
+      $completed = Join-Path $artifactDir "SI-M1-L3_Completed.csv"
+      $completedTxt = Join-Path $artifactDir "SI-M1-L3_Completed.txt"
+      if ((-not (Test-Path $completed)) -and (-not (Test-Path $completedTxt))) {
+        $reasons += "SI-M1-L3 completion file not found (.csv or .txt)"
+      }
+      if ($reasons.Count -eq 0) { @{ completed=$true; reason="Exposure calculation worksheet submitted" } }
+      else { @{ completed=$false; reason=($reasons -join "; ") } }
+  register: v_m1l3
+
+- name: "Pod{{ '%02d' | format(pod_id) }} SI M2-L1 — Vulnerability scan analysis completed"
+  ansible.windows.win_powershell:
+    script: |
+      $podName = "Pod{{ '%02d' | format(pod_id) }}"
+      $artifactDir = "C:\CyberLab\$podName\SI-Artifacts"
+      $reasons = @()
+      $marker = Join-Path $artifactDir "_LAB_READY_SI-M2-L1.txt"
+      if (-not (Test-Path $marker)) { $reasons += "lab not seeded (marker missing)" }
+      $completed = Join-Path $artifactDir "SI-M2-L1_Completed.txt"
+      if (-not (Test-Path $completed)) { $reasons += "SI-M2-L1_Completed.txt not found" }
+      elseif ((Get-Item $completed).Length -lt 50) { $reasons += "completion file too short" }
+      if ($reasons.Count -eq 0) { @{ completed=$true; reason="Vulnerability scan analysis submitted" } }
+      else { @{ completed=$false; reason=($reasons -join "; ") } }
+  register: v_m2l1
+
+- name: "Pod{{ '%02d' | format(pod_id) }} SI M2-L2 — Patch verification analysis completed"
+  ansible.windows.win_powershell:
+    script: |
+      $podName = "Pod{{ '%02d' | format(pod_id) }}"
+      $artifactDir = "C:\CyberLab\$podName\SI-Artifacts"
+      $reasons = @()
+      $marker = Join-Path $artifactDir "_LAB_READY_SI-M2-L2.txt"
+      if (-not (Test-Path $marker)) { $reasons += "lab not seeded (marker missing)" }
+      $completed = Join-Path $artifactDir "SI-M2-L2_Completed.txt"
+      if (-not (Test-Path $completed)) { $reasons += "SI-M2-L2_Completed.txt not found" }
+      elseif ((Get-Item $completed).Length -lt 50) { $reasons += "completion file too short" }
+      if ($reasons.Count -eq 0) { @{ completed=$true; reason="Patch verification analysis submitted" } }
+      else { @{ completed=$false; reason=($reasons -join "; ") } }
+  register: v_m2l2
+
+- name: "Pod{{ '%02d' | format(pod_id) }} SI M2-L3 — Remediation report and ticket created"
+  ansible.windows.win_powershell:
+    script: |
+      $podName = "Pod{{ '%02d' | format(pod_id) }}"
+      $artifactDir = "C:\CyberLab\$podName\SI-Artifacts"
+      $reasons = @()
+      $marker = Join-Path $artifactDir "_LAB_READY_SI-M2-L3.txt"
+      if (-not (Test-Path $marker)) { $reasons += "lab not seeded (marker missing)" }
+      $report = Join-Path $artifactDir "SI-M2-L3_Completed.txt"
+      if (-not (Test-Path $report)) { $reasons += "SI-M2-L3_Completed.txt not found" }
+      $ticket = Join-Path $artifactDir "SI-M2-L3_Remediation_Ticket.txt"
+      if (-not (Test-Path $ticket)) { $reasons += "SI-M2-L3_Remediation_Ticket.txt not found" }
+      elseif ((Get-Item $ticket).Length -lt 50) { $reasons += "ticket file too short" }
+      if ($reasons.Count -eq 0) { @{ completed=$true; reason="Vulnerability report and remediation ticket submitted" } }
+      else { @{ completed=$false; reason=($reasons -join "; ") } }
+  register: v_m2l3
+
+- name: "Pod{{ '%02d' | format(pod_id) }} SI M3-L1 — AV coverage assessment completed"
+  ansible.windows.win_powershell:
+    script: |
+      $podName = "Pod{{ '%02d' | format(pod_id) }}"
+      $artifactDir = "C:\CyberLab\$podName\SI-Artifacts"
+      $reasons = @()
+      $marker = Join-Path $artifactDir "_LAB_READY_SI-M3-L1.txt"
+      if (-not (Test-Path $marker)) { $reasons += "lab not seeded (marker missing)" }
+      $completed = Join-Path $artifactDir "SI-M3-L1_Completed.txt"
+      if (-not (Test-Path $completed)) { $reasons += "SI-M3-L1_Completed.txt not found" }
+      elseif ((Get-Item $completed).Length -lt 50) { $reasons += "completion file too short" }
+      if ($reasons.Count -eq 0) { @{ completed=$true; reason="AV coverage assessment submitted" } }
+      else { @{ completed=$false; reason=($reasons -join "; ") } }
+  register: v_m3l1
+
+- name: "Pod{{ '%02d' | format(pod_id) }} SI M3-L2 — Scan log review completed"
+  ansible.windows.win_powershell:
+    script: |
+      $podName = "Pod{{ '%02d' | format(pod_id) }}"
+      $artifactDir = "C:\CyberLab\$podName\SI-Artifacts"
+      $reasons = @()
+      $marker = Join-Path $artifactDir "_LAB_READY_SI-M3-L2.txt"
+      if (-not (Test-Path $marker)) { $reasons += "lab not seeded (marker missing)" }
+      $completed = Join-Path $artifactDir "SI-M3-L2_Completed.txt"
+      if (-not (Test-Path $completed)) { $reasons += "SI-M3-L2_Completed.txt not found" }
+      elseif ((Get-Item $completed).Length -lt 50) { $reasons += "completion file too short" }
+      if ($reasons.Count -eq 0) { @{ completed=$true; reason="Scan log review submitted" } }
+      else { @{ completed=$false; reason=($reasons -join "; ") } }
+  register: v_m3l2
+
+- name: "Pod{{ '%02d' | format(pod_id) }} SI M3-L3 — Definition compliance check completed"
+  ansible.windows.win_powershell:
+    script: |
+      $podName = "Pod{{ '%02d' | format(pod_id) }}"
+      $artifactDir = "C:\CyberLab\$podName\SI-Artifacts"
+      $reasons = @()
+      $marker = Join-Path $artifactDir "_LAB_READY_SI-M3-L3.txt"
+      if (-not (Test-Path $marker)) { $reasons += "lab not seeded (marker missing)" }
+      $completed = Join-Path $artifactDir "SI-M3-L3_Completed.txt"
+      if (-not (Test-Path $completed)) { $reasons += "SI-M3-L3_Completed.txt not found" }
+      elseif ((Get-Item $completed).Length -lt 50) { $reasons += "completion file too short" }
+      if ($reasons.Count -eq 0) { @{ completed=$true; reason="Definition compliance assessment submitted" } }
+      else { @{ completed=$false; reason=($reasons -join "; ") } }
+  register: v_m3l3
+
+- name: "Pod{{ '%02d' | format(pod_id) }} SI M4-L1 — GPO review completed"
+  ansible.windows.win_powershell:
+    script: |
+      $podName = "Pod{{ '%02d' | format(pod_id) }}"
+      $artifactDir = "C:\CyberLab\$podName\SI-Artifacts"
+      $reasons = @()
+      $marker = Join-Path $artifactDir "_LAB_READY_SI-M4-L1.txt"
+      if (-not (Test-Path $marker)) { $reasons += "lab not seeded (marker missing)" }
+      $completed = Join-Path $artifactDir "SI-M4-L1_Completed.txt"
+      if (-not (Test-Path $completed)) { $reasons += "SI-M4-L1_Completed.txt not found" }
+      elseif ((Get-Item $completed).Length -lt 50) { $reasons += "completion file too short" }
+      if ($reasons.Count -eq 0) { @{ completed=$true; reason="GPO review assessment submitted" } }
+      else { @{ completed=$false; reason=($reasons -join "; ") } }
+  register: v_m4l1
+
+- name: "Pod{{ '%02d' | format(pod_id) }} SI M4-L2 — Event viewer analysis completed"
+  ansible.windows.win_powershell:
+    script: |
+      $podName = "Pod{{ '%02d' | format(pod_id) }}"
+      $artifactDir = "C:\CyberLab\$podName\SI-Artifacts"
+      $reasons = @()
+      $marker = Join-Path $artifactDir "_LAB_READY_SI-M4-L2.txt"
+      if (-not (Test-Path $marker)) { $reasons += "lab not seeded (marker missing)" }
+      $completed = Join-Path $artifactDir "SI-M4-L2_Completed.txt"
+      if (-not (Test-Path $completed)) { $reasons += "SI-M4-L2_Completed.txt not found" }
+      elseif ((Get-Item $completed).Length -lt 50) { $reasons += "completion file too short" }
+      if ($reasons.Count -eq 0) { @{ completed=$true; reason="Event viewer analysis submitted" } }
+      else { @{ completed=$false; reason=($reasons -join "; ") } }
+  register: v_m4l2
+
+- name: "Pod{{ '%02d' | format(pod_id) }} SI M4-L3 — Rogue developer investigation completed"
+  ansible.windows.win_powershell:
+    script: |
+      $podName = "Pod{{ '%02d' | format(pod_id) }}"
+      $artifactDir = "C:\CyberLab\$podName\SI-Artifacts"
+      $reasons = @()
+      $marker = Join-Path $artifactDir "_LAB_READY_SI-M4-L3.txt"
+      if (-not (Test-Path $marker)) { $reasons += "lab not seeded (marker missing)" }
+      $completed = Join-Path $artifactDir "SI-M4-L3_Completed.txt"
+      if (-not (Test-Path $completed)) { $reasons += "SI-M4-L3_Completed.txt not found" }
+      elseif ((Get-Item $completed).Length -lt 100) { $reasons += "completion file too short" }
+      if ($reasons.Count -eq 0) { @{ completed=$true; reason="Rogue developer investigation submitted" } }
+      else { @{ completed=$false; reason=($reasons -join "; ") } }
+  register: v_m4l3
+
+- name: "Consolidate Pod{{ '%02d' | format(pod_id) }} SI results"
+  ansible.builtin.set_fact:
+    "pod{{ '%02d' | format(pod_id) }}_si_results":
+      M1-L1: "{{ v_m1l1.output[0] }}"
+      M1-L2: "{{ v_m1l2.output[0] }}"
+      M1-L3: "{{ v_m1l3.output[0] }}"
+      M2-L1: "{{ v_m2l1.output[0] }}"
+      M2-L2: "{{ v_m2l2.output[0] }}"
+      M2-L3: "{{ v_m2l3.output[0] }}"
+      M3-L1: "{{ v_m3l1.output[0] }}"
+      M3-L2: "{{ v_m3l2.output[0] }}"
+      M3-L3: "{{ v_m3l3.output[0] }}"
+      M4-L1: "{{ v_m4l1.output[0] }}"
+      M4-L2: "{{ v_m4l2.output[0] }}"
+      M4-L3: "{{ v_m4l3.output[0] }}"

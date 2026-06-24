@@ -1,0 +1,65 @@
+====================================================================
+  ACS CORP — VULNERABILITY REMEDIATION TIMELINE POLICY
+  Document ID: ACS-POL-SI-002 | Version: 2.1
+  Effective Date: January 1, 2026
+  Organization: ACS Corp | Domain: acs-p01.local
+====================================================================
+
+1. PURPOSE
+----------
+This policy establishes maximum acceptable timeframes for remediating
+identified information system flaws per NIST SP 800-53 SI-2 and
+CMMC Level 1 requirements.
+
+2. SCOPE
+--------
+All information systems within the ACS Corp environment, including:
+- Domain controllers and servers
+- End-user workstations
+- Network infrastructure devices
+- Cloud-hosted services
+
+3. REMEDIATION TIMELINES
+-------------------------
+Upon discovery of a vulnerability, remediation must be completed
+within the following timeframes based on CVSS severity:
+
+  Severity         CVSS Range    Max Remediation Window
+  ----------------------------------------------------------------
+  Critical         9.0 - 10.0    7 calendar days
+  High             7.0 - 8.9    14 calendar days
+  Medium           4.0 - 6.9    30 calendar days
+  Low              0.1 - 3.9    90 calendar days
+  Informational    0.0           Track only (no SLA)
+
+4. COMPLIANCE MEASUREMENT
+--------------------------
+- "Discovery Date" = date vulnerability first appears in scan results
+- "Remediation Date" = date re-scan confirms vulnerability resolved
+- "Exposure Window" = Remediation Date minus Discovery Date
+- A finding is COMPLIANT if Exposure Window <= Max Remediation Window
+- A finding is NON-COMPLIANT if Exposure Window > Max Remediation Window
+  OR if Remediation_Date = OPEN and current age exceeds threshold
+
+5. EXCEPTIONS
+-------------
+- Risk acceptance requires VP-level approval and documented
+  compensating controls
+- Maximum risk acceptance duration: 90 days (renewable once)
+- No exceptions permitted for Critical findings with active exploits
+
+6. FAILED PATCHES
+-----------------
+IMPORTANT: An attempted patch that FAILS to install does NOT satisfy
+the remediation requirement. The vulnerability remains OPEN until
+a successful installation is confirmed via re-scan.
+
+7. REFERENCES
+-------------
+- NIST SP 800-53 Rev. 5: SI-2 (Flaw Remediation)
+- CMMC Level 1: SI.L1-3.14.1
+- ACS Corp Change Management Policy (ACS-POL-CM-001)
+
+====================================================================
+Approved by: ACS Corp CISO | Review Date: June 2026
+====================================================================

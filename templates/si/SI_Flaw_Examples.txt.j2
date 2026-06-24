@@ -1,0 +1,67 @@
+====================================================================
+  ACS SECURITY ASSESSMENT — SYSTEM FLAW EXAMPLES
+  Organization: ACS Corp | Domain: acs-p01.local
+  Pod: {{ pod_id_padded }} | Generated: {{ ansible_date_time.date | default('2026-06-01') }}
+====================================================================
+
+FINDING #1
+----------
+Type:           [CLASSIFY: Software Flaw / Configuration Flaw / Patching Gap]
+System:         {{ prefix }}-ACS-SRV-002 (Windows Server 2022)
+Description:    SMBv1 protocol remains enabled on file server.
+                No GPO disabling legacy protocol. Service "LanmanServer"
+                accepts SMBv1 negotiation.
+Risk:           Remote code execution via EternalBlue-class exploits
+Reported:       No
+Discovery Date: 2026-01-15
+
+FINDING #2
+----------
+Type:           [CLASSIFY: Software Flaw / Configuration Flaw / Patching Gap]
+System:         {{ prefix }}-WS01 (Windows 11 Pro)
+Description:    Adobe Acrobat Reader DC version 2023.003.20201 installed.
+                Known heap overflow vulnerability (CVE-2024-41879).
+                Vendor patch available since 2024-09-10.
+Risk:           Arbitrary code execution via crafted PDF
+Reported:       No
+Discovery Date: 2025-11-20
+
+FINDING #3
+----------
+Type:           [CLASSIFY: Software Flaw / Configuration Flaw / Patching Gap]
+System:         {{ prefix }}-ACS-DC01 (Domain Controller)
+Description:    LDAP signing not enforced. Registry key
+                HKLM\SYSTEM\CurrentControlSet\Services\NTDS\Parameters
+                "LDAPServerIntegrity" = 0 (None)
+Risk:           LDAP relay attacks, credential interception
+Reported:       No
+Discovery Date: 2026-02-28
+
+FINDING #4
+----------
+Type:           [CLASSIFY: Software Flaw / Configuration Flaw / Patching Gap]
+System:         {{ prefix }}-DEV-Laptop-04 (Developer Workstation)
+Description:    Windows cumulative update KB5034441 failed installation.
+                Last successful patch: 2025-08-14 (312 days ago).
+                Error: 0x80070643 during servicing stack update.
+Risk:           Multiple unpatched kernel vulnerabilities
+Reported:       No
+Discovery Date: 2026-03-01
+
+FINDING #5
+----------
+Type:           [CLASSIFY: Software Flaw / Configuration Flaw / Patching Gap]
+System:         {{ prefix }}-Legacy_Server (Windows Server 2016)
+Description:    TLS 1.0 and TLS 1.1 still enabled for backward
+                compatibility with legacy application. No migration plan
+                documented.
+Risk:           Protocol downgrade attacks, weak cipher exploitation
+Reported:       No
+Discovery Date: 2025-12-10
+
+====================================================================
+INSTRUCTIONS: For each finding above, determine:
+  1. Is this a SOFTWARE FLAW, CONFIGURATION FLAW, or PATCHING GAP?
+  2. What is the risk to the organization?
+  3. Should this be formally reported for remediation? (Yes/No + justification)
+====================================================================

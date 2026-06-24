@@ -1,0 +1,47 @@
+====================================================================
+  VENDOR SECURITY BULLETIN
+  Microsoft Security Advisory ADV260001
+====================================================================
+
+Published:          January 28, 2026
+Severity:           Important
+Affected Software:  Microsoft Office 2021, Microsoft 365 Apps
+CVE:                CVE-2026-20198
+CVSS Score:         7.5 (High)
+
+VULNERABILITY DESCRIPTION:
+--------------------------
+A remote code execution vulnerability exists in Microsoft Word when
+processing specially crafted RTF documents. An attacker who successfully
+exploits this vulnerability could run arbitrary code in the context of
+the current user.
+
+EXPLOITATION:
+-------------
+- Attack Vector: Email attachment or malicious download
+- User Interaction: Required (must open document)
+- Privileges Required: None
+- Exploit publicly available: No (as of advisory date)
+
+RECOMMENDED ACTIONS:
+--------------------
+1. Deploy update KB5035201 via WSUS or SCCM
+2. Enable Protected View for Office documents from external sources
+3. Block RTF attachments at email gateway (interim mitigation)
+4. Educate users on phishing awareness
+
+AFFECTED ACS SYSTEMS:
+---------------------
+{{ prefix }}-WS01 — User workstation (Office 2021 installed)
+{{ prefix }}-DEV-Laptop-04 — Developer workstation (Microsoft 365)
+
+ADDITIONAL NOTES:
+-----------------
+This advisory was released through Microsoft's standard Patch Tuesday
+cycle. The vulnerability was responsibly disclosed by a third-party
+researcher and no active exploitation has been observed.
+
+====================================================================
+SOURCE RELIABILITY: TRUSTED (Software Vendor - Microsoft)
+ACTIONABLE: YES — Schedule patching within 14-day policy window (High)
+====================================================================

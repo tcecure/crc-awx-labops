@@ -1,0 +1,45 @@
+====================================================================
+  ACS CORP — RISK TIMELINE QUICK REFERENCE
+  For use with Vulnerability Report Form and Remediation Tickets
+====================================================================
+
+REMEDIATION SLA BY SEVERITY (from ACS-POL-SI-002):
+----------------------------------------------------
+  Critical (9.0-10.0):   7 calendar days from discovery
+  High (7.0-8.9):       14 calendar days from discovery
+  Medium (4.0-6.9):     30 calendar days from discovery
+  Low (0.1-3.9):        90 calendar days from discovery
+
+DEADLINE CALCULATION EXAMPLES:
+-------------------------------
+  Discovery: Jun 1   | CVSS 9.3 Critical | Deadline: Jun 8
+  Discovery: Jun 1   | CVSS 7.5 High     | Deadline: Jun 15
+  Discovery: Jun 1   | CVSS 5.0 Medium   | Deadline: Jul 1
+  Discovery: Jun 1   | CVSS 2.1 Low      | Deadline: Aug 30
+
+ROUTING GUIDE:
+--------------
+  Severity      Primary Owner         Escalation
+  ---------------------------------------------------------------
+  Critical      IT Admin (immediate)  CISO within 24 hours
+  High          IT Admin (scheduled)  Compliance Officer at SLA-3
+  Medium        System Owner          IT Admin at SLA-7
+  Low           System Owner          Routine review cycle
+
+EXCEPTION PROCESS:
+------------------
+  - Risk acceptance requires VP-level written approval
+  - Must document compensating controls
+  - Maximum acceptance: 90 days (one renewal permitted)
+  - Critical findings with active exploits: NO exceptions allowed
+
+COMPLIANCE NOTES:
+-----------------
+  - "In progress" does NOT equal "remediated"
+  - Failed patch attempts do NOT stop the SLA clock
+  - SLA measured from DISCOVERY date, not ticket creation date
+  - Compliance = confirmed resolution via re-scan
+
+====================================================================
+Reference: NIST SP 800-53 SI-2, CMMC SI.L1-3.14.1
+====================================================================
