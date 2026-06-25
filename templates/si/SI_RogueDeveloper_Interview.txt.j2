@@ -1,0 +1,68 @@
+====================================================================
+  INCIDENT INTERVIEW TRANSCRIPT
+  Subject: {{ prefix }}-d.chen (David Chen, Software Developer)
+  Interviewer: IT Security Team
+  Date: 2026-05-16 10:30
+  Location: Conference Room B
+  Regarding: Unauthorized Defender Modification — 2026-05-15
+====================================================================
+
+Q: David, we detected that Windows Defender was disabled on your
+   workstation ({{ prefix }}-DEV-Laptop-04) yesterday at 9:14 AM.
+   Can you explain what happened?
+
+A: Yeah, I disabled it. I've been working on a large C++ project and
+   Defender was causing major issues with my builds. Every time I
+   compile, it scans all the output files and my build times went
+   from 3 minutes to over 20 minutes. It was making it impossible
+   to meet my sprint deadlines.
+
+Q: Did you submit an exclusion request through IT before making
+   this change?
+
+A: No, I didn't. I know there's a process but it takes like two
+   weeks to get approved and I needed to ship a feature by Friday.
+   I figured I'd just turn it off temporarily and turn it back on
+   when I was done. I've done this before at my last company and
+   it was never an issue.
+
+Q: Were you aware that completely disabling Defender violates our
+   security policy?
+
+A: I mean, I knew it probably wasn't ideal, but I thought as a
+   developer with local admin rights I had the authority to manage
+   my own workstation. The build tools need to work. I also added
+   an exclusion for my C:\DevBuilds folder thinking that would be
+   a compromise.
+
+Q: The logs show protection was off for approximately 23 hours.
+   During that time, did you download any files, open emails, or
+   browse the internet?
+
+A: I was coding all day, so yeah I had browsers open for Stack
+   Overflow and documentation. I probably downloaded a few NuGet
+   packages and some GitHub repos. Nothing suspicious though.
+
+Q: Going forward, what would be the correct process?
+
+A: I guess I should have submitted the exclusion request form and
+   waited for IT to add the specific build folder as an approved
+   exception rather than disabling everything.
+
+====================================================================
+SECURITY TEAM NOTES:
+- User admits to intentionally disabling protection
+- Motivation: Build performance (compiler interference)
+- User was unaware of proper exclusion request process
+- Unprotected period: ~23 hours with internet access
+- Correct remediation:
+  1. Restore full Defender protection (done via GPO refresh)
+  2. Submit proper exclusion request for C:\DevBuilds ONLY
+  3. If approved, add FOLDER exclusion (not disable all protection)
+  4. Do NOT allow blanket AV disablement for convenience
+  5. User education on security policy compliance
+
+POLICY REFERENCE: ACS-POL-SI-003 (Malware Protection)
+  - Section 4.2: Users shall not disable endpoint protection
+  - Section 5.1: Exclusion requests require IT Security approval
+====================================================================

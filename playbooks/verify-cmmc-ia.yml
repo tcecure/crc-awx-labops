@@ -1,0 +1,74 @@
+---
+# Shared DC mode: verify all pods on the shared DCs using OU-based isolation
+- name: "Verify Labs: CMMC Level 1 Identification & Authentication (IA) - Shared DC"
+  hosts: crc_shared_dcs[0]
+  gather_facts: false
+  vars:
+    pod_list: "{{ range(1, (pod_count | default(20) | int) + 1) | list }}"
+  tasks:
+    - name: "Verify Pod{{ '%02d' | format(item) }}"
+      ansible.builtin.include_role:
+        name: verify_ia_dc
+      vars:
+        pod_id: "{{ item }}"
+        prefix: "P{{ '%02d' | format(item) }}"
+      loop: "{{ pod_list }}"
+
+- name: Consolidate results and produce report
+  hosts: localhost
+  gather_facts: false
+  connection: local
+
+  tasks:
+    - name: Build per-pod results
+      ansible.builtin.set_fact:
+        pod_results: >-
+          {%- set pods = {} -%}
+          {%- set dc_host = groups['crc_shared_dcs'][0] -%}
+          {%- for i in range(1, (pod_count | default(20) | int) + 1) -%}
+            {%- set pad = '%02d' | format(i) -%}
+            {%- set key = 'pod' ~ pad ~ '_ia_results' -%}
+            {%- set pod_data = hostvars[dc_host][key] | default({}) -%}
+            {%- set _ = pods.update({'pod' ~ pad: pod_data}) -%}
+          {%- endfor -%}
+          {{ pods }}
+
+    - name: Compute totals
+      ansible.builtin.set_fact:
+        total_completed: >-
+          {%- set count = [0] -%}
+          {%- for pod_key, pod_val in pod_results.items() -%}
+            {%- for lab_key, lab_val in pod_val.items() -%}
+              {%- if lab_val.completed | default(false) -%}
+                {%- set _ = count.append(count.pop() + 1) -%}
+              {%- endif -%}
+            {%- endfor -%}
+          {%- endfor -%}
+          {{ count[0] }}
+        total_incomplete: >-
+          {%- set count = [0] -%}
+          {%- for pod_key, pod_val in pod_results.items() -%}
+            {%- for lab_key, lab_val in pod_val.items() -%}
+              {%- if not (lab_val.completed | default(false)) -%}
+                {%- set _ = count.append(count.pop() + 1) -%}
+              {%- endif -%}
+            {%- endfor -%}
+          {%- endfor -%}
+          {{ count[0] }}
+
+    - name: Write JSON artifact
+      ansible.builtin.copy:
+        content: "{{ {'course': 'CMMC Level 1 Identification & Authentication (IA)', 'pods': pod_results, 'totals': {'completed': total_completed | int, 'incomplete': total_incomplete | int}} | to_nice_json }}"
+        dest: /runner/artifacts/auto-verify-ia.json
+      delegate_to: localhost
+
+    - name: Print Completed/Incomplete matrix
+      ansible.builtin.debug:
+        msg: |
+          === CMMC Level 1 Identification & Authentication (IA) — Lab Results (Shared DC) ===
+          {% for i in range(1, (pod_count | default(20) | int) + 1) %}
+          {%- set pad = '%02d' | format(i) -%}
+          {%- set pod = pod_results['pod' ~ pad] -%}
+          POD{{ pad }}: M1 [L1 {{ 'C' if pod['M1-L1'].completed | default(false) else 'I' }} | L2 {{ 'C' if pod['M1-L2'].completed | default(false) else 'I' }} | L3 {{ 'C' if pod['M1-L3'].completed | default(false) else 'I' }}]  M2 [L1 {{ 'C' if pod['M2-L1'].completed | default(false) else 'I' }} | L2 {{ 'C' if pod['M2-L2'].completed | default(false) else 'I' }} | L3 {{ 'C' if pod['M2-L3'].completed | default(false) else 'I' }}]  M3 [L1 {{ 'C' if pod['M3-L1'].completed | default(false) else 'I' }} | L2 {{ 'C' if pod['M3-L2'].completed | default(false) else 'I' }} | L3 {{ 'C' if pod['M3-L3'].completed | default(false) else 'I' }}]  M4 [L1 {{ 'C' if pod['M4-L1'].completed | default(false) else 'I' }} | L2 {{ 'C' if pod['M4-L2'].completed | default(false) else 'I' }} | L3 {{ 'C' if pod['M4-L3'].completed | default(false) else 'I' }}]
+          {% endfor %}
+          TOTAL: completed={{ total_completed }} incomplete={{ total_incomplete }}

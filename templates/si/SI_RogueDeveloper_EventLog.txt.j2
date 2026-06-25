@@ -1,0 +1,93 @@
+====================================================================
+  WINDOWS DEFENDER EVENT LOG — SECURITY INCIDENT
+  Host: {{ prefix }}-DEV-Laptop-04 | Domain: acs-p01.local
+  User Context: ACS-P01\{{ prefix }}-d.chen
+  Log: Microsoft-Windows-Windows Defender/Operational
+  Period: 2026-05-15 through 2026-05-16
+====================================================================
+
+Event ID: 5007
+Date:     2026-05-15 09:14:22
+Level:    Warning
+Source:   Microsoft-Windows-Windows Defender
+User:     ACS-P01\{{ prefix }}-d.chen
+Message:  Microsoft Defender Antivirus Configuration has changed.
+          If this is an unexpected event, review the settings as this
+          may be due to malware.
+          Old Value: HKLM\SOFTWARE\Policies\Microsoft\Windows Defender
+                     DisableAntiSpyware = 0x0
+          New Value: HKLM\SOFTWARE\Policies\Microsoft\Windows Defender
+                     DisableAntiSpyware = 0x1
+          Change performed by user: ACS-P01\{{ prefix }}-d.chen
+
+Event ID: 5001
+Date:     2026-05-15 09:14:23
+Level:    Warning
+Source:   Microsoft-Windows-Windows Defender
+Message:  Real-time protection is disabled.
+          Action: The service has been stopped.
+          Reason: Local administrator manually disabled protection.
+
+Event ID: 5007
+Date:     2026-05-15 09:15:01
+Level:    Warning
+Source:   Microsoft-Windows-Windows Defender
+User:     ACS-P01\{{ prefix }}-d.chen
+Message:  Microsoft Defender Antivirus Configuration has changed.
+          Old Value: HKLM\SOFTWARE\Microsoft\Windows Defender\Real-Time
+                     Protection\DisableRealtimeMonitoring = 0x0
+          New Value: HKLM\SOFTWARE\Microsoft\Windows Defender\Real-Time
+                     Protection\DisableRealtimeMonitoring = 0x1
+
+Event ID: 5010
+Date:     2026-05-15 09:15:02
+Level:    Warning
+Source:   Microsoft-Windows-Windows Defender
+Message:  Scanning for malware and other potentially unwanted software
+          is disabled.
+
+Event ID: 5007
+Date:     2026-05-15 09:22:45
+Level:    Warning
+Source:   Microsoft-Windows-Windows Defender
+User:     ACS-P01\{{ prefix }}-d.chen
+Message:  Microsoft Defender Antivirus Configuration has changed.
+          Old Value: HKLM\SOFTWARE\Microsoft\Windows Defender
+                     \Exclusions\Paths = (empty)
+          New Value: HKLM\SOFTWARE\Microsoft\Windows Defender
+                     \Exclusions\Paths\C:\DevBuilds = 0x0
+          Note: Exclusion path added for C:\DevBuilds
+
+--- NO FURTHER DEFENDER EVENTS UNTIL NEXT DAY ---
+
+Event ID: 5007
+Date:     2026-05-16 08:00:01
+Level:    Information
+Source:   Microsoft-Windows-Windows Defender
+Message:  Microsoft Defender Antivirus Configuration has changed.
+          Note: Group Policy refresh restored protection settings.
+          Old Value: DisableAntiSpyware = 0x1
+          New Value: DisableAntiSpyware = 0x0
+
+Event ID: 1000
+Date:     2026-05-16 08:00:05
+Level:    Information
+Source:   Microsoft-Windows-Windows Defender
+Message:  An antivirus scan has started.
+          Scan Type: Quick Scan (triggered by protection re-enable)
+
+====================================================================
+INCIDENT SUMMARY:
+- 2026-05-15 09:14 — User {{ prefix }}-d.chen DISABLED Defender entirely
+- 2026-05-15 09:15 — Real-time protection STOPPED
+- 2026-05-15 09:15 — Malware scanning DISABLED
+- 2026-05-15 09:22 — Exclusion added for C:\DevBuilds
+- 2026-05-16 08:00 — GPO refresh RESTORED protection (next day)
+
+KEY EVENT IDs:
+  5001 = Real-time protection disabled
+  5007 = Defender configuration changed
+  5010 = Scanning disabled
+
+EXPOSURE WINDOW: ~23 hours without malware protection
+====================================================================

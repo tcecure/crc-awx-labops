@@ -1,0 +1,44 @@
+====================================================================
+  WINDOW OF EXPOSURE TIMELINE — {{ prefix }} Environment
+  Organization: ACS Corp | Domain: acs-p01.local
+====================================================================
+
+CONCEPT: Window of Exposure
+----------------------------
+The "window of exposure" is the time between when a vulnerability is
+publicly disclosed and when the organization successfully remediates it.
+
+  Disclosure Date ----[WINDOW OF EXPOSURE]----> Remediation Date
+
+Per ACS Corp policy, maximum acceptable windows:
+  Critical (CVSS 9.0+):   7 calendar days
+  High (CVSS 7.0-8.9):   14 calendar days
+  Medium (CVSS 4.0-6.9): 30 calendar days
+  Low (CVSS 0.1-3.9):    90 calendar days
+
+TIMELINE EXAMPLE:
+-----------------
+Jan 15 - CVE-2026-1234 disclosed (CVSS 9.3 Critical)
+Jan 15 - Vendor releases patch
+Jan 16 - CISA advisory published
+Jan 18 - ACS vulnerability scan detects finding
+Jan 20 - Remediation ticket created (IT-2026-0042)
+Jan 22 - Change window scheduled
+Feb 02 - Patch applied to {{ prefix }}-ACS-SRV-002
+Feb 02 - Vulnerability confirmed resolved
+
+Window of Exposure: 18 days
+Policy Threshold:    7 days (Critical)
+Status:             NON-COMPLIANT (exceeded by 11 days)
+
+FACTORS THAT INCREASE EXPOSURE:
+-------------------------------
+- Delayed scanning cadence
+- Backlogged change advisory boards
+- Failed patch attempts counted as "in progress"
+- Lack of compensating controls during exposure window
+- No interim risk acceptance documentation
+
+====================================================================
+Reference: NIST SP 800-53 SI-2 (Flaw Remediation)
+====================================================================

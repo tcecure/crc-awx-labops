@@ -1,0 +1,50 @@
+====================================================================
+  CISA ADVISORY — ICS-CERT ALERT (SAMPLE)
+  AA26-045A: Critical Windows Server Vulnerability
+====================================================================
+
+Release Date:       February 14, 2026
+Source:             Cybersecurity and Infrastructure Security Agency (CISA)
+Classification:     TLP:CLEAR
+CVE:                CVE-2026-21001
+CVSS Score:         9.8 (Critical)
+Affected Products:  Windows Server 2019, 2022, 2025
+Vendor:             Microsoft Corporation
+
+SUMMARY:
+---------
+A critical remote code execution vulnerability exists in the Windows
+Server Message Block (SMB) service. An unauthenticated attacker could
+send specially crafted packets to a vulnerable SMB server to achieve
+code execution with SYSTEM privileges.
+
+IMPACT:
+-------
+Successful exploitation allows:
+- Remote code execution without authentication
+- Complete system compromise
+- Lateral movement across domain-joined systems
+- Potential domain-wide compromise
+
+MITIGATION:
+-----------
+- Apply Microsoft security update KB5035849 immediately
+- Disable SMBv1 if not already disabled
+- Block TCP port 445 at network perimeter
+- Enable Windows Firewall rules restricting SMB access
+
+AFFECTED ACS SYSTEMS:
+---------------------
+{{ prefix }}-ACS-SRV-002 — File Server (Windows Server 2022)
+{{ prefix }}-Legacy_Server — Application Server (Windows Server 2016)
+
+REFERENCES:
+-----------
+- Microsoft Security Response Center: https://msrc.microsoft.com
+- NVD: https://nvd.nist.gov/vuln/detail/CVE-2026-21001
+- CISA Known Exploited Vulnerabilities Catalog
+
+====================================================================
+SOURCE RELIABILITY: TRUSTED (Government Agency - CISA)
+ACTIONABLE: YES — Immediate patching required per SI-2 policy
+====================================================================

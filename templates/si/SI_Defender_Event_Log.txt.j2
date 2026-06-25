@@ -1,0 +1,93 @@
+====================================================================
+  WINDOWS DEFENDER EVENT LOG EXTRACT
+  Host: {{ prefix }}-WS01 | Domain: acs-p01.local
+  Log: Microsoft-Windows-Windows Defender/Operational
+  Period: 2026-05-01 through 2026-06-01
+====================================================================
+
+Event ID: 1000
+Date:     2026-06-01 02:00:03
+Level:    Information
+Source:   Microsoft-Windows-Windows Defender
+Message:  An antivirus scan has started.
+          Scan ID: {A4F2B3C1-8D7E-4F5A-9B2C-1D3E5F7A8B9C}
+          Scan Type: Full Scan (scheduled)
+          Scan Parameters: Full Scan
+
+Event ID: 1001
+Date:     2026-06-01 02:47:18
+Level:    Information
+Source:   Microsoft-Windows-Windows Defender
+Message:  An antivirus scan has finished.
+          Scan ID: {A4F2B3C1-8D7E-4F5A-9B2C-1D3E5F7A8B9C}
+          Scan Type: Full Scan
+          Scan Results: No threats found
+          Items Scanned: 284,521
+          Duration: 00:47:15
+
+Event ID: 2000
+Date:     2026-05-31 14:30:02
+Level:    Information
+Source:   Microsoft-Windows-Windows Defender
+Message:  Security intelligence updated successfully.
+          Current Version: 1.411.230.0
+          Previous Version: 1.411.226.0
+          Update Source: Microsoft Update Server
+
+Event ID: 1000
+Date:     2026-05-25 02:00:01
+Level:    Information
+Source:   Microsoft-Windows-Windows Defender
+Message:  An antivirus scan has started.
+          Scan ID: {B5C3D4E2-9E8F-5A6B-0C3D-2E4F6A8B9C0D}
+          Scan Type: Full Scan (scheduled)
+
+Event ID: 1001
+Date:     2026-05-25 02:52:33
+Level:    Information
+Source:   Microsoft-Windows-Windows Defender
+Message:  An antivirus scan has finished.
+          Scan ID: {B5C3D4E2-9E8F-5A6B-0C3D-2E4F6A8B9C0D}
+          Scan Type: Full Scan
+          Scan Results: No threats found
+          Items Scanned: 283,890
+          Duration: 00:52:32
+
+Event ID: 2000
+Date:     2026-05-24 08:15:44
+Level:    Information
+Source:   Microsoft-Windows-Windows Defender
+Message:  Security intelligence updated successfully.
+          Current Version: 1.411.226.0
+          Previous Version: 1.411.220.0
+
+Event ID: 2000
+Date:     2026-05-17 09:00:12
+Level:    Information
+Source:   Microsoft-Windows-Windows Defender
+Message:  Security intelligence updated successfully.
+          Current Version: 1.411.220.0
+          Previous Version: 1.411.210.0
+
+Event ID: 1000
+Date:     2026-05-18 02:00:02
+Level:    Information
+Source:   Microsoft-Windows-Windows Defender
+Message:  An antivirus scan has started.
+          Scan Type: Full Scan (scheduled)
+
+Event ID: 1001
+Date:     2026-05-18 02:44:56
+Level:    Information
+Source:   Microsoft-Windows-Windows Defender
+Message:  An antivirus scan has finished.
+          Scan Results: No threats found
+          Items Scanned: 282,104
+
+====================================================================
+SCAN CADENCE ANALYSIS:
+- Full scans observed: Jun 1, May 25, May 18 (weekly - COMPLIANT)
+- Definition updates: May 17, May 24, May 31 (regular - COMPLIANT)
+- Last scan: 2026-06-01 (within 7 days)
+- Policy requirement: Weekly full scan + definitions updated within 7 days
+====================================================================

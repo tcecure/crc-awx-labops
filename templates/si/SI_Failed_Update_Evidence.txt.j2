@@ -1,0 +1,61 @@
+====================================================================
+  WINDOWS UPDATE FAILURE EVIDENCE — {{ prefix }}-ACS-SRV-002
+  Extracted from: Windows Event Log (System)
+  Source: WindowsUpdateClient
+====================================================================
+
+EVENT 1 — Most Recent Failure
+-------------------------------
+Log Name:       System
+Source:         WindowsUpdateClient
+Event ID:       20
+Level:          Error
+Date:           2026-05-25 03:15:42
+Computer:       {{ prefix }}-ACS-SRV-002.acs-p01.local
+Description:
+  Installation Failure: Windows failed to install the following update
+  with error 0x80070643:
+  2026-05 Cumulative Update for Windows Server 2022 for x64-based
+  Systems (KB5035849).
+
+EVENT 2 — Previous Failure (Same Update)
+-----------------------------------------
+Log Name:       System
+Source:         WindowsUpdateClient
+Event ID:       20
+Level:          Error
+Date:           2026-05-20 03:12:18
+Computer:       {{ prefix }}-ACS-SRV-002.acs-p01.local
+Description:
+  Installation Failure: Windows failed to install the following update
+  with error 0x80070643:
+  2026-05 Cumulative Update for Windows Server 2022 for x64-based
+  Systems (KB5035849).
+  Additional Details: CBS store integrity check failed. Insufficient
+  free space in WinSxS component store.
+
+EVENT 3 — Successful Defender Update
+--------------------------------------
+Log Name:       System
+Source:         WindowsUpdateClient
+Event ID:       19
+Level:          Information
+Date:           2026-05-28 14:30:05
+Computer:       {{ prefix }}-ACS-SRV-002.acs-p01.local
+Description:
+  Installation Successful: Windows successfully installed the following
+  update: Security Intelligence Update for Microsoft Defender Antivirus
+  - KB5035100 (Version 1.411.234.0)
+
+====================================================================
+KEY OBSERVATIONS:
+- Defender definition updates: SUCCEEDING (antimalware signatures current)
+- Windows cumulative security update: FAILING REPEATEDLY
+- Root cause: Component store corruption / disk space issue
+- Impact: Critical security patches NOT installed despite multiple attempts
+- Note: "Attempted patch" does NOT equal "corrected flaw"
+
+CONCLUSION: The vulnerability addressed by KB5035849 REMAINS OPEN.
+The system is NON-COMPLIANT with SI-2 flaw remediation requirements
+despite evidence of update attempts.
+====================================================================
