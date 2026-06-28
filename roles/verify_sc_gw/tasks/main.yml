@@ -1,0 +1,274 @@
+---
+# verify_sc_gw/tasks/main.yml
+# Verifies SC lab completion on PodXX-GW (pfSense)
+# Checks firewall rules, VLANs, logging, interfaces
+
+- name: Read pfSense config.xml
+  ansible.builtin.shell: cat /cf/conf/config.xml
+  register: pfsense_config
+  changed_when: false
+
+- name: Parse firewall rules
+  ansible.builtin.shell: |
+    php -r "
+    require_once('config.inc');
+    \$config = parse_config(true);
+    \$rules = isset(\$config['filter']['rule']) ? \$config['filter']['rule'] : array();
+    echo json_encode(array(
+      'rule_count' => count(\$rules),
+      'has_allow_any' => false,
+      'has_default_deny' => false,
+      'has_logging' => isset(\$config['syslog']['filterdescriptions']),
+      'vlan_count' => isset(\$config['vlans']['vlan']) ? count(\$config['vlans']['vlan']) : 0,
+      'interface_count' => count(\$config['interfaces']),
+      'hostname' => \$config['system']['hostname']
+    ));
+    "
+  register: fw_state
+  changed_when: false
+
+- name: Set firewall facts
+  ansible.builtin.set_fact:
+    fw_info: "{{ fw_state.stdout | from_json }}"
+
+# ========================================================================
+# Per-lab verification
+# ========================================================================
+
+- name: "Verify M1-L2 (Deny By Default)"
+  when: sc_lab_id is not defined or sc_lab_id == 'ALL' or sc_lab_id == 'M1-L2'
+  block:
+    - name: Check no Allow Any Any rule exists
+      ansible.builtin.shell: |
+        php -r "
+        require_once('config.inc');
+        \$config = parse_config(true);
+        \$found = false;
+        foreach (\$config['filter']['rule'] as \$r) {
+          if (\$r['type'] == 'pass' && isset(\$r['source']['any']) && isset(\$r['destination']['any'])
+              && !isset(\$r['protocol'])) {
+            \$found = true;
+            break;
+          }
+        }
+        echo \$found ? 'FAIL:AllowAnyExists' : 'PASS:NoAllowAny';
+        "
+      register: m1l2_check
+      changed_when: false
+
+    - name: Check default deny exists as last rule
+      ansible.builtin.shell: |
+        php -r "
+        require_once('config.inc');
+        \$config = parse_config(true);
+        \$rules = \$config['filter']['rule'];
+        \$last = end(\$rules);
+        echo (\$last['type'] == 'block') ? 'PASS:DefaultDenyLast' : 'FAIL:NoDefaultDeny';
+        "
+      register: m1l2_deny
+      changed_when: false
+
+    - name: M1-L2 Result
+      ansible.builtin.debug:
+        msg: "M1-L2 Deny By Default: {{ m1l2_check.stdout }} | {{ m1l2_deny.stdout }}"
+
+- name: "Verify M1-L3 (Monitor/Control/Protect)"
+  when: sc_lab_id is not defined or sc_lab_id == 'ALL' or sc_lab_id == 'M1-L3'
+  block:
+    - name: Check logging enabled on rules
+      ansible.builtin.shell: |
+        php -r "
+        require_once('config.inc');
+        \$config = parse_config(true);
+        \$logged = 0;
+        foreach (\$config['filter']['rule'] as \$r) {
+          if (isset(\$r['log'])) \$logged++;
+        }
+        echo (\$logged >= 2) ? 'PASS:LoggingEnabled('.\$logged.')' : 'FAIL:InsufficientLogging('.\$logged.')';
+        "
+      register: m1l3_check
+      changed_when: false
+
+    - name: M1-L3 Result
+      ansible.builtin.debug:
+        msg: "M1-L3 Monitor/Control/Protect: {{ m1l3_check.stdout }}"
+
+- name: "Verify M2-L2 (DMZ)"
+  when: sc_lab_id is not defined or sc_lab_id == 'ALL' or sc_lab_id == 'M2-L2'
+  block:
+    - name: Check DMZ/OPT interface exists
+      ansible.builtin.shell: |
+        php -r "
+        require_once('config.inc');
+        \$config = parse_config(true);
+        \$has_opt = false;
+        foreach (array_keys(\$config['interfaces']) as \$iface) {
+          if (strpos(\$iface, 'opt') === 0) { \$has_opt = true; break; }
+        }
+        echo \$has_opt ? 'PASS:DMZExists' : 'FAIL:NoDMZ';
+        "
+      register: m2l2_check
+      changed_when: false
+
+    - name: M2-L2 Result
+      ansible.builtin.debug:
+        msg: "M2-L2 Secure DMZ: {{ m2l2_check.stdout }}"
+
+- name: "Verify M2-L3 (VLANs)"
+  when: sc_lab_id is not defined or sc_lab_id == 'ALL' or sc_lab_id == 'M2-L3'
+  block:
+    - name: Check VLANs exist
+      ansible.builtin.shell: |
+        php -r "
+        require_once('config.inc');
+        \$config = parse_config(true);
+        \$count = isset(\$config['vlans']['vlan']) ? count(\$config['vlans']['vlan']) : 0;
+        echo (\$count >= 2) ? 'PASS:VLANs('.\$count.')' : 'FAIL:NoVLANs('.\$count.')';
+        "
+      register: m2l3_check
+      changed_when: false
+
+    - name: M2-L3 Result
+      ansible.builtin.debug:
+        msg: "M2-L3 Segmentation: {{ m2l3_check.stdout }}"
+
+- name: "Verify M3-L1 (Rule Audit)"
+  when: sc_lab_id is not defined or sc_lab_id == 'ALL' or sc_lab_id == 'M3-L1'
+  block:
+    - name: Check messy rules cleaned
+      ansible.builtin.shell: |
+        php -r "
+        require_once('config.inc');
+        \$config = parse_config(true);
+        \$issues = 0;
+        \$seen = array();
+        foreach (\$config['filter']['rule'] as \$r) {
+          if (\$r['type'] == 'pass' && isset(\$r['source']['any']) && isset(\$r['destination']['any'])
+              && !isset(\$r['protocol'])) \$issues++;
+          \$sig = \$r['type'].'|'.json_encode(\$r['source']).'|'.json_encode(\$r['destination']);
+          if (isset(\$seen[\$sig])) \$issues++;
+          \$seen[\$sig] = true;
+        }
+        echo (\$issues == 0) ? 'PASS:RulesClean' : 'FAIL:Issues('.\$issues.')';
+        "
+      register: m3l1_check
+      changed_when: false
+
+    - name: M3-L1 Result
+      ansible.builtin.debug:
+        msg: "M3-L1 Rule Audit: {{ m3l1_check.stdout }}"
+
+- name: "Verify M3-L2 (Rule Ordering)"
+  when: sc_lab_id is not defined or sc_lab_id == 'ALL' or sc_lab_id == 'M3-L2'
+  block:
+    - name: Check block rule is last
+      ansible.builtin.shell: |
+        php -r "
+        require_once('config.inc');
+        \$config = parse_config(true);
+        \$rules = \$config['filter']['rule'];
+        // Check that no block-all appears before allow rules
+        \$block_pos = -1; \$last_allow = -1;
+        foreach (\$rules as \$i => \$r) {
+          if (\$r['type'] == 'block' && isset(\$r['source']['any']) && isset(\$r['destination']['any'])) \$block_pos = \$i;
+          if (\$r['type'] == 'pass') \$last_allow = \$i;
+        }
+        echo (\$block_pos > \$last_allow && \$block_pos >= 0) ? 'PASS:OrderCorrect' : 'FAIL:OrderWrong';
+        "
+      register: m3l2_check
+      changed_when: false
+
+    - name: M3-L2 Result
+      ansible.builtin.debug:
+        msg: "M3-L2 Rule Ordering: {{ m3l2_check.stdout }}"
+
+- name: "Verify M3-L3 (Least Privilege)"
+  when: sc_lab_id is not defined or sc_lab_id == 'ALL' or sc_lab_id == 'M3-L3'
+  block:
+    - name: Check only HTTPS allowed to accounting
+      ansible.builtin.shell: |
+        php -r "
+        require_once('config.inc');
+        \$config = parse_config(true);
+        \$acct_ip = '{{ lan_network }}.100';
+        \$bad_ports = 0; \$has_443 = false;
+        foreach (\$config['filter']['rule'] as \$r) {
+          if (isset(\$r['destination']['address']) && \$r['destination']['address'] == \$acct_ip) {
+            if (isset(\$r['destination']['port']) && \$r['destination']['port'] == '443' && \$r['type'] == 'pass') {
+              \$has_443 = true;
+            } elseif (\$r['type'] == 'pass') {
+              \$bad_ports++;
+            }
+          }
+        }
+        echo (\$has_443 && \$bad_ports == 0) ? 'PASS:OnlyHTTPS' : 'FAIL:ExtraPorts('.\$bad_ports.')';
+        "
+      register: m3l3_check
+      changed_when: false
+
+    - name: M3-L3 Result
+      ansible.builtin.debug:
+        msg: "M3-L3 Least Privilege: {{ m3l3_check.stdout }}"
+
+- name: "Verify M4-L3 (Capstone)"
+  when: sc_lab_id is not defined or sc_lab_id == 'ALL' or sc_lab_id == 'M4-L3'
+  block:
+    - name: Capstone comprehensive check
+      ansible.builtin.shell: |
+        php -r "
+        require_once('config.inc');
+        \$config = parse_config(true);
+        \$checks = array();
+
+        // Check 1: No Allow Any Any
+        \$allow_any = false;
+        foreach (\$config['filter']['rule'] as \$r) {
+          if (\$r['type'] == 'pass' && isset(\$r['source']['any']) && isset(\$r['destination']['any'])
+              && !isset(\$r['protocol'])) { \$allow_any = true; break; }
+        }
+        \$checks['deny_by_default'] = !\$allow_any;
+
+        // Check 2: WAN secured
+        \$wan_open = false;
+        foreach (\$config['filter']['rule'] as \$r) {
+          if (isset(\$r['interface']) && \$r['interface'] == 'wan' && \$r['type'] == 'pass'
+              && isset(\$r['source']['any']) && isset(\$r['destination']['any'])) { \$wan_open = true; }
+        }
+        \$checks['wan_secured'] = !\$wan_open;
+
+        // Check 3: No Telnet exposure
+        \$telnet = false;
+        foreach (\$config['filter']['rule'] as \$r) {
+          if (\$r['type'] == 'pass' && isset(\$r['destination']['port']) && strpos(\$r['destination']['port'], '23') !== false
+              && isset(\$r['interface']) && \$r['interface'] == 'wan') { \$telnet = true; }
+        }
+        \$checks['no_telnet'] = !\$telnet;
+
+        // Check 4: Logging enabled
+        \$checks['logging'] = isset(\$config['syslog']['filterdescriptions']);
+
+        // Check 5: Has VLANs or segmentation
+        \$checks['segmentation'] = isset(\$config['vlans']['vlan']) && count(\$config['vlans']['vlan']) >= 2;
+
+        \$passed = array_sum(\$checks);
+        \$total = count(\$checks);
+        echo json_encode(array('passed' => \$passed, 'total' => \$total, 'checks' => \$checks));
+        "
+      register: m4l3_check
+      changed_when: false
+
+    - name: M4-L3 Result
+      ansible.builtin.debug:
+        msg: "M4-L3 Capstone: {{ m4l3_check.stdout }}"
+
+# ========================================================================
+# Summary
+# ========================================================================
+
+- name: Generate verification summary
+  ansible.builtin.set_fact:
+    sc_gw_summary:
+      hostname: "{{ fw_info.hostname }}"
+      rule_count: "{{ fw_info.rule_count }}"
+      vlan_count: "{{ fw_info.vlan_count }}"
+      logging: "{{ fw_info.has_logging }}"

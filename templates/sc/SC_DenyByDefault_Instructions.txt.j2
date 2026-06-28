@@ -1,0 +1,44 @@
+============================================================
+ SC LAB M1-L2: DENY BY DEFAULT FIREWALL
+ Pod: {{ pod_name }} ({{ prefix }})
+ Gateway: http://{{ gw_ip }}
+============================================================
+
+SCENARIO:
+The {{ pod_name }}-GW firewall currently has an "Allow Any Any"
+rule that permits ALL traffic through the firewall. This is
+a critical security misconfiguration.
+
+YOUR TASK:
+1. Log into the pfSense web UI at http://{{ gw_ip }}
+   Credentials: admin / pfsense
+
+2. Navigate to Firewall > Rules > LAN
+
+3. OBSERVE the current rules:
+   - You will see an "Allow ALL traffic" rule
+   - This means ANY device can reach ANY destination
+   - This violates CMMC SC.L1-3.13.1
+
+4. RECONFIGURE to Deny-By-Default:
+   a. DELETE the "Allow Any Any" rule
+   b. CREATE specific rules that ONLY allow:
+      - DNS to DC01 (10.50.1.10 port 53)
+      - Web traffic (ports 80, 443)
+      - ICMP/Ping for troubleshooting
+   c. Verify the DEFAULT DENY rule is at the bottom
+
+5. VERIFY:
+   - Business applications still work (DNS, web)
+   - Unauthorized traffic is blocked
+   - Check Firewall > Logs to see blocked traffic
+
+SUCCESS CRITERIA:
+  [ ] No "Allow Any Any" rule exists
+  [ ] Only necessary traffic is permitted
+  [ ] Default deny is the last rule
+  [ ] DNS resolution works
+  [ ] Web browsing works
+
+Save evidence: Screenshot your final rule set and save to:
+  C:\CyberLab\{{ pod_name }}\SC-Artifacts\M1-L2_FinalRules.png

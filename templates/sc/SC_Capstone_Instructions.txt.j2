@@ -1,0 +1,61 @@
+============================================================
+ SC LAB M4-L3: FINAL CAPSTONE
+ Pod: {{ pod_name }} ({{ prefix }})
+ Gateway: http://{{ gw_ip }}
+============================================================
+
+SCENARIO:
+ACS Consulting, a small defense contractor, has inherited a
+poorly configured network. The firewall allows all traffic,
+has no segmentation, no logging, and dangerous services are
+exposed to the internet. You must fix EVERYTHING.
+
+PROBLEMS TO FIX:
+  1. Allow Any Any on LAN (no deny-by-default)
+  2. WAN allows all inbound traffic
+  3. Telnet exposed to internet (port 23)
+  4. No VLANs (flat network)
+  5. No logging enabled
+  6. No NAT rules for proper service publishing
+
+YOUR TASKS:
+
+TASK 1: IMPLEMENT DENY-BY-DEFAULT
+  [ ] Remove all "Allow Any" rules
+  [ ] Create specific allow rules for required services
+  [ ] Add default deny as last rule
+
+TASK 2: SECURE THE WAN
+  [ ] Block all inbound WAN traffic by default
+  [ ] Remove Telnet exposure
+  [ ] Only allow necessary inbound services (if any)
+
+TASK 3: CREATE NETWORK SEGMENTATION
+  [ ] Create at least 2 VLANs (e.g., Servers, Workstations)
+  [ ] Configure inter-VLAN rules
+  [ ] Isolate sensitive resources
+
+TASK 4: ENABLE LOGGING
+  [ ] Enable logging on block rules
+  [ ] Enable logging on key allow rules
+  [ ] Verify logs appear in Status > System Logs
+
+TASK 5: VERIFY COMMUNICATIONS
+  [ ] DNS works (to DC01)
+  [ ] Web browsing works
+  [ ] Internal services accessible
+  [ ] External attacks blocked
+
+TASK 6: PRODUCE ASSESSMENT EVIDENCE
+  [ ] Screenshot of final firewall rules
+  [ ] Screenshot of VLAN configuration
+  [ ] Screenshot of firewall logs
+  [ ] Completed compliance checklist
+  [ ] Network diagram with boundaries marked
+
+GRADING:
+  This lab is the practical assessment for the SC module.
+  All 6 tasks must be completed with evidence.
+
+Save ALL evidence to:
+  C:\CyberLab\{{ pod_name }}\SC-Artifacts\M4-L3_Capstone\

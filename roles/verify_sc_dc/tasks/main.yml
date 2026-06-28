@@ -1,0 +1,55 @@
+---
+# verify_sc_dc/tasks/main.yml
+# Verifies SC lab artifacts on DC01
+
+- name: Check SC-Artifacts directory exists
+  ansible.windows.win_stat:
+    path: 'C:\CyberLab\Pod{{ "%02d" | format(pod_id) }}\SC-Artifacts'
+  register: sc_dir
+
+- name: Fail if SC-Artifacts missing
+  ansible.builtin.fail:
+    msg: "SC-Artifacts directory not found for Pod{{ '%02d' | format(pod_id) }}"
+  when: not sc_dir.stat.exists
+
+- name: Count lab markers
+  ansible.windows.win_shell: |
+    (Get-ChildItem "C:\CyberLab\Pod{{ '%02d' | format(pod_id) }}\SC-Artifacts" -Filter "_LAB_READY_SC-*.txt" | Measure-Object).Count
+  register: marker_count
+
+- name: Check individual lab markers
+  ansible.windows.win_stat:
+    path: 'C:\CyberLab\Pod{{ "%02d" | format(pod_id) }}\SC-Artifacts\_LAB_READY_SC-{{ item }}.txt'
+  loop:
+    - M1-L1
+    - M1-L2
+    - M1-L3
+    - M2-L1
+    - M2-L2
+    - M2-L3
+    - M3-L1
+    - M3-L2
+    - M3-L3
+    - M4-L1
+    - M4-L2
+    - M4-L3
+  register: lab_markers
+
+- name: Report marker status
+  ansible.builtin.debug:
+    msg: >-
+      Pod{{ '%02d' | format(pod_id) }} SC markers:
+      {{ marker_count.stdout | trim }}/12 present.
+      Missing: {{ lab_markers.results | selectattr('stat.exists', 'equalto', false)
+                  | map(attribute='item') | list | join(', ') | default('none') }}
+
+- name: Check student completion artifacts
+  ansible.windows.win_find:
+    paths: 'C:\CyberLab\Pod{{ "%02d" | format(pod_id) }}\SC-Artifacts'
+    patterns: '*.txt,*.png,*.csv'
+    recurse: true
+  register: all_artifacts
+
+- name: Report artifact count
+  ansible.builtin.debug:
+    msg: "Pod{{ '%02d' | format(pod_id) }} SC total artifacts: {{ all_artifacts.matched }}"

@@ -1,0 +1,34 @@
+============================================================
+ SC LAB M2-L1: ORGANIZATIONAL BOUNDARY DIAGRAM
+ Pod: {{ pod_name }} ({{ prefix }})
+============================================================
+
+INSTRUCTIONS:
+Using the live pfSense configuration and network reference,
+draw a complete organizational boundary diagram identifying:
+
+REQUIRED ELEMENTS:
+  1. ISP / Internet connection
+  2. Firewall ({{ pod_name }}-GW at {{ gw_ip }})
+  3. LAN network
+  4. DMZ (if configured)
+  5. Cloud resources (if applicable)
+  6. All network boundaries
+
+REFERENCE DATA (from your live environment):
+  Gateway WAN: Check Status > Interfaces > WAN
+  Gateway LAN: {{ gw_ip }}/24
+  DC01: 10.50.1.10
+  Domain: acs-p01.local
+
+TASK:
+  1. Log into pfSense at http://{{ gw_ip }}
+  2. Review Status > Interfaces for network details
+  3. Review Firewall > Rules for traffic flow
+  4. Draw your organizational boundary diagram
+  5. Label: ISP, Internet, Firewall, LAN, DMZ, each server
+
+DELIVERABLE:
+  Save your completed diagram to:
+  C:\CyberLab\{{ pod_name }}\SC-Artifacts\M2-L1_OrgBoundary_Diagram.txt
+  (or .png if using a drawing tool)

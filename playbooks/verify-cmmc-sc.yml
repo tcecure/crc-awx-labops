@@ -1,0 +1,25 @@
+---
+# verify-cmmc-sc.yml
+# Verifies SC lab completion on PodXX-GW + DC01
+
+- name: Verify SC Labs on PodXX-GW Gateways
+  hosts: crc_pod_gateways
+  gather_facts: false
+  vars:
+    sc_lab_id: "{{ lab_id | default('ALL') }}"
+    lan_network: "10.51.{{ pod_id }}"
+  roles:
+    - verify_sc_gw
+
+- name: Verify SC Lab Artifacts on DC01
+  hosts: crc_shared_dcs
+  gather_facts: false
+  tasks:
+    - name: Verify SC artifacts for each pod
+      ansible.builtin.include_role:
+        name: verify_sc_dc
+      vars:
+        pod_id: "{{ item }}"
+      loop: "{{ range(1, 21) | list }}"
+      loop_control:
+        label: "Pod{{ '%02d' | format(item) }}"

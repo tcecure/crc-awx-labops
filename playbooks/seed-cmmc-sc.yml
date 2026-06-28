@@ -1,0 +1,27 @@
+---
+# seed-cmmc-sc.yml
+# Seeds SC (System & Communications Protection) labs across all pods
+# Targets: PodXX-GW (pfSense via SSH) + DC01 (WinRM)
+
+- name: Seed SC Labs on PodXX-GW Gateways
+  hosts: crc_pod_gateways
+  gather_facts: false
+  vars:
+    sc_lab_id: "{{ lab_id | default('ALL') }}"
+  roles:
+    - seed_sc_gw
+
+- name: Seed SC Lab Artifacts on DC01
+  hosts: crc_shared_dcs
+  gather_facts: false
+  vars:
+    sc_lab_id: "{{ lab_id | default('ALL') }}"
+  tasks:
+    - name: Seed SC artifacts for each pod
+      ansible.builtin.include_role:
+        name: seed_sc_dc
+      vars:
+        pod_id: "{{ item }}"
+      loop: "{{ range(1, 21) | list }}"
+      loop_control:
+        label: "Pod{{ '%02d' | format(item) }}"

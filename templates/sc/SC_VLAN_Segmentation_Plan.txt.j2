@@ -1,0 +1,46 @@
+============================================================
+ SC LAB M2-L3: INTERNAL SEGMENTATION PLAN
+ Pod: {{ pod_name }} ({{ prefix }})
+ Gateway: http://{{ gw_ip }}
+============================================================
+
+SCENARIO:
+ACS Consulting has all departments on a flat network. HR,
+Finance, Engineering, and Guest WiFi all share the same
+subnet with no isolation. A Guest WiFi user can reach HR
+file shares and Finance databases.
+
+SEGMENTATION REQUIREMENTS:
+  VLAN 10 - HR Department
+    Subnet: {{ gw_ip | replace('.1', '.0') | replace('.0', '') }}.10.0/24
+    Gateway: {{ gw_ip | replace('.1', '.0') | replace('.0', '') }}.10.1
+    Access: DC01 (DNS, AD), HR file shares only
+
+  VLAN 20 - Finance Department
+    Subnet: {{ gw_ip | replace('.1', '.0') | replace('.0', '') }}.20.0/24
+    Gateway: {{ gw_ip | replace('.1', '.0') | replace('.0', '') }}.20.1
+    Access: DC01 (DNS, AD), accounting app (HTTPS only)
+
+  VLAN 30 - Engineering Department
+    Subnet: {{ gw_ip | replace('.1', '.0') | replace('.0', '') }}.30.0/24
+    Gateway: {{ gw_ip | replace('.1', '.0') | replace('.0', '') }}.30.1
+    Access: DC01 (DNS, AD), internet, dev servers
+
+  VLAN 40 - Guest WiFi
+    Subnet: {{ gw_ip | replace('.1', '.0') | replace('.0', '') }}.40.0/24
+    Gateway: {{ gw_ip | replace('.1', '.0') | replace('.0', '') }}.40.1
+    Access: Internet ONLY (no internal resources)
+
+YOUR TASKS:
+1. Create VLANs on pfSense (Interfaces > VLANs)
+2. Assign interfaces for each VLAN
+3. Configure DHCP for each VLAN subnet
+4. Create firewall rules enforcing isolation:
+   [ ] Guest cannot reach HR, Finance, or Engineering
+   [ ] Engineering cannot reach Finance
+   [ ] All departments can reach DC01 for DNS/AD
+   [ ] Domain controllers remain isolated from Guest
+
+Save evidence to:
+  C:\CyberLab\{{ pod_name }}\SC-Artifacts\M2-L3_VLAN_Config.png
+  C:\CyberLab\{{ pod_name }}\SC-Artifacts\M2-L3_Isolation_Test.txt

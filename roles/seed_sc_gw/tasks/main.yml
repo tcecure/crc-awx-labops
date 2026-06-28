@@ -1,0 +1,34 @@
+---
+# seed_sc_gw/tasks/main.yml
+# Seeds SC lab scenarios on PodXX-GW (pfSense) via SSH
+# Requires: ansible_host = LAN IP of PodXX-GW (10.51.X.1)
+
+- name: Copy SC baseline script to pfSense
+  ansible.builtin.copy:
+    src: seed-sc-baseline.sh
+    dest: /tmp/seed-sc-baseline.sh
+    mode: '0755'
+
+- name: Run SC baseline configuration
+  ansible.builtin.shell: sh /tmp/seed-sc-baseline.sh {{ pod_id }}
+  register: baseline_result
+  changed_when: "'BASELINE_SAVED' in baseline_result.stdout"
+
+- name: Display baseline result
+  ansible.builtin.debug:
+    var: baseline_result.stdout_lines
+
+- name: Copy SC lab seeding script to pfSense
+  ansible.builtin.copy:
+    src: apply-sc-lab.sh
+    dest: /tmp/apply-sc-lab.sh
+    mode: '0755'
+
+- name: Seed SC labs on pfSense
+  ansible.builtin.shell: sh /tmp/apply-sc-lab.sh {{ pod_id }} {{ sc_lab_id | default('ALL') }}
+  register: seed_result
+  changed_when: "'SEEDED' in seed_result.stdout"
+
+- name: Display seed result
+  ansible.builtin.debug:
+    var: seed_result.stdout_lines

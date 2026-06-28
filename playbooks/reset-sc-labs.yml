@@ -1,0 +1,32 @@
+---
+# reset-sc-labs.yml
+# Resets SC labs to baseline on PodXX-GW + DC01
+
+- name: Reset SC Labs on PodXX-GW Gateways
+  hosts: crc_pod_gateways
+  gather_facts: false
+  tasks:
+    - name: Copy reset script
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../roles/seed_sc_gw/files/reset-sc-labs.sh"
+        dest: /tmp/reset-sc-labs.sh
+        mode: '0755'
+
+    - name: Run SC reset on pfSense
+      ansible.builtin.shell: sh /tmp/reset-sc-labs.sh {{ pod_id }}
+      register: reset_result
+
+    - name: Display reset result
+      ansible.builtin.debug:
+        var: reset_result.stdout_lines
+
+- name: Reset SC Artifacts on DC01
+  hosts: crc_shared_dcs
+  gather_facts: false
+  tasks:
+    - name: Reset SC artifacts for each pod
+      ansible.windows.win_shell: |
+        powershell -ExecutionPolicy Bypass -File C:\CyberLab\_Scripts\reset-sc-labs.ps1 -PodId {{ item }}
+      loop: "{{ range(1, 21) | list }}"
+      loop_control:
+        label: "Pod{{ '%02d' | format(item) }}"

@@ -1,0 +1,42 @@
+============================================================
+ SC LAB M3-L1: FIREWALL RULE AUDIT WORKSHEET
+ Pod: {{ pod_name }} ({{ prefix }})
+ Gateway: http://{{ gw_ip }}
+============================================================
+
+SCENARIO:
+You have been asked to audit the {{ pod_name }}-GW firewall.
+The previous administrator left messy, insecure rules.
+
+AUDIT INSTRUCTIONS:
+1. Log into pfSense at http://{{ gw_ip }}
+2. Navigate to Firewall > Rules > LAN
+3. Review every rule and classify each issue found
+
+KNOWN ISSUE TYPES TO LOOK FOR:
+  [A] Allow Any Any - overly permissive
+  [S] Shadowed Rule - never fires due to rule above it
+  [D] Duplicate Rule - same effect as another rule
+  [U] Unused Rule   - references nonexistent network/service
+  [O] OK            - legitimate, properly scoped rule
+
+AUDIT TABLE:
+Rule # | Description | Issue Type | Action Required
+-------|-------------|------------|----------------
+  1    |             |            |
+  2    |             |            |
+  3    |             |            |
+  4    |             |            |
+  5    |             |            |
+  6    |             |            |
+  7    |             |            |
+
+TASKS:
+  1. Document each rule and its issue in the table above
+  2. DELETE or MODIFY problematic rules
+  3. VERIFY connectivity still works after cleanup
+  4. Document your changes
+
+Save completed audit to:
+  C:\CyberLab\{{ pod_name }}\SC-Artifacts\M3-L1_Audit_Complete.txt
+  C:\CyberLab\{{ pod_name }}\SC-Artifacts\M3-L1_CleanRules.png

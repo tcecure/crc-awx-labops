@@ -1,0 +1,46 @@
+============================================================
+ SC LAB M1-L1: TRUST BOUNDARY IDENTIFICATION WORKSHEET
+ Pod: {{ pod_name }} ({{ prefix }})
+ Date: {{ ansible_date_time.date | default('____-__-__') }}
+============================================================
+
+INSTRUCTIONS:
+Review the network topology below and identify each trust
+boundary, trusted zone, untrusted zone, and FCI location.
+
+NETWORK TOPOLOGY - ACS Consulting (Small Defense Contractor)
+------------------------------------------------------------
+                    INTERNET
+                       |
+                  [ISP Router]
+                       |
+                 ---- WAN ----
+                |             |
+           [{{ pod_name }}-GW Firewall]
+           IP: {{ gw_ip }}
+                |
+           ---- LAN ----
+          |      |      |
+     [DC01]  [Workstation] [File Server]
+   10.50.1.10  {{ gw_ip | replace('.1', '.10') }}   {{ gw_ip | replace('.1', '.20') }}
+
+TASK 1: Identify the EXTERNAL boundary
+  Your answer: ________________________________________________
+
+TASK 2: Identify the INTERNAL boundary (if any)
+  Your answer: ________________________________________________
+
+TASK 3: Mark each asset as TRUSTED or UNTRUSTED
+  Internet:     [ ] Trusted  [ ] Untrusted
+  ISP Router:   [ ] Trusted  [ ] Untrusted
+  Firewall:     [ ] Trusted  [ ] Untrusted
+  DC01:         [ ] Trusted  [ ] Untrusted
+  Workstation:  [ ] Trusted  [ ] Untrusted
+  File Server:  [ ] Trusted  [ ] Untrusted
+
+TASK 4: Where should FCI (Federal Contract Information) reside?
+  Your answer: ________________________________________________
+  Justification: ______________________________________________
+
+TASK 5: Submit your completed boundary diagram
+  Save to: C:\CyberLab\{{ pod_name }}\SC-Artifacts\M1-L1_Boundary_Diagram.txt

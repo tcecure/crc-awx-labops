@@ -1,0 +1,43 @@
+---
+# seed_sc_dc/tasks/main.yml
+# Deploys SC lab artifacts to DC01 via WinRM
+# Creates SC-Artifacts directory and lab markers per pod
+
+- name: Ensure SC templates directory exists on DC
+  ansible.windows.win_file:
+    path: 'C:\CyberLab\_Templates\SC'
+    state: directory
+
+- name: Deploy SC Jinja2 templates to DC
+  ansible.windows.win_template:
+    src: "{{ item }}"
+    dest: 'C:\CyberLab\_Templates\SC\{{ item | basename }}'
+  loop: "{{ lookup('fileglob', playbook_dir + '/../templates/sc/*.j2', wantlist=True) }}"
+
+- name: Copy SC baseline script to DC
+  ansible.windows.win_copy:
+    src: seed-sc-baseline.ps1
+    dest: 'C:\CyberLab\_Scripts\seed-sc-baseline.ps1'
+
+- name: Run SC baseline on DC
+  ansible.windows.win_shell: |
+    powershell -ExecutionPolicy Bypass -File C:\CyberLab\_Scripts\seed-sc-baseline.ps1 -PodId {{ pod_id }}
+  register: baseline_result
+
+- name: Display DC baseline result
+  ansible.builtin.debug:
+    var: baseline_result.stdout_lines
+
+- name: Copy SC lab seeding script to DC
+  ansible.windows.win_copy:
+    src: apply-sc-lab.ps1
+    dest: 'C:\CyberLab\_Scripts\apply-sc-lab.ps1'
+
+- name: Seed SC labs on DC
+  ansible.windows.win_shell: |
+    powershell -ExecutionPolicy Bypass -File C:\CyberLab\_Scripts\apply-sc-lab.ps1 -PodId {{ pod_id }} -LabId {{ sc_lab_id | default('ALL') }}
+  register: seed_result
+
+- name: Display DC seed result
+  ansible.builtin.debug:
+    var: seed_result.stdout_lines
