@@ -4,12 +4,12 @@
 # Checks firewall rules, VLANs, logging, interfaces
 
 - name: Read pfSense config.xml
-  ansible.builtin.shell: cat /cf/conf/config.xml
+  ansible.builtin.raw: cat /cf/conf/config.xml
   register: pfsense_config
   changed_when: false
 
 - name: Parse firewall rules
-  ansible.builtin.shell: |
+  ansible.builtin.raw: |
     php -r "
     require_once('config.inc');
     \$config = parse_config(true);
@@ -39,7 +39,7 @@
   when: sc_lab_id is not defined or sc_lab_id == 'ALL' or sc_lab_id == 'M1-L2'
   block:
     - name: Check no Allow Any Any rule exists
-      ansible.builtin.shell: |
+      ansible.builtin.raw: |
         php -r "
         require_once('config.inc');
         \$config = parse_config(true);
@@ -57,7 +57,7 @@
       changed_when: false
 
     - name: Check default deny exists as last rule
-      ansible.builtin.shell: |
+      ansible.builtin.raw: |
         php -r "
         require_once('config.inc');
         \$config = parse_config(true);
@@ -76,7 +76,7 @@
   when: sc_lab_id is not defined or sc_lab_id == 'ALL' or sc_lab_id == 'M1-L3'
   block:
     - name: Check logging enabled on rules
-      ansible.builtin.shell: |
+      ansible.builtin.raw: |
         php -r "
         require_once('config.inc');
         \$config = parse_config(true);
@@ -97,7 +97,7 @@
   when: sc_lab_id is not defined or sc_lab_id == 'ALL' or sc_lab_id == 'M2-L2'
   block:
     - name: Check DMZ/OPT interface exists
-      ansible.builtin.shell: |
+      ansible.builtin.raw: |
         php -r "
         require_once('config.inc');
         \$config = parse_config(true);
@@ -118,7 +118,7 @@
   when: sc_lab_id is not defined or sc_lab_id == 'ALL' or sc_lab_id == 'M2-L3'
   block:
     - name: Check VLANs exist
-      ansible.builtin.shell: |
+      ansible.builtin.raw: |
         php -r "
         require_once('config.inc');
         \$config = parse_config(true);
@@ -136,7 +136,7 @@
   when: sc_lab_id is not defined or sc_lab_id == 'ALL' or sc_lab_id == 'M3-L1'
   block:
     - name: Check messy rules cleaned
-      ansible.builtin.shell: |
+      ansible.builtin.raw: |
         php -r "
         require_once('config.inc');
         \$config = parse_config(true);
@@ -162,7 +162,7 @@
   when: sc_lab_id is not defined or sc_lab_id == 'ALL' or sc_lab_id == 'M3-L2'
   block:
     - name: Check block rule is last
-      ansible.builtin.shell: |
+      ansible.builtin.raw: |
         php -r "
         require_once('config.inc');
         \$config = parse_config(true);
@@ -186,7 +186,7 @@
   when: sc_lab_id is not defined or sc_lab_id == 'ALL' or sc_lab_id == 'M3-L3'
   block:
     - name: Check only HTTPS allowed to accounting
-      ansible.builtin.shell: |
+      ansible.builtin.raw: |
         php -r "
         require_once('config.inc');
         \$config = parse_config(true);
@@ -214,7 +214,7 @@
   when: sc_lab_id is not defined or sc_lab_id == 'ALL' or sc_lab_id == 'M4-L3'
   block:
     - name: Capstone comprehensive check
-      ansible.builtin.shell: |
+      ansible.builtin.raw: |
         php -r "
         require_once('config.inc');
         \$config = parse_config(true);

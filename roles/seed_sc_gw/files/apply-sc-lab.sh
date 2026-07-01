@@ -219,7 +219,8 @@ seed_m2_l2() {
 );
 
 // NAT rule pointing to LAN web server
-if (!isset(\$config['nat']['rule'])) \$config['nat']['rule'] = array();
+if (!isset(\$config['nat']) || !is_array(\$config['nat'])) \$config['nat'] = array();
+if (!isset(\$config['nat']['rule']) || !is_array(\$config['nat']['rule'])) \$config['nat']['rule'] = array();
 \$config['nat']['rule'][] = array(
     'source' => array('any' => ''),
     'destination' => array('network' => 'wanip', 'port' => '80'),
@@ -266,7 +267,8 @@ seed_m2_l3() {
 unset(\$config['vlans']);
 
 // Leave instructions in aliases
-if (!isset(\$config['aliases']['alias'])) \$config['aliases']['alias'] = array();
+if (!isset(\$config['aliases']) || !is_array(\$config['aliases'])) \$config['aliases'] = array();
+if (!isset(\$config['aliases']['alias']) || !is_array(\$config['aliases']['alias'])) \$config['aliases']['alias'] = array();
 \$config['aliases']['alias'][] = array(
     'name' => 'TASK_HR_SUBNET',
     'type' => 'network',
