@@ -56,6 +56,26 @@
           {%- endfor -%}
           {{ count[0] }}
 
+    - name: Build SI-prefixed results for the training tracker
+      ansible.builtin.set_fact:
+        pod_results_pub: >-
+          {%- set pods = {} -%}
+          {%- for pod_key, pod_val in pod_results.items() -%}
+            {%- set labs = {} -%}
+            {%- for lab_key, lab_val in pod_val.items() -%}
+              {%- set nk = lab_key if lab_key.startswith('SI-') else 'SI-' ~ lab_key -%}
+              {%- set _ = labs.update({nk: lab_val}) -%}
+            {%- endfor -%}
+            {%- set _ = pods.update({pod_key: labs}) -%}
+          {%- endfor -%}
+          {{ pods }}
+
+    - name: Publish per-pod results as AWX job artifacts (for training tracker)
+      ansible.builtin.set_stats:
+        data: "{{ pod_results_pub }}"
+        aggregate: false
+        per_host: false
+
     - name: Write JSON artifact
       ansible.builtin.copy:
         content: "{{ {'course': 'CMMC Level 1 System & Information Integrity (SI)', 'pods': pod_results, 'totals': {'completed': total_completed | int, 'incomplete': total_incomplete | int}} | to_nice_json }}"
