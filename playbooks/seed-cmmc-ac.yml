@@ -11,8 +11,8 @@
     #   pod_id=7       -> only Pod07 (alias, used by the portal per-pod action)
     #   (neither set)  -> range(1, pod_count+1)  [original behavior]
     pod_list: >-
-      {{ ((pods | default(pod_id) | string).split(',') | map('trim') | select('match', '^[0-9]+$') | map('int') | list)
-         if (pods is defined or pod_id is defined)
+      {{ ((pods | default(pod_id) | default('') | string).split(',') | map('trim') | select('match', '^[0-9]+$') | map('int') | list)
+         if ((pods | default('') | string | trim) != '' or (pod_id | default('') | string | trim) != '')
          else (range(1, (pod_count | default(10) | int) + 1) | list) }}
   tasks:
     - name: Copy seed-baseline.ps1
