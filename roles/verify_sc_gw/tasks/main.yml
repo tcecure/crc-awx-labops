@@ -295,7 +295,7 @@
         reason: "{{ m3l3_check.stdout | default('not checked') | trim }}"
       M4-L3:
         completed: "{{ (((m4l3_check.stdout | default('{}') | from_json).passed | default(0) | int) == ((m4l3_check.stdout | default('{}') | from_json).total | default(-1) | int)) | bool }}"
-        reason: "{{ m4l3_check.stdout | default('not checked') | trim }}"
+        reason: "{{ 'capstone: passed ' ~ ((m4l3_check.stdout | default('{}') | from_json).passed | default(0) | int) ~ '/' ~ ((m4l3_check.stdout | default('{}') | from_json).total | default(0) | int) ~ ' checks' if (m4l3_check.stdout is defined) else 'not checked' }}"
 
 - name: Show SC gateway lab results
   ansible.builtin.debug:
