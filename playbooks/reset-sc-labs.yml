@@ -30,3 +30,11 @@
       loop: "{{ range(1, 21) | list }}"
       loop_control:
         label: "Pod{{ '%02d' | format(item) }}"
+
+    - name: "Clear SC seed marker for Pod{{ '%02d' | format(item) }}"
+      ansible.windows.win_file:
+        path: "C:\\CyberLab\\Pod{{ '%02d' | format(item) }}\\.families\\SC.seeded"
+        state: absent
+      loop: "{{ range(1, 21) | list }}"
+      loop_control:
+        label: "Pod{{ '%02d' | format(item) }}"

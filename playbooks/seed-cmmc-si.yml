@@ -62,3 +62,12 @@
       loop: "{{ seed_results.results }}"
       loop_control:
         label: "Pod{{ '%02d' | format(item.item) }}"
+
+    - name: "Write SI seed marker for Pod{{ '%02d' | format(item) }}"
+      ansible.windows.win_shell: |
+        $d = "C:\CyberLab\Pod{{ '%02d' | format(item) }}\.families"
+        New-Item -ItemType Directory -Force -Path $d | Out-Null
+        Set-Content -Path (Join-Path $d 'SI.seeded') -Value (Get-Date -Format o)
+      loop: "{{ pod_list }}"
+      loop_control:
+        label: "Pod{{ '%02d' | format(item) }}"
