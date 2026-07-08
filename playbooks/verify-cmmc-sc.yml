@@ -9,6 +9,9 @@
 - name: Verify SC Labs on PodXX-GW Gateways
   hosts: crc_pod_gateways
   gather_facts: false
+  # Gateways may be unreachable from AWX (isolated pod LAN); don't let that
+  # abort the run — the DC document labs + consolidation must still publish.
+  ignore_unreachable: true
   vars:
     sc_lab_id: "{{ lab_id | default('ALL') }}"
     lan_network: "10.51.{{ pod_id }}"
