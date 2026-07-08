@@ -30,13 +30,14 @@
 - name: Set firewall facts
   ansible.builtin.set_fact:
     fw_info: "{{ fw_state.stdout | from_json }}"
+  when: fw_state.stdout is defined and (fw_state.stdout | trim) != ''
 
 # ========================================================================
 # Per-lab verification
 # ========================================================================
 
 - name: "Verify M1-L2 (Deny By Default)"
-  when: sc_lab_id is not defined or sc_lab_id == 'ALL' or sc_lab_id == 'M1-L2'
+  when: (sc_lab_id is not defined or sc_lab_id == 'ALL' or sc_lab_id == 'M1-L2') and fw_info is defined
   block:
     - name: Check no Allow Any Any rule exists
       ansible.builtin.raw: |
@@ -73,7 +74,7 @@
         msg: "M1-L2 Deny By Default: {{ m1l2_check.stdout }} | {{ m1l2_deny.stdout }}"
 
 - name: "Verify M1-L3 (Monitor/Control/Protect)"
-  when: sc_lab_id is not defined or sc_lab_id == 'ALL' or sc_lab_id == 'M1-L3'
+  when: (sc_lab_id is not defined or sc_lab_id == 'ALL' or sc_lab_id == 'M1-L3') and fw_info is defined
   block:
     - name: Check logging enabled on rules
       ansible.builtin.raw: |
@@ -94,7 +95,7 @@
         msg: "M1-L3 Monitor/Control/Protect: {{ m1l3_check.stdout }}"
 
 - name: "Verify M2-L2 (DMZ)"
-  when: sc_lab_id is not defined or sc_lab_id == 'ALL' or sc_lab_id == 'M2-L2'
+  when: (sc_lab_id is not defined or sc_lab_id == 'ALL' or sc_lab_id == 'M2-L2') and fw_info is defined
   block:
     - name: Check DMZ/OPT interface exists
       ansible.builtin.raw: |
@@ -115,7 +116,7 @@
         msg: "M2-L2 Secure DMZ: {{ m2l2_check.stdout }}"
 
 - name: "Verify M2-L3 (VLANs)"
-  when: sc_lab_id is not defined or sc_lab_id == 'ALL' or sc_lab_id == 'M2-L3'
+  when: (sc_lab_id is not defined or sc_lab_id == 'ALL' or sc_lab_id == 'M2-L3') and fw_info is defined
   block:
     - name: Check VLANs exist
       ansible.builtin.raw: |
@@ -133,7 +134,7 @@
         msg: "M2-L3 Segmentation: {{ m2l3_check.stdout }}"
 
 - name: "Verify M3-L1 (Rule Audit)"
-  when: sc_lab_id is not defined or sc_lab_id == 'ALL' or sc_lab_id == 'M3-L1'
+  when: (sc_lab_id is not defined or sc_lab_id == 'ALL' or sc_lab_id == 'M3-L1') and fw_info is defined
   block:
     - name: Check messy rules cleaned
       ansible.builtin.raw: |
@@ -159,7 +160,7 @@
         msg: "M3-L1 Rule Audit: {{ m3l1_check.stdout }}"
 
 - name: "Verify M3-L2 (Rule Ordering)"
-  when: sc_lab_id is not defined or sc_lab_id == 'ALL' or sc_lab_id == 'M3-L2'
+  when: (sc_lab_id is not defined or sc_lab_id == 'ALL' or sc_lab_id == 'M3-L2') and fw_info is defined
   block:
     - name: Check block rule is last
       ansible.builtin.raw: |
@@ -183,7 +184,7 @@
         msg: "M3-L2 Rule Ordering: {{ m3l2_check.stdout }}"
 
 - name: "Verify M3-L3 (Least Privilege)"
-  when: sc_lab_id is not defined or sc_lab_id == 'ALL' or sc_lab_id == 'M3-L3'
+  when: (sc_lab_id is not defined or sc_lab_id == 'ALL' or sc_lab_id == 'M3-L3') and fw_info is defined
   block:
     - name: Check only HTTPS allowed to accounting
       ansible.builtin.raw: |
@@ -211,7 +212,7 @@
         msg: "M3-L3 Least Privilege: {{ m3l3_check.stdout }}"
 
 - name: "Verify M4-L3 (Capstone)"
-  when: sc_lab_id is not defined or sc_lab_id == 'ALL' or sc_lab_id == 'M4-L3'
+  when: (sc_lab_id is not defined or sc_lab_id == 'ALL' or sc_lab_id == 'M4-L3') and fw_info is defined
   block:
     - name: Capstone comprehensive check
       ansible.builtin.raw: |
