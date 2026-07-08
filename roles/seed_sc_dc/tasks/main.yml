@@ -3,6 +3,12 @@
 # Deploys SC lab artifacts to DC01 via WinRM
 # Creates SC-Artifacts directory and lab markers per pod
 
+- name: Compute per-pod facts for SC templates
+  ansible.builtin.set_fact:
+    pod_name: "Pod{{ '%02d' | format(pod_id | int) }}"
+    prefix: "P{{ '%02d' | format(pod_id | int) }}"
+    gw_ip: "10.51.{{ pod_id | int }}.1"
+
 - name: Ensure SC templates directory exists on DC
   ansible.windows.win_file:
     path: 'C:\CyberLab\_Templates\SC'

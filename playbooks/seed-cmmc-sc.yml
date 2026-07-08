@@ -23,7 +23,7 @@
     - name: Seed SC gateway labs (only targeted pods)
       ansible.builtin.include_role:
         name: seed_sc_gw
-      when: my_pod in pod_list
+      when: (my_pod | int) in (pod_list | map('int') | list)
 
 - name: Seed SC Lab Artifacts on DC01
   hosts: crc_shared_dcs
