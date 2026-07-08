@@ -33,16 +33,13 @@
   hosts: localhost
   connection: local
   gather_facts: false
-  vars:
-    advance_dry_run: "{{ advance_dry_run | default('0') }}"
-    advance_enabled: "{{ advance_enabled | default('1') }}"
   tasks:
     - name: Run auto-advance
       ansible.builtin.command:
         cmd: "python3 {{ playbook_dir }}/../scripts/advance_families.py"
       environment:
-        ADVANCE_DRY_RUN: "{{ advance_dry_run }}"
-        ADVANCE_ENABLED: "{{ advance_enabled }}"
+        ADVANCE_DRY_RUN: "{{ advance_dry_run | default('0') }}"
+        ADVANCE_ENABLED: "{{ advance_enabled | default('1') }}"
         SEED_MARKERS_FILE: /tmp/seed_markers.json
       register: advance_out
       changed_when: "'launched 0 seed job(s)' not in (advance_out.stdout | default(''))"
