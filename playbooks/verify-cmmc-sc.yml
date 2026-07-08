@@ -1,6 +1,10 @@
 ---
 # verify-cmmc-sc.yml
-# Verifies SC lab completion on PodXX-GW + DC01
+# Verifies SC lab completion and publishes per-pod results to the training
+# tracker (AWX job artifacts via set_stats), same pattern as AC/IA/SI.
+#   - 8 hands-on labs verified on PodXX-GW (pfSense)          -> verify_sc_gw
+#   - 4 document labs verified via completion files on DC01   -> verify_sc_dc
+# Consolidation merges both, prefixes keys with "SC-", and set_stats.
 
 - name: Verify SC Labs on PodXX-GW Gateways
   hosts: crc_pod_gateways
@@ -11,15 +15,81 @@
   roles:
     - verify_sc_gw
 
-- name: Verify SC Lab Artifacts on DC01
-  hosts: crc_shared_dcs
+- name: Verify SC Document-Lab Artifacts on DC01
+  hosts: crc_shared_dcs[0]
   gather_facts: false
+  vars:
+    pod_list: "{{ range(1, (pod_count | default(20) | int) + 1) | list }}"
   tasks:
-    - name: Verify SC artifacts for each pod
+    - name: Verify SC document-lab artifacts for each pod
       ansible.builtin.include_role:
         name: verify_sc_dc
       vars:
         pod_id: "{{ item }}"
-      loop: "{{ range(1, 21) | list }}"
+      loop: "{{ pod_list }}"
       loop_control:
         label: "Pod{{ '%02d' | format(item) }}"
+
+- name: Consolidate SC results and produce report
+  hosts: localhost
+  gather_facts: false
+  connection: local
+  vars:
+    pod_list: "{{ range(1, (pod_count | default(20) | int) + 1) | list }}"
+  tasks:
+    - name: Build per-pod SC results (merge gateway + document labs, SC- prefixed)
+      ansible.builtin.set_fact:
+        pod_results_pub: >-
+          {%- set pods = {} -%}
+          {%- set dc_host = groups['crc_shared_dcs'][0] -%}
+          {%- for i in pod_list -%}
+            {%- set pad = '%02d' | format(i) -%}
+            {%- set gw_host = 'pod' ~ pad ~ '-gw' -%}
+            {%- set gw = (hostvars[gw_host].sc_gw_lab_results | default({})) if gw_host in hostvars else {} -%}
+            {%- set dc = hostvars[dc_host]['pod' ~ pad ~ '_sc_dc_results'] | default({}) -%}
+            {%- set labs = {} -%}
+            {%- for lab_key, lab_val in dc.items() -%}
+              {%- set _ = labs.update({'SC-' ~ lab_key: lab_val}) -%}
+            {%- endfor -%}
+            {%- for lab_key, lab_val in gw.items() -%}
+              {%- set _ = labs.update({'SC-' ~ lab_key: lab_val}) -%}
+            {%- endfor -%}
+            {%- set _ = pods.update({'pod' ~ pad: labs}) -%}
+          {%- endfor -%}
+          {{ pods }}
+
+    - name: Compute totals
+      ansible.builtin.set_fact:
+        total_completed: >-
+          {%- set count = [0] -%}
+          {%- for pod_key, pod_val in pod_results_pub.items() -%}
+            {%- for lab_key, lab_val in pod_val.items() -%}
+              {%- if lab_val.completed | default(false) -%}
+                {%- set _ = count.append(count.pop() + 1) -%}
+              {%- endif -%}
+            {%- endfor -%}
+          {%- endfor -%}
+          {{ count[0] }}
+
+    - name: Publish per-pod SC results as AWX job artifacts (for training tracker)
+      ansible.builtin.set_stats:
+        data: "{{ pod_results_pub }}"
+        aggregate: false
+        per_host: false
+
+    - name: Write JSON artifact
+      ansible.builtin.copy:
+        content: "{{ {'course': 'CMMC Level 1 System & Communications Protection (SC)', 'pods': pod_results_pub, 'totals': {'completed': total_completed | int}} | to_nice_json }}"
+        dest: /runner/artifacts/auto-verify-sc.json
+      delegate_to: localhost
+
+    - name: Print SC Completed/Incomplete matrix
+      ansible.builtin.debug:
+        msg: |
+          === CMMC Level 1 System & Communications Protection (SC) — Lab Results ===
+          {% for i in pod_list %}
+          {%- set pad = '%02d' | format(i) -%}
+          {%- set pod = pod_results_pub['pod' ~ pad] -%}
+          POD{{ pad }}: M1 [L1 {{ 'C' if (pod['SC-M1-L1'] | default({})).completed | default(false) else 'I' }} | L2 {{ 'C' if (pod['SC-M1-L2'] | default({})).completed | default(false) else 'I' }} | L3 {{ 'C' if (pod['SC-M1-L3'] | default({})).completed | default(false) else 'I' }}]  M2 [L1 {{ 'C' if (pod['SC-M2-L1'] | default({})).completed | default(false) else 'I' }} | L2 {{ 'C' if (pod['SC-M2-L2'] | default({})).completed | default(false) else 'I' }} | L3 {{ 'C' if (pod['SC-M2-L3'] | default({})).completed | default(false) else 'I' }}]  M3 [L1 {{ 'C' if (pod['SC-M3-L1'] | default({})).completed | default(false) else 'I' }} | L2 {{ 'C' if (pod['SC-M3-L2'] | default({})).completed | default(false) else 'I' }} | L3 {{ 'C' if (pod['SC-M3-L3'] | default({})).completed | default(false) else 'I' }}]  M4 [L1 {{ 'C' if (pod['SC-M4-L1'] | default({})).completed | default(false) else 'I' }} | L2 {{ 'C' if (pod['SC-M4-L2'] | default({})).completed | default(false) else 'I' }} | L3 {{ 'C' if (pod['SC-M4-L3'] | default({})).completed | default(false) else 'I' }}]
+          {% endfor %}
+          TOTAL completed={{ total_completed }}

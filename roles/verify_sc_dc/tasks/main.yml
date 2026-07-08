@@ -1,55 +1,83 @@
 ---
 # verify_sc_dc/tasks/main.yml
-# Verifies SC lab artifacts on DC01
+# Verifies SC *document-based* lab completion on DC01.
+# The four document labs are worksheet exercises whose completion is a
+# student-produced file (SC-<lab>_Completed.txt/.csv) under SC-Artifacts:
+#   M1-L1  Understanding Trust Boundaries
+#   M2-L1  Draw the Organizational Boundary
+#   M4-L1  Firewall Log Investigation
+#   M4-L2  Verify SC Compliance
+# The eight hands-on labs are verified on the pfSense gateway (verify_sc_gw).
+# Produces hostvar podXX_sc_dc_results = { 'M1-L1': {completed, reason}, ... }
 
-- name: Check SC-Artifacts directory exists
-  ansible.windows.win_stat:
-    path: 'C:\CyberLab\Pod{{ "%02d" | format(pod_id) }}\SC-Artifacts'
-  register: sc_dir
+- name: "Pod{{ '%02d' | format(pod_id) }} SC M1-L1 — Trust boundary worksheet completed"
+  ansible.windows.win_powershell:
+    script: |
+      $podName = "Pod{{ '%02d' | format(pod_id) }}"
+      $artifactDir = "C:\CyberLab\$podName\SC-Artifacts"
+      $reasons = @()
+      $marker = Join-Path $artifactDir "_LAB_READY_SC-M1-L1.txt"
+      if (-not (Test-Path $marker)) { $reasons += "lab not seeded (marker missing)" }
+      $done = @("SC-M1-L1_Completed.txt","SC-M1-L1_Completed.csv","SC-M1-L1_Completed.png") |
+              ForEach-Object { Join-Path $artifactDir $_ } | Where-Object { Test-Path $_ } | Select-Object -First 1
+      if (-not $done) { $reasons += "SC-M1-L1_Completed.(txt/csv/png) not found" }
+      elseif ((Get-Item $done).Length -lt 50) { $reasons += "completion file too short (incomplete)" }
+      if ($reasons.Count -eq 0) { @{ completed=$true; reason="Trust boundary worksheet submitted" } }
+      else { @{ completed=$false; reason=($reasons -join "; ") } }
+  register: v_m1l1
 
-- name: Fail if SC-Artifacts missing
-  ansible.builtin.fail:
-    msg: "SC-Artifacts directory not found for Pod{{ '%02d' | format(pod_id) }}"
-  when: not sc_dir.stat.exists
+- name: "Pod{{ '%02d' | format(pod_id) }} SC M2-L1 — Organizational boundary diagram completed"
+  ansible.windows.win_powershell:
+    script: |
+      $podName = "Pod{{ '%02d' | format(pod_id) }}"
+      $artifactDir = "C:\CyberLab\$podName\SC-Artifacts"
+      $reasons = @()
+      $marker = Join-Path $artifactDir "_LAB_READY_SC-M2-L1.txt"
+      if (-not (Test-Path $marker)) { $reasons += "lab not seeded (marker missing)" }
+      $done = @("SC-M2-L1_Completed.txt","SC-M2-L1_Completed.csv","SC-M2-L1_Completed.png") |
+              ForEach-Object { Join-Path $artifactDir $_ } | Where-Object { Test-Path $_ } | Select-Object -First 1
+      if (-not $done) { $reasons += "SC-M2-L1_Completed.(txt/csv/png) not found" }
+      elseif ((Get-Item $done).Length -lt 50) { $reasons += "completion file too short (incomplete)" }
+      if ($reasons.Count -eq 0) { @{ completed=$true; reason="Organizational boundary diagram submitted" } }
+      else { @{ completed=$false; reason=($reasons -join "; ") } }
+  register: v_m2l1
 
-- name: Count lab markers
-  ansible.windows.win_shell: |
-    (Get-ChildItem "C:\CyberLab\Pod{{ '%02d' | format(pod_id) }}\SC-Artifacts" -Filter "_LAB_READY_SC-*.txt" | Measure-Object).Count
-  register: marker_count
+- name: "Pod{{ '%02d' | format(pod_id) }} SC M4-L1 — Firewall log investigation completed"
+  ansible.windows.win_powershell:
+    script: |
+      $podName = "Pod{{ '%02d' | format(pod_id) }}"
+      $artifactDir = "C:\CyberLab\$podName\SC-Artifacts"
+      $reasons = @()
+      $marker = Join-Path $artifactDir "_LAB_READY_SC-M4-L1.txt"
+      if (-not (Test-Path $marker)) { $reasons += "lab not seeded (marker missing)" }
+      $done = @("SC-M4-L1_Completed.txt","SC-M4-L1_Completed.csv") |
+              ForEach-Object { Join-Path $artifactDir $_ } | Where-Object { Test-Path $_ } | Select-Object -First 1
+      if (-not $done) { $reasons += "SC-M4-L1_Completed.(txt/csv) not found" }
+      elseif ((Get-Item $done).Length -lt 50) { $reasons += "completion file too short (incomplete)" }
+      if ($reasons.Count -eq 0) { @{ completed=$true; reason="Log investigation findings submitted" } }
+      else { @{ completed=$false; reason=($reasons -join "; ") } }
+  register: v_m4l1
 
-- name: Check individual lab markers
-  ansible.windows.win_stat:
-    path: 'C:\CyberLab\Pod{{ "%02d" | format(pod_id) }}\SC-Artifacts\_LAB_READY_SC-{{ item }}.txt'
-  loop:
-    - M1-L1
-    - M1-L2
-    - M1-L3
-    - M2-L1
-    - M2-L2
-    - M2-L3
-    - M3-L1
-    - M3-L2
-    - M3-L3
-    - M4-L1
-    - M4-L2
-    - M4-L3
-  register: lab_markers
+- name: "Pod{{ '%02d' | format(pod_id) }} SC M4-L2 — Compliance checklist completed"
+  ansible.windows.win_powershell:
+    script: |
+      $podName = "Pod{{ '%02d' | format(pod_id) }}"
+      $artifactDir = "C:\CyberLab\$podName\SC-Artifacts"
+      $reasons = @()
+      $marker = Join-Path $artifactDir "_LAB_READY_SC-M4-L2.txt"
+      if (-not (Test-Path $marker)) { $reasons += "lab not seeded (marker missing)" }
+      $done = @("SC-M4-L2_Completed.txt","SC-M4-L2_Completed.csv") |
+              ForEach-Object { Join-Path $artifactDir $_ } | Where-Object { Test-Path $_ } | Select-Object -First 1
+      if (-not $done) { $reasons += "SC-M4-L2_Completed.(txt/csv) not found" }
+      elseif ((Get-Item $done).Length -lt 50) { $reasons += "completion file too short (incomplete)" }
+      if ($reasons.Count -eq 0) { @{ completed=$true; reason="Compliance checklist submitted" } }
+      else { @{ completed=$false; reason=($reasons -join "; ") } }
+  register: v_m4l2
 
-- name: Report marker status
-  ansible.builtin.debug:
-    msg: >-
-      Pod{{ '%02d' | format(pod_id) }} SC markers:
-      {{ marker_count.stdout | trim }}/12 present.
-      Missing: {{ lab_markers.results | selectattr('stat.exists', 'equalto', false)
-                  | map(attribute='item') | list | join(', ') | default('none') }}
-
-- name: Check student completion artifacts
-  ansible.windows.win_find:
-    paths: 'C:\CyberLab\Pod{{ "%02d" | format(pod_id) }}\SC-Artifacts'
-    patterns: '*.txt,*.png,*.csv'
-    recurse: true
-  register: all_artifacts
-
-- name: Report artifact count
-  ansible.builtin.debug:
-    msg: "Pod{{ '%02d' | format(pod_id) }} SC total artifacts: {{ all_artifacts.matched }}"
+- name: "Consolidate Pod{{ '%02d' | format(pod_id) }} SC document-lab results"
+  ansible.builtin.set_fact:
+    "pod{{ '%02d' | format(pod_id) }}_sc_dc_results":
+      M1-L1: "{{ v_m1l1.output[0] }}"
+      M2-L1: "{{ v_m2l1.output[0] }}"
+      M4-L1: "{{ v_m4l1.output[0] }}"
+      M4-L2: "{{ v_m4l2.output[0] }}"

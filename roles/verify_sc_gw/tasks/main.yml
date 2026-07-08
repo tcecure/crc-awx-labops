@@ -262,13 +262,40 @@
         msg: "M4-L3 Capstone: {{ m4l3_check.stdout }}"
 
 # ========================================================================
-# Summary
+# Consolidate GW lab results for the training tracker
+#   Produces sc_gw_lab_results = { 'M1-L2': {completed, reason}, ... }
+#   for the 8 gateway-verified SC labs. Keys are bare (no SC- prefix);
+#   the playbook adds the SC- prefix during consolidation.
 # ========================================================================
 
-- name: Generate verification summary
+- name: Build SC gateway lab results for this pod
   ansible.builtin.set_fact:
-    sc_gw_summary:
-      hostname: "{{ fw_info.hostname }}"
-      rule_count: "{{ fw_info.rule_count }}"
-      vlan_count: "{{ fw_info.vlan_count }}"
-      logging: "{{ fw_info.has_logging }}"
+    sc_gw_lab_results:
+      M1-L2:
+        completed: "{{ (((m1l2_check.stdout | default('')) is search('^PASS')) and ((m1l2_deny.stdout | default('')) is search('^PASS'))) | bool }}"
+        reason: "{{ (m1l2_check.stdout | default('not checked') | trim) ~ ' | ' ~ (m1l2_deny.stdout | default('not checked') | trim) }}"
+      M1-L3:
+        completed: "{{ ((m1l3_check.stdout | default('')) is search('^PASS')) | bool }}"
+        reason: "{{ m1l3_check.stdout | default('not checked') | trim }}"
+      M2-L2:
+        completed: "{{ ((m2l2_check.stdout | default('')) is search('^PASS')) | bool }}"
+        reason: "{{ m2l2_check.stdout | default('not checked') | trim }}"
+      M2-L3:
+        completed: "{{ ((m2l3_check.stdout | default('')) is search('^PASS')) | bool }}"
+        reason: "{{ m2l3_check.stdout | default('not checked') | trim }}"
+      M3-L1:
+        completed: "{{ ((m3l1_check.stdout | default('')) is search('^PASS')) | bool }}"
+        reason: "{{ m3l1_check.stdout | default('not checked') | trim }}"
+      M3-L2:
+        completed: "{{ ((m3l2_check.stdout | default('')) is search('^PASS')) | bool }}"
+        reason: "{{ m3l2_check.stdout | default('not checked') | trim }}"
+      M3-L3:
+        completed: "{{ ((m3l3_check.stdout | default('')) is search('^PASS')) | bool }}"
+        reason: "{{ m3l3_check.stdout | default('not checked') | trim }}"
+      M4-L3:
+        completed: "{{ (((m4l3_check.stdout | default('{}') | from_json).passed | default(0) | int) == ((m4l3_check.stdout | default('{}') | from_json).total | default(-1) | int)) | bool }}"
+        reason: "{{ m4l3_check.stdout | default('not checked') | trim }}"
+
+- name: Show SC gateway lab results
+  ansible.builtin.debug:
+    var: sc_gw_lab_results
