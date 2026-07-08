@@ -5,7 +5,15 @@
   gather_facts: false
   vars:
     seed_user_password: "{{ seed_user_password | default(lookup('env', 'SEED_USER_PASSWORD')) }}"
-    pod_list: "{{ range(1, (pod_count | default(20) | int) + 1) | list }}"
+    # Target selection (backward compatible):
+    #   pods="7"       -> only Pod07
+    #   pods="7,9,12"  -> those pods
+    #   pod_id=7       -> only Pod07 (alias, used by the portal per-pod action)
+    #   (neither set)  -> range(1, pod_count+1)  [original behavior]
+    pod_list: >-
+      {{ ((pods | default(pod_id) | string).split(',') | map('trim') | select('match', '^[0-9]+$') | map('int') | list)
+         if (pods is defined or pod_id is defined)
+         else (range(1, (pod_count | default(20) | int) + 1) | list) }}
   tasks:
     - name: Copy seed-si-baseline.ps1
       ansible.windows.win_copy:
