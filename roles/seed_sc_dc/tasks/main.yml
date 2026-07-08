@@ -9,10 +9,13 @@
     prefix: "P{{ '%02d' | format(pod_id | int) }}"
     gw_ip: "10.51.{{ pod_id | int }}.1"
 
-- name: Ensure SC templates directory exists on DC
+- name: Ensure SC templates and scripts directories exist on DC
   ansible.windows.win_file:
-    path: 'C:\CyberLab\_Templates\SC'
+    path: "{{ item }}"
     state: directory
+  loop:
+    - 'C:\CyberLab\_Templates\SC'
+    - 'C:\CyberLab\_Scripts'
 
 - name: Deploy SC Jinja2 templates to DC
   ansible.windows.win_template:
