@@ -1,0 +1,32 @@
+---
+# TEST-ONLY: simulate a student completing all 12 SI labs on Pod20 by writing
+# the completion evidence files the SI verify checks for. Removed after testing.
+- name: Complete SI labs for Pod20 (test)
+  hosts: crc_shared_dcs[0]
+  gather_facts: false
+  vars:
+    pod: 20
+    si_labs:
+      - SI-M1-L1
+      - SI-M1-L2
+      - SI-M1-L3
+      - SI-M2-L1
+      - SI-M2-L2
+      - SI-M2-L3
+      - SI-M3-L1
+      - SI-M3-L2
+      - SI-M3-L3
+      - SI-M4-L1
+      - SI-M4-L2
+      - SI-M4-L3
+  tasks:
+    - name: Write SI completion evidence files
+      ansible.windows.win_shell: |
+        $dir = "C:\CyberLab\Pod{{ '%02d' | format(pod) }}\SI-Artifacts"
+        New-Item -ItemType Directory -Force -Path $dir | Out-Null
+        $body = "TEST completion evidence for {{ item }} on Pod{{ '%02d' | format(pod) }}. " * 6
+        Set-Content -Path (Join-Path $dir '{{ item }}_Completed.txt') -Value $body
+        Set-Content -Path (Join-Path $dir '{{ item }}_Completed.csv') -Value $body
+      loop: "{{ si_labs }}"
+      loop_control:
+        label: "{{ item }}"
