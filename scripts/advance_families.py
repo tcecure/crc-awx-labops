@@ -24,8 +24,8 @@ Guardrails:
   * ADVANCE_ENABLED=0 disables all launching (report-only).
 
 Environment:
-  AWX_HOST         e.g. http://192.168.1.103:30080  (no trailing /api/v2)
-  AWX_TOKEN        AWX OAuth2 token (Bearer)
+  CRC_AWX_HOST     e.g. http://10.43.121.132  (AWX in-cluster ClusterIP; no /api/v2)
+  CRC_AWX_TOKEN    AWX OAuth2 token (Bearer)
   ADVANCE_DRY_RUN  "1" to skip launches (default "0")
   ADVANCE_ENABLED  "0" to disable launches (default "1")
   SEED_MARKERS_FILE path to JSON list of marker file paths (default /tmp/seed_markers.json)
@@ -138,8 +138,8 @@ def launch_seed(host, token, family, pod_num):
 
 
 def main():
-    host = os.environ.get("AWX_HOST", "").rstrip("/")
-    token = os.environ.get("AWX_TOKEN", "")
+    host = (os.environ.get("CRC_AWX_HOST") or os.environ.get("AWX_HOST", "")).rstrip("/")
+    token = os.environ.get("CRC_AWX_TOKEN") or os.environ.get("AWX_TOKEN", "")
     dry = os.environ.get("ADVANCE_DRY_RUN", "0") == "1"
     enabled = os.environ.get("ADVANCE_ENABLED", "1") == "1"
     markers_file = os.environ.get("SEED_MARKERS_FILE", "/tmp/seed_markers.json")
