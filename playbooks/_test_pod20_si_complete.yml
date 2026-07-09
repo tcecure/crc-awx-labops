@@ -30,3 +30,9 @@
       loop: "{{ si_labs }}"
       loop_control:
         label: "{{ item }}"
+
+    - name: Write SI-M2-L3 remediation ticket (special-case evidence)
+      ansible.windows.win_shell: |
+        $dir = "C:\CyberLab\Pod{{ '%02d' | format(pod) }}\SI-Artifacts"
+        $body = "TEST remediation ticket for SI-M2-L3 on Pod{{ '%02d' | format(pod) }}. " * 6
+        Set-Content -Path (Join-Path $dir 'SI-M2-L3_Remediation_Ticket.txt') -Value $body
