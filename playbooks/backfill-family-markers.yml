@@ -1,0 +1,33 @@
+---
+# Backfill per-family seed markers for pods that were seeded before the
+# marker mechanism existed (or to assert a known seeded state).
+#
+# Markers live at C:\CyberLab\PodNN\.families\<FAM>.seeded and are what the
+# auto-advance job uses for idempotency (it never re-seeds a family whose
+# marker exists). Run this once against already-seeded pods so auto-advance
+# does not re-seed (and reset) families that are already in place.
+#
+# Vars:
+#   pods="1,2,3"           -> those pods           (default: all 1..pod_count)
+#   pod_count=20           -> ceiling when pods unset
+#   families="AC,IA,SI"    -> families to mark      (default: AC,IA,SI,SC)
+
+- name: Backfill per-family seed markers on DC01
+  hosts: crc_shared_dcs[0]
+  gather_facts: false
+  vars:
+    pod_list: >-
+      {{ ((pods | default('') | string).split(',') | map('trim') | select('match', '^[0-9]+$') | map('int') | list)
+         if ((pods | default('') | string | trim) != '')
+         else (range(1, (pod_count | default(20) | int) + 1) | list) }}
+    family_list: >-
+      {{ (families | default('AC,IA,SI,SC') | string).split(',') | map('trim') | select('match', '^[A-Za-z]{2}$') | map('upper') | list }}
+  tasks:
+    - name: "Write seed markers"
+      ansible.windows.win_shell: |
+        $d = "C:\CyberLab\Pod{{ '%02d' | format(item.0) }}\.families"
+        New-Item -ItemType Directory -Force -Path $d | Out-Null
+        Set-Content -Path (Join-Path $d '{{ item.1 }}.seeded') -Value (Get-Date -Format o)
+      loop: "{{ pod_list | product(family_list) | list }}"
+      loop_control:
+        label: "Pod{{ '%02d' | format(item.0) }} {{ item.1 }}"

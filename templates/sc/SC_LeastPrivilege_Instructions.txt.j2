@@ -1,0 +1,40 @@
+============================================================
+ SC LAB M3-L3: LEAST PRIVILEGE ACCESS
+ Pod: {{ pod_name }} ({{ prefix }})
+ Gateway: http://{{ gw_ip }}
+============================================================
+
+SCENARIO:
+ACS Consulting's accounting application at {{ gw_ip | replace('.1', '.100') }}
+only needs TCP port 443 (HTTPS). However, the firewall has
+rules allowing FTP (21), SSH (22), Telnet (23), HTTP (80),
+MySQL (3306), and port 8080 — all unnecessary and dangerous.
+
+YOUR TASKS:
+1. Log into pfSense at http://{{ gw_ip }}
+2. Navigate to Firewall > Rules > LAN
+3. Review rules targeting {{ gw_ip | replace('.1', '.100') }}
+4. IDENTIFY which ports are required vs unnecessary:
+
+   Port  | Service  | Required? | Action
+   ------|----------|-----------|--------
+    21   | FTP      | NO        | DELETE
+    22   | SSH      | NO        | DELETE
+    23   | Telnet   | NO        | DELETE
+    80   | HTTP     | NO        | DELETE
+   443   | HTTPS    | YES       | KEEP
+   3306  | MySQL    | NO        | DELETE
+   8080  | Alt HTTP | NO        | DELETE
+
+5. DELETE all unnecessary port rules
+6. VERIFY the accounting app still works on port 443
+7. Confirm all other ports are blocked
+
+SUCCESS CRITERIA:
+  [ ] Only TCP 443 is open to {{ gw_ip | replace('.1', '.100') }}
+  [ ] FTP, SSH, Telnet, HTTP, MySQL, 8080 are blocked
+  [ ] Accounting application still accessible
+  [ ] Default deny catches everything else
+
+Save evidence to:
+  C:\CyberLab\{{ pod_name }}\SC-Artifacts\M3-L3_LeastPrivilege_Rules.png

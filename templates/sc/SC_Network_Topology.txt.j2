@@ -1,0 +1,28 @@
+============================================================
+ ACS CONSULTING - NETWORK TOPOLOGY REFERENCE
+ Pod: {{ pod_name }} ({{ prefix }})
+============================================================
+
+NETWORK ASSETS:
+  Gateway/Firewall:  {{ pod_name }}-GW ({{ gw_ip }})
+    - WAN: DHCP (Internet-facing)
+    - LAN: {{ gw_ip }}/24
+
+  Domain Controller: DC01 (10.50.1.10)
+    - Active Directory: acs-p01.local
+    - DNS Server
+    - Shared across all pods
+
+  Pod LAN Subnet:    {{ gw_ip | replace('.1', '.0') }}/24
+    - Gateway:       {{ gw_ip }}
+    - DHCP Range:    {{ gw_ip | replace('.1', '.100') }} - {{ gw_ip | replace('.1', '.199') }}
+
+FIREWALL ACCESS:
+  Web UI: http://{{ gw_ip }}
+  SSH:    ssh admin@{{ gw_ip }}
+  Credentials: admin / pfsense
+
+SECURITY ZONES:
+  UNTRUSTED:  Internet, ISP Router, WAN interface
+  TRUSTED:    LAN subnet, DC01, internal workstations
+  DMZ:        Not configured (students may create in labs)

@@ -1,0 +1,38 @@
+============================================================
+ SC LAB M1-L3: MONITOR, CONTROL, PROTECT WORKSHEET
+ Pod: {{ pod_name }} ({{ prefix }})
+ Gateway: http://{{ gw_ip }}
+============================================================
+
+SCENARIO:
+Your firewall has rules configured that demonstrate the three
+core responsibilities of a firewall: Monitor, Control, Protect.
+
+INSTRUCTIONS:
+1. Log into pfSense at http://{{ gw_ip }}
+2. Navigate to Firewall > Rules > LAN
+3. Review each rule and its logging status
+4. Navigate to Status > System Logs > Firewall
+5. Identify which log entries represent each responsibility
+
+TASK 1: Identify MONITORING actions
+  Which rule(s) demonstrate monitoring? ________________________
+  What log entries show monitoring? ____________________________
+  How does logging help security? ______________________________
+
+TASK 2: Identify CONTROL actions
+  Which rule(s) demonstrate control? ___________________________
+  What traffic is being controlled? ____________________________
+  Why restrict DNS to only DC01? _______________________________
+
+TASK 3: Identify PROTECTION actions
+  Which rule(s) demonstrate protection? ________________________
+  What is being protected from? ________________________________
+  What would happen without this rule? _________________________
+
+TASK 4: Explain the Default Deny
+  Why is "block all" at the bottom? ____________________________
+  Is this monitoring, controlling, or protecting? ______________
+
+Save completed worksheet to:
+  C:\CyberLab\{{ pod_name }}\SC-Artifacts\M1-L3_Worksheet_Complete.txt

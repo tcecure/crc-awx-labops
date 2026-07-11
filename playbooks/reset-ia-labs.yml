@@ -26,3 +26,11 @@
       loop: "{{ reset_results.results }}"
       loop_control:
         label: "Pod{{ '%02d' | format(item.item) }}"
+
+    - name: "Clear IA seed marker for Pod{{ '%02d' | format(item) }}"
+      ansible.windows.win_file:
+        path: "C:\\CyberLab\\Pod{{ '%02d' | format(item) }}\\.families\\IA.seeded"
+        state: absent
+      loop: "{{ pod_list }}"
+      loop_control:
+        label: "Pod{{ '%02d' | format(item) }}"

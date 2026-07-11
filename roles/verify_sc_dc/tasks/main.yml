@@ -1,0 +1,83 @@
+---
+# verify_sc_dc/tasks/main.yml
+# Verifies SC *document-based* lab completion on DC01.
+# The four document labs are worksheet exercises whose completion is a
+# student-produced file (SC-<lab>_Completed.txt/.csv) under SC-Artifacts:
+#   M1-L1  Understanding Trust Boundaries
+#   M2-L1  Draw the Organizational Boundary
+#   M4-L1  Firewall Log Investigation
+#   M4-L2  Verify SC Compliance
+# The eight hands-on labs are verified on the pfSense gateway (verify_sc_gw).
+# Produces hostvar podXX_sc_dc_results = { 'M1-L1': {completed, reason}, ... }
+
+- name: "Pod{{ '%02d' | format(pod_id) }} SC M1-L1 — Trust boundary worksheet completed"
+  ansible.windows.win_powershell:
+    script: |
+      $podName = "Pod{{ '%02d' | format(pod_id) }}"
+      $artifactDir = "C:\CyberLab\$podName\SC-Artifacts"
+      $reasons = @()
+      $marker = Join-Path $artifactDir "_LAB_READY_SC-M1-L1.txt"
+      if (-not (Test-Path $marker)) { $reasons += "lab not seeded (marker missing)" }
+      $done = @("SC-M1-L1_Completed.txt","SC-M1-L1_Completed.csv","SC-M1-L1_Completed.png") |
+              ForEach-Object { Join-Path $artifactDir $_ } | Where-Object { Test-Path $_ } | Select-Object -First 1
+      if (-not $done) { $reasons += "SC-M1-L1_Completed.(txt/csv/png) not found" }
+      elseif ((Get-Item $done).Length -lt 50) { $reasons += "completion file too short (incomplete)" }
+      if ($reasons.Count -eq 0) { @{ completed=$true; reason="Trust boundary worksheet submitted" } }
+      else { @{ completed=$false; reason=($reasons -join "; ") } }
+  register: v_m1l1
+
+- name: "Pod{{ '%02d' | format(pod_id) }} SC M2-L1 — Organizational boundary diagram completed"
+  ansible.windows.win_powershell:
+    script: |
+      $podName = "Pod{{ '%02d' | format(pod_id) }}"
+      $artifactDir = "C:\CyberLab\$podName\SC-Artifacts"
+      $reasons = @()
+      $marker = Join-Path $artifactDir "_LAB_READY_SC-M2-L1.txt"
+      if (-not (Test-Path $marker)) { $reasons += "lab not seeded (marker missing)" }
+      $done = @("SC-M2-L1_Completed.txt","SC-M2-L1_Completed.csv","SC-M2-L1_Completed.png") |
+              ForEach-Object { Join-Path $artifactDir $_ } | Where-Object { Test-Path $_ } | Select-Object -First 1
+      if (-not $done) { $reasons += "SC-M2-L1_Completed.(txt/csv/png) not found" }
+      elseif ((Get-Item $done).Length -lt 50) { $reasons += "completion file too short (incomplete)" }
+      if ($reasons.Count -eq 0) { @{ completed=$true; reason="Organizational boundary diagram submitted" } }
+      else { @{ completed=$false; reason=($reasons -join "; ") } }
+  register: v_m2l1
+
+- name: "Pod{{ '%02d' | format(pod_id) }} SC M4-L1 — Firewall log investigation completed"
+  ansible.windows.win_powershell:
+    script: |
+      $podName = "Pod{{ '%02d' | format(pod_id) }}"
+      $artifactDir = "C:\CyberLab\$podName\SC-Artifacts"
+      $reasons = @()
+      $marker = Join-Path $artifactDir "_LAB_READY_SC-M4-L1.txt"
+      if (-not (Test-Path $marker)) { $reasons += "lab not seeded (marker missing)" }
+      $done = @("SC-M4-L1_Completed.txt","SC-M4-L1_Completed.csv") |
+              ForEach-Object { Join-Path $artifactDir $_ } | Where-Object { Test-Path $_ } | Select-Object -First 1
+      if (-not $done) { $reasons += "SC-M4-L1_Completed.(txt/csv) not found" }
+      elseif ((Get-Item $done).Length -lt 50) { $reasons += "completion file too short (incomplete)" }
+      if ($reasons.Count -eq 0) { @{ completed=$true; reason="Log investigation findings submitted" } }
+      else { @{ completed=$false; reason=($reasons -join "; ") } }
+  register: v_m4l1
+
+- name: "Pod{{ '%02d' | format(pod_id) }} SC M4-L2 — Compliance checklist completed"
+  ansible.windows.win_powershell:
+    script: |
+      $podName = "Pod{{ '%02d' | format(pod_id) }}"
+      $artifactDir = "C:\CyberLab\$podName\SC-Artifacts"
+      $reasons = @()
+      $marker = Join-Path $artifactDir "_LAB_READY_SC-M4-L2.txt"
+      if (-not (Test-Path $marker)) { $reasons += "lab not seeded (marker missing)" }
+      $done = @("SC-M4-L2_Completed.txt","SC-M4-L2_Completed.csv") |
+              ForEach-Object { Join-Path $artifactDir $_ } | Where-Object { Test-Path $_ } | Select-Object -First 1
+      if (-not $done) { $reasons += "SC-M4-L2_Completed.(txt/csv) not found" }
+      elseif ((Get-Item $done).Length -lt 50) { $reasons += "completion file too short (incomplete)" }
+      if ($reasons.Count -eq 0) { @{ completed=$true; reason="Compliance checklist submitted" } }
+      else { @{ completed=$false; reason=($reasons -join "; ") } }
+  register: v_m4l2
+
+- name: "Consolidate Pod{{ '%02d' | format(pod_id) }} SC document-lab results"
+  ansible.builtin.set_fact:
+    "pod{{ '%02d' | format(pod_id) }}_sc_dc_results":
+      M1-L1: "{{ v_m1l1.output[0] }}"
+      M2-L1: "{{ v_m2l1.output[0] }}"
+      M4-L1: "{{ v_m4l1.output[0] }}"
+      M4-L2: "{{ v_m4l2.output[0] }}"

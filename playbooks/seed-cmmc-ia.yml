@@ -5,7 +5,15 @@
   gather_facts: false
   vars:
     seed_user_password: "{{ seed_user_password | default(lookup('env', 'SEED_USER_PASSWORD')) }}"
-    pod_list: "{{ range(1, (pod_count | default(20) | int) + 1) | list }}"
+    # Target selection (backward compatible):
+    #   pods="7"       -> only Pod07
+    #   pods="7,9,12"  -> those pods
+    #   pod_id=7       -> only Pod07 (alias, used by the portal per-pod action)
+    #   (neither set)  -> range(1, pod_count+1)  [original behavior]
+    pod_list: >-
+      {{ ((pods | default(pod_id) | default('') | string).split(',') | map('trim') | select('match', '^[0-9]+$') | map('int') | list)
+         if ((pods | default('') | string | trim) != '' or (pod_id | default('') | string | trim) != '')
+         else (range(1, (pod_count | default(20) | int) + 1) | list) }}
   tasks:
     - name: Copy seed-ia-baseline.ps1
       ansible.windows.win_copy:
@@ -44,3 +52,12 @@
       loop: "{{ seed_results.results }}"
       loop_control:
         label: "Pod{{ '%02d' | format(item.item) }}"
+
+    - name: "Write IA seed marker for Pod{{ '%02d' | format(item) }}"
+      ansible.windows.win_shell: |
+        $d = "C:\CyberLab\Pod{{ '%02d' | format(item) }}\.families"
+        New-Item -ItemType Directory -Force -Path $d | Out-Null
+        Set-Content -Path (Join-Path $d 'IA.seeded') -Value (Get-Date -Format o)
+      loop: "{{ pod_list }}"
+      loop_control:
+        label: "Pod{{ '%02d' | format(item) }}"

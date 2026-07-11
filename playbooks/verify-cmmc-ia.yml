@@ -56,6 +56,12 @@
           {%- endfor -%}
           {{ count[0] }}
 
+    - name: Publish per-pod results as AWX job artifacts (for training tracker)
+      ansible.builtin.set_stats:
+        data: "{{ pod_results }}"
+        aggregate: false
+        per_host: false
+
     - name: Write JSON artifact
       ansible.builtin.copy:
         content: "{{ {'course': 'CMMC Level 1 Identification & Authentication (IA)', 'pods': pod_results, 'totals': {'completed': total_completed | int, 'incomplete': total_incomplete | int}} | to_nice_json }}"

@@ -1,0 +1,55 @@
+============================================================
+ SC LAB M4-L2: SC COMPLIANCE VERIFICATION CHECKLIST
+ Pod: {{ pod_name }} ({{ prefix }})
+ Gateway: http://{{ gw_ip }}
+ Date: {{ ansible_date_time.date | default('____-__-__') }}
+============================================================
+
+ASSESSOR WALKTHROUGH - CMMC Level 1 SC Controls
+
+Perform a simplified assessor walkthrough of your pod's
+System & Communications Protection controls.
+
+CHECKLIST:
+
+1. BOUNDARY PROTECTION (SC.L1-3.13.1)
+   [ ] System boundary exists (firewall operational)
+       Evidence: Screenshot of Status > Dashboard
+   [ ] Boundary device configured (pfSense with rules)
+       Evidence: Screenshot of Firewall > Rules
+   [ ] External connections monitored
+       Evidence: Screenshot of Status > System Logs
+
+2. FIREWALL CONFIGURATION (SC.L1-3.13.1)
+   [ ] Default deny policy in place
+       Evidence: Last rule is "Block All"
+   [ ] Only authorized traffic permitted
+       Evidence: List of allow rules with justification
+   [ ] No "Allow Any Any" rules exist
+       Evidence: Rule list screenshot
+
+3. LOGGING ENABLED (SC.L1-3.13.1)
+   [ ] Firewall logging active
+       Evidence: Status > System Logs shows entries
+   [ ] Rule logging enabled on key rules
+       Evidence: Rules show logging icon
+
+4. INTERNAL SEGMENTATION (SC.L1-3.13.1)
+   [ ] Network segmented (VLANs or zones exist)
+       Evidence: Interfaces > VLANs screenshot
+       NOTE: If not yet configured, document as finding
+   [ ] FCI isolated from public networks
+       Evidence: Rule preventing external access to FCI
+
+5. FCI PROTECTION (SC.L1-3.13.1)
+   [ ] FCI location identified
+   [ ] Access to FCI restricted by firewall rules
+   [ ] Evidence of FCI boundary protection
+
+FINDINGS:
+  Compliant items:    __ / 12
+  Non-compliant:      __ / 12
+  Recommendations: ____________________________________________
+
+Save all evidence screenshots and this checklist to:
+  C:\CyberLab\{{ pod_name }}\SC-Artifacts\M4-L2_Compliance_Evidence\

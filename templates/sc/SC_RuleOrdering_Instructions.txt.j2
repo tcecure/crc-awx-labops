@@ -1,0 +1,40 @@
+============================================================
+ SC LAB M3-L2: RULE ORDERING CHALLENGE
+ Pod: {{ pod_name }} ({{ prefix }})
+ Gateway: http://{{ gw_ip }}
+============================================================
+
+SCENARIO:
+The {{ pod_name }}-GW firewall has all the RIGHT rules but in
+the WRONG order. A "Block All" rule is at the top, preventing
+all legitimate traffic from passing through.
+
+YOUR TASK:
+1. Log into pfSense at http://{{ gw_ip }}
+2. Navigate to Firewall > Rules > LAN
+3. OBSERVE: All allow rules are BELOW the block rule
+4. REORDER rules so that:
+   a. Specific allow rules come FIRST
+   b. Default deny comes LAST
+5. VERIFY after reordering:
+   [ ] DNS works (nslookup acs-p01.local)
+   [ ] Web browsing works
+   [ ] RDP to DC01 works
+   [ ] Ping works
+   [ ] Unauthorized traffic is still blocked
+
+WHY ORDER MATTERS:
+  pfSense evaluates rules TOP to BOTTOM.
+  The FIRST matching rule wins.
+  If "Block All" is first, nothing else gets checked.
+
+CORRECT ORDER SHOULD BE:
+  1. Anti-lockout (Web UI access)
+  2. Allow DNS to DC01
+  3. Allow Web traffic (80, 443)
+  4. Allow RDP to DC01
+  5. Allow ICMP
+  6. Default Deny (last)
+
+Save evidence to:
+  C:\CyberLab\{{ pod_name }}\SC-Artifacts\M3-L2_Reordered_Rules.png

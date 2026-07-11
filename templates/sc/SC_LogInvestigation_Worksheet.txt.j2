@@ -1,0 +1,47 @@
+============================================================
+ SC LAB M4-L1: FIREWALL LOG INVESTIGATION
+ Pod: {{ pod_name }} ({{ prefix }})
+ Gateway: http://{{ gw_ip }}
+============================================================
+
+SCENARIO:
+Your firewall logs show suspicious activity. As the security
+analyst, investigate the logs and document your findings.
+
+INSTRUCTIONS:
+1. Log into pfSense at http://{{ gw_ip }}
+2. Navigate to Status > System Logs > Firewall
+3. Review the log entries and answer the questions below
+
+INVESTIGATION QUESTIONS:
+
+Q1: PORT SCANS
+  Do you see repeated blocked connections to ports 22, 23,
+  3389, or 445 from external sources?
+  Source IPs: _________________________________________________
+  Ports targeted: ____________________________________________
+  Assessment: ________________________________________________
+
+Q2: BLOCKED MALWARE INDICATORS
+  Are there blocked outbound connections to IRC ports
+  (6660-6669, 6697) or known malware ports?
+  Evidence: ___________________________________________________
+  Risk level: ________________________________________________
+
+Q3: DENIED OUTBOUND TRAFFIC
+  What legitimate traffic is being blocked by the default deny?
+  Applications affected: _____________________________________
+  Should rules be adjusted? __________________________________
+
+Q4: SUSPICIOUS COUNTRIES / IPs
+  Are there connections from unexpected geographic regions?
+  Suspicious entries: ________________________________________
+  Recommended action: ________________________________________
+
+FINDINGS SUMMARY:
+  Total suspicious events: ___________________________________
+  Recommended actions: ________________________________________
+  Priority items: ____________________________________________
+
+Save investigation report to:
+  C:\CyberLab\{{ pod_name }}\SC-Artifacts\M4-L1_Investigation_Report.txt

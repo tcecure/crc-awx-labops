@@ -1,0 +1,39 @@
+============================================================
+ SC LAB M2-L2: SECURE THE DMZ
+ Pod: {{ pod_name }} ({{ prefix }})
+ Gateway: http://{{ gw_ip }}
+============================================================
+
+SCENARIO:
+ACS Consulting has a public web server that was accidentally
+placed on the INTERNAL LAN at {{ gw_ip | replace('.1', '.50') }}.
+External visitors can reach it, but this means the web server
+has full access to internal resources like DC01 and file shares.
+
+YOUR TASKS:
+1. Log into pfSense at http://{{ gw_ip }}
+
+2. CREATE a DMZ zone:
+   a. Navigate to Interfaces > Assignments
+   b. Add a new interface (OPT1) and rename it "DMZ"
+   c. Assign a DMZ subnet (e.g., {{ gw_ip | replace('.1', '.0') | replace('.0', '') }}.200.0/24)
+
+3. UPDATE firewall rules:
+   a. WAN > Allow HTTP/HTTPS to DMZ web server only
+   b. DMZ > Allow web server to respond to requests
+   c. DMZ > BLOCK all traffic from DMZ to LAN
+   d. LAN > Allow management access to DMZ
+
+4. UPDATE NAT rules:
+   a. Change the port forward from LAN IP to DMZ IP
+   b. Web server should now be at the DMZ address
+
+5. VERIFY:
+   [ ] Web server is accessible from WAN
+   [ ] DMZ cannot reach internal LAN
+   [ ] LAN can still manage DMZ
+   [ ] DC01 and file shares are NOT accessible from DMZ
+
+Save evidence to:
+  C:\CyberLab\{{ pod_name }}\SC-Artifacts\M2-L2_DMZ_Rules.png
+  C:\CyberLab\{{ pod_name }}\SC-Artifacts\M2-L2_DMZ_Verification.txt
