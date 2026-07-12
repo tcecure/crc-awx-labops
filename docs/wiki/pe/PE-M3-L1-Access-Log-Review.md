@@ -44,12 +44,12 @@ Both physical-access discrepancies are identified for investigation.
 
 ## AWX Template Used
 
-- Seed: **Seed - PE Family (AWX template 28)**
-- Verify: **Verify - PE Family (AWX template 29)**
+- Seed: **Seed - PE Family (AWX template 30)**
+- Verify: **Verify - PE Family (AWX template 31)**
 
 ## Reset Behavior
 
-**Reset - PE Family (AWX template 30)** removes the entire per-pod `PE-Artifacts` directory and the `PE.seeded` family marker. It does not touch another family or pod.
+**Reset - PE Family (AWX template 32)** removes the entire per-pod `PE-Artifacts` directory and the `PE.seeded` family marker. It does not touch another family or pod.
 
 ## Automation Requirements
 

@@ -25,8 +25,8 @@ PE.L1-3.10.1 through PE.L1-3.10.5 — Limit, escort, monitor, and log physical a
 
 | Operation | Template |
 |---|---|
-| Seed | Seed - PE Family (AWX template 28) |
-| Verify | Verify - PE Family (AWX template 29) |
-| Reset | Reset - PE Family (AWX template 30) |
+| Seed | Seed - PE Family (AWX template 30) |
+| Verify | Verify - PE Family (AWX template 31) |
+| Reset | Reset - PE Family (AWX template 32) |
 
 Verification publishes all 20 pods in AWX `Job.artifacts` and writes `PE_Verification_Report.json`.

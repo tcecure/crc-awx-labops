@@ -32,7 +32,7 @@ Family order: **AC → IA → SI → SC → MP → PE**.
 The Auto-Advance job (AWX Job Template **"Auto-Advance Families"**) does two things:
 
 1. **Reads completion** from the latest *successful* verify job of each family
-   (templates AC=13, IA=16, SI=19, SC=22, MP=26, PE=29) via the AWX API. A family counts as
+   (templates AC=13, IA=16, SI=19, SC=22, MP=28, PE=31) via the AWX API. A family counts as
    complete for a pod only when every lab declared for that family reports `completed=true`
    (12 for AC/IA/SI/SC, 3 for MP, and 6 for PE).
 2. **Reads seed state** from per-family marker files on DC01
@@ -40,7 +40,7 @@ The Auto-Advance job (AWX Job Template **"Auto-Advance Families"**) does two thi
 
 For each pod it finds the earliest family that is **100% complete** whose
 **successor is not yet seeded**, and launches that successor's **per-pod** seed
-template (AC=12, IA=15, SI=18, SC=21, MP=25, PE=28) with `pods=<N>`.
+template (AC=12, IA=15, SI=18, SC=21, MP=27, PE=30) with `pods=<N>`.
 
 ### Why two signals (completion + markers)?
 

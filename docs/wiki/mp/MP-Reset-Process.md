@@ -1,6 +1,6 @@
 # Media Protection (MP) — Reset Process
 
-Run **Reset - MP Family (AWX template 27)** with `pods` or `pod_id`. The reset:
+Run **Reset - MP Family (AWX template 29)** with `pods` or `pod_id`. The reset:
 
 1. Removes `C:\CyberLab\PodNN\MP-Artifacts\`.
 2. Removes `C:\CyberLab\PodNN\.families\MP.seeded`.

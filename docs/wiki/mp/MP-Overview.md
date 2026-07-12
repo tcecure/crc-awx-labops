@@ -22,8 +22,8 @@ MP.L1-3.8.3 — Sanitize or destroy information system media containing Federal 
 
 | Operation | Template |
 |---|---|
-| Seed | Seed - MP Family (AWX template 25) |
-| Verify | Verify - MP Family (AWX template 26) |
-| Reset | Reset - MP Family (AWX template 27) |
+| Seed | Seed - MP Family (AWX template 27) |
+| Verify | Verify - MP Family (AWX template 28) |
+| Reset | Reset - MP Family (AWX template 29) |
 
 Verification publishes all 20 pods in AWX `Job.artifacts` and writes `MP_Verification_Report.json`.

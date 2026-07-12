@@ -3,15 +3,15 @@
 ## Data Flow
 
 ```text
-Seed - PE Family (AWX template 28)
+Seed - PE Family (AWX template 30)
   ↓ per-pod artifacts and PE.seeded
 Student evidence
   ↓
-Verify - PE Family (AWX template 29)
+Verify - PE Family (AWX template 31)
   ↓ AWX Job.artifacts
 Training Tracker
   ↓
-Reset - PE Family (AWX template 30)
+Reset - PE Family (AWX template 32)
 ```
 
 ## Variables

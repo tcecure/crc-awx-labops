@@ -48,12 +48,12 @@ The media is verifiably recreated and documented for approved reuse rather than 
 
 ## AWX Template Used
 
-- Seed: **Seed - MP Family (AWX template 25)**
-- Verify: **Verify - MP Family (AWX template 26)**
+- Seed: **Seed - MP Family (AWX template 27)**
+- Verify: **Verify - MP Family (AWX template 28)**
 
 ## Reset Behavior
 
-**Reset - MP Family (AWX template 27)** removes the entire per-pod `MP-Artifacts` directory and the `MP.seeded` family marker. It does not touch another family or pod.
+**Reset - MP Family (AWX template 29)** removes the entire per-pod `MP-Artifacts` directory and the `MP.seeded` family marker. It does not touch another family or pod.
 
 ## Automation Requirements
 

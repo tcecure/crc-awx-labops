@@ -1,6 +1,6 @@
 # Physical Protection (PE) — Reset Process
 
-Run **Reset - PE Family (AWX template 30)** with `pods` or `pod_id`. The reset:
+Run **Reset - PE Family (AWX template 32)** with `pods` or `pod_id`. The reset:
 
 1. Removes `C:\CyberLab\PodNN\PE-Artifacts\`.
 2. Removes `C:\CyberLab\PodNN\.families\PE.seeded`.

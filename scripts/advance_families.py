@@ -40,8 +40,8 @@ import urllib.error
 
 FAMILY_ORDER = ["AC", "IA", "SI", "SC", "MP", "PE"]
 
-VERIFY_TEMPLATES = {"AC": 13, "IA": 16, "SI": 19, "SC": 22, "MP": 26, "PE": 29}
-SEED_TEMPLATES = {"AC": 12, "IA": 15, "SI": 18, "SC": 21, "MP": 25, "PE": 28}
+VERIFY_TEMPLATES = {"AC": 13, "IA": 16, "SI": 19, "SC": 22, "MP": 28, "PE": 31}
+SEED_TEMPLATES = {"AC": 12, "IA": 15, "SI": 18, "SC": 21, "MP": 27, "PE": 30}
 
 LABS = {
     "AC": ["L1.1", "L1.2", "L1.3", "L2.1", "L2.2", "L2.3",

@@ -3,15 +3,15 @@
 ## Data Flow
 
 ```text
-Seed - MP Family (AWX template 25)
+Seed - MP Family (AWX template 27)
   ↓ per-pod artifacts and MP.seeded
 Student evidence
   ↓
-Verify - MP Family (AWX template 26)
+Verify - MP Family (AWX template 28)
   ↓ AWX Job.artifacts
 Training Tracker
   ↓
-Reset - MP Family (AWX template 27)
+Reset - MP Family (AWX template 29)
 ```
 
 ## Variables
