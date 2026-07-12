@@ -38,10 +38,10 @@ import sys
 import urllib.request
 import urllib.error
 
-FAMILY_ORDER = ["AC", "IA", "SI", "SC"]
+FAMILY_ORDER = ["AC", "IA", "SI", "SC", "MP", "PE"]
 
-VERIFY_TEMPLATES = {"AC": 13, "IA": 16, "SI": 19, "SC": 22}
-SEED_TEMPLATES = {"AC": 12, "IA": 15, "SI": 18, "SC": 21}
+VERIFY_TEMPLATES = {"AC": 13, "IA": 16, "SI": 19, "SC": 22, "MP": 26, "PE": 29}
+SEED_TEMPLATES = {"AC": 12, "IA": 15, "SI": 18, "SC": 21, "MP": 25, "PE": 28}
 
 LABS = {
     "AC": ["L1.1", "L1.2", "L1.3", "L2.1", "L2.2", "L2.3",
@@ -52,6 +52,8 @@ LABS = {
            "SI-M3-L1", "SI-M3-L2", "SI-M3-L3", "SI-M4-L1", "SI-M4-L2", "SI-M4-L3"],
     "SC": ["SC-M1-L1", "SC-M1-L2", "SC-M1-L3", "SC-M2-L1", "SC-M2-L2", "SC-M2-L3",
            "SC-M3-L1", "SC-M3-L2", "SC-M3-L3", "SC-M4-L1", "SC-M4-L2", "SC-M4-L3"],
+    "MP": ["MP-M1-L1", "MP-M1-L2", "MP-M1-L3"],
+    "PE": ["PE-M1-L1", "PE-M1-L2", "PE-M2-L1", "PE-M2-L2", "PE-M3-L1", "PE-M3-L2"],
 }
 
 MARKER_RE = re.compile(r"Pod0*(\d+)[\\/]\.families[\\/]([A-Z]{2})\.seeded$", re.IGNORECASE)

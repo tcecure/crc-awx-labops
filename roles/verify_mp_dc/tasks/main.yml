@@ -1,0 +1,118 @@
+---
+- name: "Verify Pod{{ '%02d' | format(pod_id) }} MP evidence"
+  ansible.windows.win_powershell:
+    script: |
+      $podName = "Pod{{ '%02d' | format(pod_id) }}"
+      $prefix = "P{{ '%02d' | format(pod_id) }}"
+      $artifactDir = "C:\CyberLab\$podName\MP-Artifacts"
+
+      function New-Result {
+          param([System.Collections.Generic.List[string]]$Reasons, [string]$Success)
+          if ($Reasons.Count -eq 0) { return @{ completed = $true; reason = $Success } }
+          return @{ completed = $false; reason = ($Reasons -join '; ') }
+      }
+
+      function Require-File {
+          param([System.Collections.Generic.List[string]]$Reasons, [string]$Name)
+          $path = Join-Path $artifactDir $Name
+          if (-not (Test-Path $path)) { $Reasons.Add("$Name not found") }
+          return $path
+      }
+
+      $results = @{}
+
+      $reasons = [System.Collections.Generic.List[string]]::new()
+      Require-File $reasons '_LAB_READY_MP-M1-L1.txt' | Out-Null
+      Require-File $reasons "$prefix-FCI-USB.vhdx" | Out-Null
+      Require-File $reasons "$prefix-Employee-Handbook.vhdx" | Out-Null
+      Require-File $reasons 'MediaInventory.xlsx' | Out-Null
+      Require-File $reasons 'MediaClassificationWorksheet.docx' | Out-Null
+      Require-File $reasons 'MediaDisposalPolicy.pdf' | Out-Null
+      $responsePath = Require-File $reasons 'MediaClassificationResponses.csv'
+      if (Test-Path $responsePath) {
+          $rows = @(Import-Csv $responsePath)
+          $fci = $rows | Where-Object Media -eq "$prefix-FCI-USB.vhdx" | Select-Object -First 1
+          $general = $rows | Where-Object Media -eq "$prefix-Employee-Handbook.vhdx" | Select-Object -First 1
+          if (-not $fci -or ([string]$fci.Classification).Trim().ToLowerInvariant() -notin @('fci','contains fci')) {
+              $reasons.Add("$prefix-FCI-USB.vhdx must be classified as FCI")
+          } elseif ([string]::IsNullOrWhiteSpace($fci.Evidence) -or $fci.Evidence.Length -lt 10) {
+              $reasons.Add('FCI media evidence is incomplete')
+          }
+          if (-not $general -or ([string]$general.Classification).Trim().ToLowerInvariant() -notin @('non-fci','not fci','does not contain fci')) {
+              $reasons.Add("$prefix-Employee-Handbook.vhdx must be classified as Non-FCI")
+          } elseif ([string]::IsNullOrWhiteSpace($general.Evidence) -or $general.Evidence.Length -lt 10) {
+              $reasons.Add('Non-FCI media evidence is incomplete')
+          }
+      }
+      $results['M1-L1'] = New-Result $reasons 'Media classification worksheet correctly identifies FCI and non-FCI media'
+
+      $reasons = [System.Collections.Generic.List[string]]::new()
+      Require-File $reasons '_LAB_READY_MP-M1-L2.txt' | Out-Null
+      $vhdxPath = Require-File $reasons "$prefix-FCI-USB.vhdx"
+      $metadataPath = Require-File $reasons 'MP-M1-L2_SeedMetadata.json'
+      $logPath = Require-File $reasons 'MediaSanitizationLog.csv'
+      $certificatePath = Require-File $reasons 'MediaSanitizationCertificate.csv'
+
+      foreach ($recordPath in @($logPath, $certificatePath)) {
+          if (Test-Path $recordPath) {
+              $record = @(Import-Csv $recordPath) | Select-Object -First 1
+              if (-not $record -or $record.MediaId -ne "$prefix-FCI-USB") { $reasons.Add("$(Split-Path $recordPath -Leaf) has the wrong media ID") }
+              if (-not $record -or ([string]$record.Method).Trim().ToLowerInvariant() -notin @('clear','purge')) { $reasons.Add("$(Split-Path $recordPath -Leaf) must record an approved Clear or Purge method") }
+              if (-not $record -or ([string]$record.Result).Trim().ToLowerInvariant() -ne 'pass') { $reasons.Add("$(Split-Path $recordPath -Leaf) must record a PASS result") }
+              if (-not $record -or ([string]$record.Disposition).Trim().ToLowerInvariant() -ne 'reuse') { $reasons.Add("$(Split-Path $recordPath -Leaf) must record Reuse disposition") }
+              if (-not $record -or [string]::IsNullOrWhiteSpace($record.SanitizedBy)) { $reasons.Add("$(Split-Path $recordPath -Leaf) is missing SanitizedBy") }
+              $date = [datetime]::MinValue
+              if (-not $record -or -not [datetime]::TryParse($record.Date, [ref]$date)) { $reasons.Add("$(Split-Path $recordPath -Leaf) has an invalid date") }
+          }
+      }
+
+      if ((Test-Path $vhdxPath) -and (Test-Path $metadataPath)) {
+          $mountedHere = $false
+          try {
+              $image = Get-DiskImage -ImagePath $vhdxPath -ErrorAction Stop
+              if (-not $image.Attached) {
+                  Mount-DiskImage -ImagePath $vhdxPath -Access ReadOnly -ErrorAction Stop | Out-Null
+                  $mountedHere = $true
+              }
+              $volume = Get-DiskImage -ImagePath $vhdxPath | Get-Disk | Get-Partition | Get-Volume | Where-Object FileSystem | Select-Object -First 1
+              if (-not $volume) { throw 'No formatted volume was found' }
+              if ($volume.FileSystemLabel -ne "$prefix-SANITIZED") { $reasons.Add("volume label must be $prefix-SANITIZED") }
+              $unexpected = @(Get-ChildItem -LiteralPath $volume.Path -Force -ErrorAction Stop | Where-Object Name -notin @('System Volume Information','$RECYCLE.BIN'))
+              if ($unexpected.Count -gt 0) { $reasons.Add('sanitized volume still contains files or folders') }
+              $volumeInfo = fsutil.exe fsinfo volumeinfo $volume.Path 2>&1 | Out-String
+              $match = [regex]::Match($volumeInfo, 'Volume Serial Number\s*:\s*(\S+)', 'IgnoreCase')
+              $currentSerial = if ($match.Success) { (($match.Groups[1].Value -replace '-', '') -replace '^0x', '').ToUpperInvariant() } else { '' }
+              $metadata = Get-Content $metadataPath -Raw | ConvertFrom-Json
+              $seedSerial = ((([string]$metadata.OriginalVolumeSerial) -replace '-', '') -replace '^0x', '').ToUpperInvariant()
+              if ([string]::IsNullOrWhiteSpace($currentSerial)) { $reasons.Add('could not read sanitized volume serial number') }
+              elseif ($currentSerial -eq $seedSerial) { $reasons.Add('volume serial is unchanged; recreate and format the volume rather than deleting files') }
+          } catch {
+              $reasons.Add("could not inspect sanitized media: $($_.Exception.Message)")
+          } finally {
+              if ($mountedHere) { Dismount-DiskImage -ImagePath $vhdxPath -ErrorAction SilentlyContinue }
+          }
+      }
+      $results['M1-L2'] = New-Result $reasons 'Media was recreated, validated empty, and documented for approved reuse'
+
+      $reasons = [System.Collections.Generic.List[string]]::new()
+      Require-File $reasons '_LAB_READY_MP-M1-L3.txt' | Out-Null
+      Require-File $reasons 'LaptopAssetRecord.csv' | Out-Null
+      Require-File $reasons 'ChainOfCustody.csv' | Out-Null
+      Require-File $reasons 'VendorDestructionCertificate.txt' | Out-Null
+      $dispositionPath = Require-File $reasons 'MP-M1-L3_DispositionWorksheet.csv'
+      if (Test-Path $dispositionPath) {
+          $record = @(Import-Csv $dispositionPath) | Select-Object -First 1
+          if (-not $record -or $record.AssetId -ne "$prefix-LAP-017") { $reasons.Add('disposition worksheet has the wrong asset ID') }
+          if (-not $record -or ([string]$record.Decision).Trim().ToLowerInvariant() -ne 'destroy') { $reasons.Add('the correct disposition is Destroy') }
+          if (-not $record -or $record.DriveSerial -ne "SN-$prefix-88421") { $reasons.Add('drive serial does not match the asset and custody records') }
+          if (-not $record -or $record.CertificateId -ne "VDC-$prefix-2026-017") { $reasons.Add('vendor certificate ID does not match') }
+          if (-not $record -or [string]::IsNullOrWhiteSpace($record.Rationale) -or $record.Rationale.Length -lt 20) { $reasons.Add('disposition rationale is incomplete') }
+      }
+      $results['M1-L3'] = New-Result $reasons 'Disposition worksheet correctly selects destruction and matches supporting records'
+
+      $results
+  register: mp_verify
+
+- name: "Consolidate Pod{{ '%02d' | format(pod_id) }} MP results"
+  ansible.builtin.set_fact:
+    "pod{{ '%02d' | format(pod_id) }}_mp_results": "{{ mp_verify.output[0] }}"

@@ -1,0 +1,43 @@
+---
+- name: "Seed Labs: CMMC Level 1 Media Protection (MP) - Shared DC"
+  hosts: crc_shared_dcs[0]
+  gather_facts: false
+  vars:
+    pod_list: >-
+      {{ ((pods | default(pod_id) | default('') | string).split(',') | map('trim') | select('match', '^[0-9]+$') | map('int') | list)
+         if ((pods | default('') | string | trim) != '' or (pod_id | default('') | string | trim) != '')
+         else (range(1, (pod_count | default(20) | int) + 1) | list) }}
+  tasks:
+    - name: Copy MP seed script
+      ansible.windows.win_copy:
+        src: "{{ playbook_dir }}/../roles/seed_mp_dc/files/apply-mp-lab.ps1"
+        dest: C:\Windows\Temp\apply-mp-lab.ps1
+
+    - name: Deploy MP templates
+      ansible.windows.win_copy:
+        src: "{{ playbook_dir }}/../templates/mp/"
+        dest: C:\CyberLab\_Templates\MP\
+
+    - name: "Seed MP family for Pod{{ '%02d' | format(item) }}"
+      ansible.windows.win_shell: >
+        powershell.exe -ExecutionPolicy Bypass -File C:\Windows\Temp\apply-mp-lab.ps1
+        -PodId {{ item }} -TemplatesPath "C:\CyberLab\_Templates\MP"
+        -ForceReseed {{ '$true' if (force_reseed | default(false) | bool) else '$false' }}
+      loop: "{{ pod_list }}"
+      register: seed_results
+
+    - name: Show MP seed results
+      ansible.builtin.debug:
+        msg: "Pod{{ '%02d' | format(item.item) }}: {{ item.stdout_lines | default([]) }}"
+      loop: "{{ seed_results.results }}"
+      loop_control:
+        label: "Pod{{ '%02d' | format(item.item) }}"
+
+    - name: "Write MP seed marker for Pod{{ '%02d' | format(item) }}"
+      ansible.windows.win_shell: |
+        $directory = "C:\CyberLab\Pod{{ '%02d' | format(item) }}\.families"
+        New-Item -ItemType Directory -Force -Path $directory | Out-Null
+        Set-Content -Path (Join-Path $directory 'MP.seeded') -Value (Get-Date -Format o)
+      loop: "{{ pod_list }}"
+      loop_control:
+        label: "Pod{{ '%02d' | format(item) }}"
