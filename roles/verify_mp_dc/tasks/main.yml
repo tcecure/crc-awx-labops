@@ -88,7 +88,7 @@
           } catch {
               $reasons.Add("could not inspect sanitized media: $($_.Exception.Message)")
           } finally {
-              if ($mountedHere) { Dismount-DiskImage -ImagePath $vhdxPath -ErrorAction SilentlyContinue }
+              if ($mountedHere) { Dismount-DiskImage -ImagePath $vhdxPath -ErrorAction SilentlyContinue | Out-Null }
           }
       }
       $results['M1-L2'] = New-Result $reasons 'Media was recreated, validated empty, and documented for approved reuse'
