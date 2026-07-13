@@ -11,7 +11,8 @@ param(
     [string]$TemplatesPath = "C:\CyberLab\_Templates\PE",
 
     [Parameter(Mandatory=$false)]
-    [bool]$ForceReseed = $false
+    [ValidateSet(0,1)]
+    [int]$ForceReseed = 0
 )
 
 $podName = "Pod{0:D2}" -f $PodId
