@@ -79,7 +79,7 @@ seed state stays accurate automatically once the mechanism is in place.
 | Marker backfill tool | `playbooks/backfill-family-markers.yml` |
 | AWX Job Template | **Auto-Advance Families** (id 24) |
 | AWX Credential | **CRC AWX API Token** (custom type "AWX API Token") injecting `CRC_AWX_HOST` / `CRC_AWX_TOKEN` |
-| AWX Schedule | **Auto-Advance every 30m** (created disabled — see rollout) |
+| AWX Schedule | **Auto-Advance every 30m** (enabled; id 7) |
 
 The job template uses two credentials: the WinRM machine credential (to read
 markers on DC01) and the AWX API token credential (to read verify artifacts and
@@ -89,31 +89,26 @@ so the execution pod can reach the AWX API.
 
 ---
 
-## Rollout / going live
+## Rollout / live status
 
-The mechanism is built and tested but the schedule ships **disabled** so it does
-not change behavior on already-seeded pods until you opt in.
+Auto-Advance is enabled in AWX and runs every 30 minutes. Before activation, the
+live pod state was audited and markers were reconciled without changing lab
+artifacts:
 
-1. **Backfill markers for existing seeded pods** so auto-advance does not
-   re-seed (and reset) families that are already in place. Run
-   **`backfill-family-markers.yml`** for the families that are actually seeded
-   today (AC and IA are bulk-seeded on all pods):
+* AC was confirmed seeded and marked on Pods 01–20.
+* IA was confirmed seeded and marked on Pod01 only.
+* A stale IA marker was removed from Pod20; its existing SI and SC markers were
+  retained because those families are present.
+* MP and PE remained unseeded on every pod.
+* A dry run and the first enabled run both reported zero seed actions.
 
-   ```
-   pods=""            # all pods (blank = 1..pod_count)
-   families="AC,IA"   # only mark what is truly seeded
-   ```
+For a new deployment, first use **`backfill-family-markers.yml`** to mark only
+families proven already seeded. Run Auto-Advance once with
+`advance_dry_run=1`, review the proposed actions, and then enable the schedule.
 
-   Leave SI/SC/MP/PE unmarked where they were never seeded — auto-advance will seed
-   them per-pod as students finish the preceding family.
-
-2. **(Recommended) Onboarding model:** seed **AC only** for a fresh/reset pod
-   (`Seed CMMC AC Labs` with `pods=<N>`). The student then unlocks IA → SI → SC → MP → PE
-   automatically as each family is completed.
-
-3. **Enable the schedule** (AWX → Templates → Auto-Advance Families → Schedules →
-   enable), or run the job on demand. Optionally run once with
-   `advance_dry_run=1` first to review the decisions in the job output.
+The recommended onboarding model is to seed **AC only** for a fresh/reset pod
+(`Seed CMMC AC Labs` with `pods=<N>`). The student then unlocks
+IA → SI → SC → MP → PE automatically as each family is completed.
 
 ---
 
