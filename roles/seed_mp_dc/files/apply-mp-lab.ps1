@@ -125,23 +125,23 @@ function New-LabVhdx {
         Set-Content -Path (Join-Path $root 'General Office\Holiday-Calendar.txt') -Value "Company holiday calendar."
     }
 
-    $volumeInfo = fsutil.exe fsinfo volumeinfo $root 2>&1 | Out-String
-    $match = [regex]::Match($volumeInfo, 'Volume Serial Number\s*:\s*(\S+)', 'IgnoreCase')
-    if (-not $match.Success) { throw "Could not read the seeded volume serial number" }
-    $serial = $match.Groups[1].Value
+    $volume = Get-Volume -DriveLetter $drive -ErrorAction Stop
+    $volumeUniqueId = [string]$volume.UniqueId
+    if ([string]::IsNullOrWhiteSpace($volumeUniqueId)) { throw "Could not read the seeded volume unique ID" }
     Invoke-DiskPartScript @(
         "select vdisk file=`"$Path`"",
         "detach vdisk"
     )
-    return $serial
+    return $volumeUniqueId
 }
 
 function Ensure-FciMedia {
     $path = Join-Path $artifactDir "$prefix-FCI-USB.vhdx"
     $metadata = Join-Path $artifactDir "MP-M1-L2_SeedMetadata.json"
     if (-not (Test-Path $path) -or -not (Test-Path $metadata)) {
-        $serial = New-LabVhdx -Path $path -Label "$prefix-FCI-MEDIA" -ContentType FCI
-        @{ MediaId = "$prefix-FCI-USB"; OriginalVolumeSerial = $serial; SeededAt = (Get-Date -Format o) } |
+        if ((Test-Path $path) -and -not (Test-Path $metadata)) { Remove-Item -LiteralPath $path -Force }
+        $volumeUniqueId = New-LabVhdx -Path $path -Label "$prefix-FCI-MEDIA" -ContentType FCI
+        @{ MediaId = "$prefix-FCI-USB"; OriginalVolumeUniqueId = $volumeUniqueId; SeededAt = (Get-Date -Format o) } |
             ConvertTo-Json | Set-Content -Path $metadata
     }
 }

@@ -79,13 +79,12 @@
               if ($volume.FileSystemLabel -ne "$prefix-SANITIZED") { $reasons.Add("volume label must be $prefix-SANITIZED") }
               $unexpected = @(Get-ChildItem -LiteralPath $volume.Path -Force -ErrorAction Stop | Where-Object Name -notin @('System Volume Information','$RECYCLE.BIN'))
               if ($unexpected.Count -gt 0) { $reasons.Add('sanitized volume still contains files or folders') }
-              $volumeInfo = fsutil.exe fsinfo volumeinfo $volume.Path 2>&1 | Out-String
-              $match = [regex]::Match($volumeInfo, 'Volume Serial Number\s*:\s*(\S+)', 'IgnoreCase')
-              $currentSerial = if ($match.Success) { (($match.Groups[1].Value -replace '-', '') -replace '^0x', '').ToUpperInvariant() } else { '' }
+              $currentVolumeUniqueId = [string]$volume.UniqueId
               $metadata = Get-Content $metadataPath -Raw | ConvertFrom-Json
-              $seedSerial = ((([string]$metadata.OriginalVolumeSerial) -replace '-', '') -replace '^0x', '').ToUpperInvariant()
-              if ([string]::IsNullOrWhiteSpace($currentSerial)) { $reasons.Add('could not read sanitized volume serial number') }
-              elseif ($currentSerial -eq $seedSerial) { $reasons.Add('volume serial is unchanged; recreate and format the volume rather than deleting files') }
+              $seedVolumeUniqueId = [string]$metadata.OriginalVolumeUniqueId
+              if ([string]::IsNullOrWhiteSpace($currentVolumeUniqueId)) { $reasons.Add('could not read sanitized volume unique ID') }
+              elseif ([string]::IsNullOrWhiteSpace($seedVolumeUniqueId)) { $reasons.Add('seed metadata is missing the original volume unique ID') }
+              elseif ($currentVolumeUniqueId -eq $seedVolumeUniqueId) { $reasons.Add('volume identity is unchanged; recreate and format the volume rather than deleting files') }
           } catch {
               $reasons.Add("could not inspect sanitized media: $($_.Exception.Message)")
           } finally {
