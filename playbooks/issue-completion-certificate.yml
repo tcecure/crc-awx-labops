@@ -17,8 +17,8 @@
     - name: Validate certificate request
       ansible.builtin.assert:
         that:
-          - certificate_pod_id >= 1
-          - certificate_pod_id <= (pod_count | default(20) | int)
+          - certificate_pod_id | int >= 1
+          - certificate_pod_id | int <= (pod_count | default(20) | int)
           - certificate_scope_normalized in ['AC', 'IA', 'SI', 'SC', 'MP', 'PE', 'FINAL']
           - certificate_expected_student_account | length > 0
           - certificate_verification_jobs is mapping
@@ -34,13 +34,13 @@
         msg: "{{ certificate_scope_normalized }} certificate already exists for {{ certificate_pod_name }}; set force_reissue=true to replace it."
       when:
         - certificate_marker.stat.exists
-        - not certificate_force_reissue
+        - not (certificate_force_reissue | bool)
 
     - name: End idempotent no-op
       ansible.builtin.meta: end_host
       when:
         - certificate_marker.stat.exists
-        - not certificate_force_reissue
+        - not (certificate_force_reissue | bool)
 
     - name: Read student-supplied certificate profile
       ansible.windows.slurp:
