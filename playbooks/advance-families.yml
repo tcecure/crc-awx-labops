@@ -1,32 +1,36 @@
 ---
-# Auto-advance lab families per pod.
+# Auto-advance lab families and issue completion certificates per pod.
 #
 # When a pod completes every lab in its current family, seed the NEXT family
-# for that pod only (per-pod) so students progress at their own pace without
-# resetting completed work. Idempotent + guarded (see scripts/advance_families.py).
+# for that pod only. If the student submitted a certificate name, launch an
+# idempotent family certificate request without changing completed work.
 #
 # Requires (injected by an AWX "AWX API Token" custom credential):
 #   AWX_HOST   e.g. http://192.168.1.103:30080
 #   AWX_TOKEN  AWX OAuth2 token
 # Optional extra vars:
 #   advance_dry_run: "1"   -> compute + print decisions, do not launch seeds
-#   advance_enabled: "0"   -> disable launching (report-only)
+#   advance_enabled: "0"      -> disable seed launching (report-only)
+#   certificates_enabled: "1" -> enable certificate launching (default disabled)
 
-- name: Collect per-family seed markers from DC01
+- name: Collect family and certificate state from DC01
   hosts: crc_shared_dcs[0]
   gather_facts: false
   tasks:
-    - name: Find seed markers
+    - name: Find seed markers, issued markers, and certificate profiles
       ansible.windows.win_find:
         paths: 'C:\CyberLab'
         recurse: true
-        patterns: '*.seeded'
-      register: found_markers
+        patterns:
+          - '*.seeded'
+          - '*.issued'
+          - 'CertificateProfile.json'
+      register: found_family_state
 
-    - name: Save marker paths to the control node
+    - name: Save family state paths to the control node
       ansible.builtin.copy:
-        content: "{{ found_markers.files | map(attribute='path') | list | to_json }}"
-        dest: /tmp/seed_markers.json
+        content: "{{ found_family_state.files | map(attribute='path') | list | to_json }}"
+        dest: /tmp/family_state_paths.json
       delegate_to: localhost
 
 - name: Decide and launch per-pod family advancement
@@ -40,9 +44,12 @@
       environment:
         ADVANCE_DRY_RUN: "{{ advance_dry_run | default('0') }}"
         ADVANCE_ENABLED: "{{ advance_enabled | default('1') }}"
-        SEED_MARKERS_FILE: /tmp/seed_markers.json
+        CERTIFICATES_ENABLED: "{{ certificates_enabled | default('0') }}"
+        FAMILY_STATE_FILE: /tmp/family_state_paths.json
       register: advance_out
-      changed_when: "'launched 0 seed job(s)' not in (advance_out.stdout | default(''))"
+      changed_when: >-
+        ('launched 0 seed job(s)' not in (advance_out.stdout | default(''))) or
+        ('launched 0 certificate job(s)' not in (advance_out.stdout | default('')))
 
     - name: Show auto-advance output
       ansible.builtin.debug:

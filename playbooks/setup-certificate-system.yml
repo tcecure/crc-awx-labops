@@ -1,0 +1,26 @@
+---
+- name: Deploy DRCC certificate request workflow
+  hosts: crc_shared_dcs[0]
+  gather_facts: false
+  vars:
+    pod_list: >-
+      {{ ((pods | default(pod_id) | default('') | string).split(',') |
+          map('trim') |
+          select('match', '^[0-9]+$') |
+          map('int') |
+          list)
+         if ((pods | default('') | string | trim) != '' or
+             (pod_id | default('') | string | trim) != '')
+         else (range(1, (pod_count | default(20) | int) + 1) | list) }}
+  tasks:
+    - name: Validate selected pods
+      ansible.builtin.assert:
+        that:
+          - pod_list | length > 0
+          - pod_list | min >= 1
+          - pod_list | max <= (pod_count | default(20) | int)
+          - (pod_list | difference(student_accounts_by_pod.keys() | map('int') | list)) | length == 0
+        fail_msg: "pods/pod_id must select a mapped student assignment from Pod01 through Pod{{ '%02d' | format(pod_count | default(20) | int) }}"
+
+    - name: Deploy student certificate request files
+      ansible.builtin.include_tasks: tasks/deploy-certificate-request.yml

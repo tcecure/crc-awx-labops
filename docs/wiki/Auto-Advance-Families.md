@@ -2,9 +2,9 @@
 
 When a pod completes **every lab** in its current CMMC family, the next family is
 **automatically seeded for that pod only** — so students progress at their own
-pace without an instructor re-seeding, and without resetting completed work.
+pace without an instructor re-seeding, and without resetting completed work. The same scheduled job also issues an idempotent PDF certificate and JSON receipt after each completed family when the student has submitted a certificate name.
 
-Family order: **AC → IA → SI → SC → MP → PE**.
+Family order: **AC → IA → SI → SC → MP → PE**. A final certificate is issued after all six families.
 
 ---
 
@@ -29,7 +29,7 @@ Family order: **AC → IA → SI → SC → MP → PE**.
                                                        NEXT family (pods=<N>)
 ```
 
-The Auto-Advance job (AWX Job Template **"Auto-Advance Families"**) does two things:
+The Auto-Advance job (AWX Job Template **"Auto-Advance Families"**) evaluates three state sources:
 
 1. **Reads completion** from the latest *successful* verify job of each family
    (templates AC=13, IA=16, SI=19, SC=22, MP=28, PE=31) via the AWX API. A family counts as
@@ -37,10 +37,12 @@ The Auto-Advance job (AWX Job Template **"Auto-Advance Families"**) does two thi
    (12 for AC/IA/SI/SC, 3 for MP, and 6 for PE).
 2. **Reads seed state** from per-family marker files on DC01
    (`C:\CyberLab\PodNN\.families\<FAM>.seeded`).
+3. **Reads certificate state** from the student profile and issuance markers
+   (`Certificates\CertificateProfile.json` and `.certificates\<FAM>.issued`).
 
 For each pod it finds the earliest family that is **100% complete** whose
 **successor is not yet seeded**, and launches that successor's **per-pod** seed
-template (AC=12, IA=15, SI=18, SC=21, MP=27, PE=30) with `pods=<N>`.
+template (AC=12, IA=15, SI=18, SC=21, MP=27, PE=30) with `pods=<N>`. Independently, each completed family without an issuance marker launches **Generate Completion Certificate** after the student submits a name. Certificate generation revalidates the referenced AWX verifier job before writing files.
 
 ### Why two signals (completion + markers)?
 
@@ -61,9 +63,13 @@ template (AC=12, IA=15, SI=18, SC=21, MP=27, PE=30) with `pods=<N>`.
 | One step per run | At most one family is advanced per pod per run (the earliest gap). |
 | No reset | Advancing seeds a **different** family; completed families are untouched. |
 | `advance_dry_run=1` | Compute and log decisions without launching any seed. |
-| `advance_enabled=0` | Report-only: never launch (for a safe "watch" mode). |
+| `advance_enabled=0` | Report-only: never launch a family seed. |
+| Student-named | No certificate is issued until the student runs `REQUEST-MY-CERTIFICATE.cmd` and confirms a display name. |
+| Verified at issuance | The certificate job checks the AWX job status, verifier template, pod result, and every required lab again. |
+| Idempotent certificates | `.certificates\<FAM>.issued` and `FINAL.issued` prevent duplicate scheduled issuance. |
+| Preserved history | Family resets do not delete issued certificates or receipts. An instructor must explicitly reissue or revoke them. |
 
-Markers are written by the seed playbooks and cleared by the reset playbooks, so
+Seed markers are written by seed playbooks and cleared by reset playbooks. Certificate markers are written only after both pod and instructor copies are stored successfully.
 seed state stays accurate automatically once the mechanism is in place.
 
 ---
@@ -77,7 +83,12 @@ seed state stays accurate automatically once the mechanism is in place.
 | Marker writes | end of `playbooks/seed-cmmc-{ac,ia,si,sc,mp,pe}.yml` |
 | Marker clears | end of `playbooks/reset-{ac,ia,si,sc,mp,pe}-labs.yml` |
 | Marker backfill tool | `playbooks/backfill-family-markers.yml` |
+| Student certificate prompt | `roles/certificates/files/request-certificate-name.ps1` |
+| Certificate deployment | `playbooks/setup-certificate-system.yml` |
+| Certificate generation | `scripts/generate_completion_certificate.py` |
+| Certificate issuance | `playbooks/issue-completion-certificate.yml` |
 | AWX Job Template | **Auto-Advance Families** (id 24) |
+| Certificate Job Template | **Generate Completion Certificate** |
 | AWX Credential | **CRC AWX API Token** (custom type "AWX API Token") injecting `CRC_AWX_HOST` / `CRC_AWX_TOKEN` |
 | AWX Schedule | **Auto-Advance every 30m** (enabled; id 7) |
 
@@ -120,6 +131,9 @@ IA → SI → SC → MP → PE automatically as each family is completed.
 * **Watch mode:** set `advance_enabled: "0"` to log decisions but never launch.
 * **Force a single pod now:** seed the next family manually with the per-pod
   seed template (`pods=<N>`); this also writes the family marker.
+* **Student certificate name:** run `C:\CyberLab\PodNN\REQUEST-MY-CERTIFICATE.cmd`, enter the full name, and confirm it. Issuance occurs after the next scheduled cycle for every already-completed family.
+* **Certificate locations:** students receive PDF/JSON files in `C:\CyberLab\PodNN\Certificates`; the protected instructor archive is `C:\ProgramData\DRCC\InstructorCertificates\PodNN`.
+* **Correct a name:** update the student profile, then manually launch **Generate Completion Certificate** with the same pod/scope/job mapping and `force_reissue=true`.
 * **Troubleshooting:**
   * *No actions though a family looks done* — confirm the latest **successful**
     verify job for that family shows every declared lab complete for the pod, and that the next

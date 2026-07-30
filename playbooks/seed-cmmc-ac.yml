@@ -61,3 +61,6 @@
       loop: "{{ pod_list }}"
       loop_control:
         label: "Pod{{ '%02d' | format(item) }}"
+
+    - name: Deploy student certificate request files
+      ansible.builtin.include_tasks: tasks/deploy-certificate-request.yml

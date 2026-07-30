@@ -1,0 +1,175 @@
+---
+- name: Issue a validated DRCC completion certificate
+  hosts: crc_shared_dcs[0]
+  gather_facts: false
+  vars:
+    certificate_scope_normalized: "{{ certificate_scope | default('') | upper }}"
+    certificate_pod_id: "{{ pod_id | default(0) | int }}"
+    certificate_pod_name: "Pod{{ '%02d' | format(certificate_pod_id | int) }}"
+    certificate_force_reissue: "{{ force_reissue | default(false) | bool }}"
+    certificate_expected_student_account: "{{ student_accounts_by_pod.get(certificate_pod_id | int, '') }}"
+    certificate_marker_path: 'C:\CyberLab\{{ certificate_pod_name }}\.certificates\{{ certificate_scope_normalized }}.issued'
+    certificate_profile_path: 'C:\CyberLab\{{ certificate_pod_name }}\Certificates\CertificateProfile.json'
+    certificate_instructor_path: 'C:\ProgramData\DRCC\InstructorCertificates\{{ certificate_pod_name }}'
+  tasks:
+    - name: Validate certificate request
+      ansible.builtin.assert:
+        that:
+          - certificate_pod_id >= 1
+          - certificate_pod_id <= (pod_count | default(20) | int)
+          - certificate_scope_normalized in ['AC', 'IA', 'SI', 'SC', 'MP', 'PE', 'FINAL']
+          - certificate_expected_student_account | length > 0
+          - certificate_verification_jobs is mapping
+        fail_msg: Certificate requests require pod_id, certificate_scope, and certificate_verification_jobs.
+
+    - name: Check existing issuance marker
+      ansible.windows.win_stat:
+        path: "{{ certificate_marker_path }}"
+      register: certificate_marker
+
+    - name: Report existing certificate
+      ansible.builtin.debug:
+        msg: "{{ certificate_scope_normalized }} certificate already exists for {{ certificate_pod_name }}; set force_reissue=true to replace it."
+      when:
+        - certificate_marker.stat.exists
+        - not certificate_force_reissue
+
+    - name: End idempotent no-op
+      ansible.builtin.meta: end_host
+      when:
+        - certificate_marker.stat.exists
+        - not certificate_force_reissue
+
+    - name: Read student-supplied certificate profile
+      ansible.windows.win_slurp:
+        src: "{{ certificate_profile_path }}"
+      register: certificate_profile_file
+
+    - name: Parse certificate profile
+      ansible.builtin.set_fact:
+        certificate_profile: "{{ certificate_profile_file.content | b64decode | from_json }}"
+
+    - name: Validate certificate profile identity
+      ansible.builtin.assert:
+        that:
+          - certificate_profile.DisplayName | default('') | trim | length >= 2
+          - certificate_profile.DisplayName | default('') | trim | length <= 80
+          - certificate_profile.StudentAccount | default('') == certificate_expected_student_account
+          - certificate_profile.Pod | default('') == certificate_pod_name
+          - certificate_profile.NameSource | default('') == 'student_supplied'
+        fail_msg: The student certificate profile is missing or does not match the selected pod.
+
+    - name: Create temporary certificate workspace
+      ansible.builtin.tempfile:
+        state: directory
+        prefix: drcc-certificate-
+      delegate_to: localhost
+      register: certificate_workspace
+
+    - name: Generate and validate certificate files
+      ansible.builtin.command:
+        argv:
+          - python3
+          - "{{ playbook_dir }}/../scripts/generate_completion_certificate.py"
+          - --scope
+          - "{{ certificate_scope_normalized }}"
+          - --pod-id
+          - "{{ certificate_pod_id | string }}"
+          - --student-name
+          - "{{ certificate_profile.DisplayName | trim }}"
+          - --student-account
+          - "{{ certificate_profile.StudentAccount }}"
+          - --verification-jobs
+          - "{{ certificate_verification_jobs | to_json }}"
+          - --output-dir
+          - "{{ certificate_workspace.path }}"
+      environment:
+        CRC_AWX_HOST: "{{ lookup('env', 'CRC_AWX_HOST') }}"
+        CRC_AWX_TOKEN: "{{ lookup('env', 'CRC_AWX_TOKEN') }}"
+      delegate_to: localhost
+      register: generated_certificate
+      changed_when: true
+
+    - name: Parse certificate generation result
+      ansible.builtin.set_fact:
+        certificate_result: "{{ generated_certificate.stdout | from_json }}"
+
+    - name: Protect instructor certificate archive
+      ansible.windows.win_shell: |
+        $path = 'C:\ProgramData\DRCC\InstructorCertificates'
+        New-Item -ItemType Directory -Force -Path $path | Out-Null
+        $acl = New-Object System.Security.AccessControl.DirectorySecurity
+        $acl.SetAccessRuleProtection($true, $false)
+        $inherit = [System.Security.AccessControl.InheritanceFlags]'ContainerInherit, ObjectInherit'
+        $propagate = [System.Security.AccessControl.PropagationFlags]::None
+        foreach ($identity in @('SYSTEM', 'BUILTIN\Administrators')) {
+            $rule = New-Object System.Security.AccessControl.FileSystemAccessRule(
+                $identity, 'FullControl', $inherit, $propagate, 'Allow'
+            )
+            $acl.AddAccessRule($rule)
+        }
+        Set-Acl -Path $path -AclObject $acl
+      changed_when: false
+
+    - name: Create pod, marker, and instructor certificate directories
+      ansible.windows.win_file:
+        path: "{{ item }}"
+        state: directory
+      loop:
+        - 'C:\CyberLab\{{ certificate_pod_name }}\Certificates'
+        - 'C:\CyberLab\{{ certificate_pod_name }}\.certificates'
+        - "{{ certificate_instructor_path }}"
+
+    - name: Copy PDF certificate to pod
+      ansible.windows.win_copy:
+        src: "{{ certificate_result.pdf }}"
+        dest: 'C:\CyberLab\{{ certificate_pod_name }}\Certificates\DRCC_{{ certificate_scope_normalized }}_{{ certificate_pod_name }}_Certificate.pdf'
+
+    - name: Copy JSON receipt to pod
+      ansible.windows.win_copy:
+        src: "{{ certificate_result.receipt }}"
+        dest: 'C:\CyberLab\{{ certificate_pod_name }}\Certificates\DRCC_{{ certificate_scope_normalized }}_{{ certificate_pod_name }}_Receipt.json'
+
+    - name: Archive PDF certificate for instructors
+      ansible.windows.win_copy:
+        src: "{{ certificate_result.pdf }}"
+        dest: '{{ certificate_instructor_path }}\DRCC_{{ certificate_scope_normalized }}_{{ certificate_pod_name }}_Certificate.pdf'
+
+    - name: Archive JSON receipt for instructors
+      ansible.windows.win_copy:
+        src: "{{ certificate_result.receipt }}"
+        dest: '{{ certificate_instructor_path }}\DRCC_{{ certificate_scope_normalized }}_{{ certificate_pod_name }}_Receipt.json'
+
+    - name: Record idempotent certificate issuance marker
+      ansible.windows.win_copy:
+        content: |
+          {
+            "CertificateId": "{{ certificate_result.certificate_id }}",
+            "ReceiptSha256": "{{ certificate_result.receipt_sha256 }}",
+            "Scope": "{{ certificate_scope_normalized }}",
+            "Pod": "{{ certificate_pod_name }}",
+            "StudentAccount": "{{ certificate_profile.StudentAccount }}",
+            "IssuedAt": "{{ lookup('pipe', 'date -u +%Y-%m-%dT%H:%M:%SZ') }}"
+          }
+        dest: "{{ certificate_marker_path }}"
+
+    - name: Publish certificate result as AWX artifact
+      ansible.builtin.set_stats:
+        data:
+          certificate:
+            certificate_id: "{{ certificate_result.certificate_id }}"
+            scope: "{{ certificate_scope_normalized }}"
+            pod: "{{ certificate_pod_name }}"
+            student_account: "{{ certificate_profile.StudentAccount }}"
+            receipt_sha256: "{{ certificate_result.receipt_sha256 }}"
+            pod_pdf: 'C:\CyberLab\{{ certificate_pod_name }}\Certificates\DRCC_{{ certificate_scope_normalized }}_{{ certificate_pod_name }}_Certificate.pdf'
+            instructor_pdf: '{{ certificate_instructor_path }}\DRCC_{{ certificate_scope_normalized }}_{{ certificate_pod_name }}_Certificate.pdf'
+        aggregate: false
+        per_host: false
+
+    - name: Remove temporary certificate workspace
+      ansible.builtin.file:
+        path: "{{ certificate_workspace.path }}"
+        state: absent
+      delegate_to: localhost
+      changed_when: false
