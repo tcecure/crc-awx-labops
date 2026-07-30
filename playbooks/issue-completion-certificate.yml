@@ -43,7 +43,7 @@
         - not certificate_force_reissue
 
     - name: Read student-supplied certificate profile
-      ansible.windows.win_slurp:
+      ansible.windows.slurp:
         src: "{{ certificate_profile_path }}"
       register: certificate_profile_file
 
