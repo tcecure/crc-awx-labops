@@ -3,6 +3,8 @@
 - name: "Seed Labs: CMMC Level 1 Access Control (AC) - Shared DC"
   hosts: crc_shared_dcs[0]
   gather_facts: false
+  vars_files:
+    - "{{ playbook_dir }}/../vars/student-assignments.yml"
   vars:
     seed_user_password: "{{ seed_user_password | default(lookup('env', 'SEED_USER_PASSWORD')) }}"
     # Target selection (backward compatible):

@@ -2,6 +2,8 @@
 - name: Issue a validated DRCC completion certificate
   hosts: crc_shared_dcs[0]
   gather_facts: false
+  vars_files:
+    - "{{ playbook_dir }}/../vars/student-assignments.yml"
   vars:
     certificate_scope_normalized: "{{ certificate_scope | default('') | upper }}"
     certificate_pod_id: "{{ pod_id | default(0) | int }}"
