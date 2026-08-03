@@ -92,7 +92,7 @@ Seed markers are written by seed playbooks and cleared by reset playbooks. The f
 | Certificate Job Template | **Generate Completion Certificate** (id 36) |
 | Certificate setup template | **Setup Certificate System** (id 37) |
 | AWX Credential | **CRC AWX API Token** (custom type "AWX API Token") injecting `CRC_AWX_HOST` / `CRC_AWX_TOKEN` |
-| AWX Schedule | **Auto-Advance every 30m** (id 7; family advancement enabled, certificate launches disabled pending Pod20 review) |
+| AWX Schedule | **Auto-Advance every 30m** (id 7; family advancement and final-certificate launching enabled) |
 
 The job template uses two credentials: the WinRM machine credential (to read
 markers on DC01) and the AWX API token credential (to read verify artifacts and
@@ -121,9 +121,12 @@ The certificate workflow was deployed to all 20 pods and validated on scratch Po
 * Certificate job 19023 validated PDF/JSON generation, dual storage, receipt hashing, profile identity checks, and AWX revalidation using a controlled SI test under the earlier family-certificate design.
 * Jobs 19025 and 19026 validated idempotent reruns and explicit `force_reissue=true` replacement.
 * The temporary profile, certificate, archive copy, marker, and test helper were removed after validation.
-* The current final-only policy rejects family certificate scopes and requires all six verifier jobs covering all 57 labs.
+* **Setup Certificate System** job 20249 deployed the final-only student instructions and prompt wording.
+* Certificate job 20250 confirmed that a family scope is rejected before profile or artifact processing.
+* Auto-Advance dry-run jobs 20251 and 20253 reported zero certificate actions from the existing Pod20 SI-only scratch state.
+* Live Auto-Advance job 20254 ran with certificate launching enabled and launched zero unintended seed or certificate jobs.
 
-Certificate launching remains controlled by schedule 7's `certificates_enabled` setting. A completed single family, including Pod20's scratch SI result, cannot trigger a certificate under the final-only policy.
+Schedule 7 is enabled with `advance_enabled: "1"` and `certificates_enabled: "1"`. A completed single family, including Pod20's scratch SI result, cannot trigger a certificate under the final-only policy.
 
 For a new deployment, first use **`backfill-family-markers.yml`** to mark only
 families proven already seeded. Run Auto-Advance once with
@@ -141,7 +144,7 @@ IA → SI → SC → MP → PE automatically as each family is completed.
   The job output prints `completed families`, `seeded families`, and the exact
   actions it would take.
 * **Watch mode:** set `advance_enabled: "0"` to log decisions but never launch.
-* **Certificate rollout:** set `certificates_enabled: "1"` only after scratch completion state has been cleared or approved. This flag does not change seed/advance behavior.
+* **Certificate control:** `certificates_enabled: "1"` is live. Set it to `"0"` to pause final-certificate launches without changing seed/advance behavior.
 * **Force a single pod now:** seed the next family manually with the per-pod
   seed template (`pods=<N>`); this also writes the family marker.
 * **Student certificate name:** run `C:\CyberLab\PodNN\REQUEST-MY-CERTIFICATE.cmd`, enter the full name, and confirm it. Issuance occurs after the next scheduled cycle once all 57 labs are complete.
