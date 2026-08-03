@@ -1,14 +1,17 @@
 ---
-- name: Issue a validated DRCC completion certificate
+- name: Issue the validated DRCC CMMC Level 1 completion certificate
   hosts: crc_shared_dcs[0]
   gather_facts: false
   vars_files:
     - "{{ playbook_dir }}/../vars/student-assignments.yml"
   vars:
-    certificate_scope_normalized: "{{ certificate_scope | default('') | upper }}"
+    certificate_scope_requested: "{{ certificate_scope | default('FINAL') | upper }}"
+    certificate_scope_normalized: FINAL
     certificate_pod_id: "{{ pod_id | default(0) | int }}"
     certificate_pod_name: "Pod{{ '%02d' | format(certificate_pod_id | int) }}"
     certificate_force_reissue: "{{ force_reissue | default(false) | bool }}"
+    certificate_required_families: ['AC', 'IA', 'SI', 'SC', 'MP', 'PE']
+    certificate_verification_jobs_normalized: "{{ certificate_verification_jobs | default({}) }}"
     certificate_expected_student_account: "{{ student_accounts_by_pod.get(certificate_pod_id | int, '') }}"
     certificate_marker_path: 'C:\CyberLab\{{ certificate_pod_name }}\.certificates\{{ certificate_scope_normalized }}.issued'
     certificate_profile_path: 'C:\CyberLab\{{ certificate_pod_name }}\Certificates\CertificateProfile.json'
@@ -19,10 +22,11 @@
         that:
           - certificate_pod_id | int >= 1
           - certificate_pod_id | int <= (pod_count | default(20) | int)
-          - certificate_scope_normalized in ['AC', 'IA', 'SI', 'SC', 'MP', 'PE', 'FINAL']
+          - certificate_scope_requested == certificate_scope_normalized
           - certificate_expected_student_account | length > 0
-          - certificate_verification_jobs is mapping
-        fail_msg: Certificate requests require pod_id, certificate_scope, and certificate_verification_jobs.
+          - certificate_verification_jobs_normalized is mapping
+          - (certificate_required_families | difference(certificate_verification_jobs_normalized.keys() | list)) | length == 0
+        fail_msg: Final certificate requests require pod_id and all six certificate_verification_jobs; family certificates are not supported.
 
     - name: Check existing issuance marker
       ansible.windows.win_stat:
@@ -82,7 +86,7 @@
           - --student-account
           - "{{ certificate_profile.StudentAccount }}"
           - --verification-jobs
-          - "{{ certificate_verification_jobs | to_json }}"
+          - "{{ certificate_verification_jobs_normalized | to_json }}"
           - --output-dir
           - "{{ certificate_workspace.path }}"
       environment:

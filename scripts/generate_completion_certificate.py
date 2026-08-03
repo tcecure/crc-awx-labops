@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate validated DRCC Cyber Lab completion certificates and receipts."""
+"""Generate the validated DRCC CMMC Level 1 completion certificate and receipt."""
 
 import argparse
 import datetime as dt
@@ -12,15 +12,7 @@ import urllib.request
 from pathlib import Path
 
 FAMILY_ORDER = ["AC", "IA", "SI", "SC", "MP", "PE"]
-FAMILY_NAMES = {
-    "AC": "Access Control",
-    "IA": "Identification and Authentication",
-    "SI": "System and Information Integrity",
-    "SC": "System and Communications Protection",
-    "MP": "Media Protection",
-    "PE": "Physical Protection",
-    "FINAL": "CMMC Level 1 Cyber Lab",
-}
+AWARD_NAME = "CMMC Level 1 Cyber Lab"
 VERIFY_TEMPLATES = {"AC": 13, "IA": 16, "SI": 19, "SC": 22, "MP": 28, "PE": 31}
 LABS = {
     "AC": ["L1.1", "L1.2", "L1.3", "L2.1", "L2.2", "L2.3", "L3.1", "L3.2", "L3.3", "L4.1", "L4.2", "L4.3"],
@@ -43,7 +35,9 @@ def request_json(url, token):
 
 
 def verify_completion(host, token, pod_key, scope, verification_jobs):
-    families = FAMILY_ORDER if scope == "FINAL" else [scope]
+    if scope != "FINAL":
+        raise ValueError("only the final CMMC Level 1 certificate is supported")
+    families = FAMILY_ORDER
     completed_at = []
     validated_jobs = {}
     for family in families:
@@ -87,15 +81,10 @@ def centered_text(text, y, size, font="F1", color="0.12 0.18 0.25"):
 
 
 def make_pdf(path, receipt):
-    scope = receipt["scope"]
-    family_name = receipt["award_name"]
+    award_name = receipt["award_name"]
     completion_date = receipt["completed_at"][:10]
-    if scope == "FINAL":
-        subtitle = "All six CMMC Level 1 families - 57 competency labs"
-        award_line = "has successfully completed the full"
-    else:
-        subtitle = "%d competency labs independently verified" % len(receipt["labs"])
-        award_line = "has successfully completed the CMMC Level 1 family"
+    subtitle = "All six CMMC Level 1 families - 57 competency labs"
+    award_line = "has successfully completed the full"
 
     stream = bytearray()
     stream += b"0.05 0.22 0.31 rg 0 0 792 612 re f\n"
@@ -109,7 +98,7 @@ def make_pdf(path, receipt):
     stream += centered_text(receipt["student_name"], 365, name_size, "F4", "0.11 0.36 0.46")
     stream += b"0.78 0.58 0.20 RG 1 w 150 350 m 642 350 l S\n"
     stream += centered_text(award_line, 317, 14, "F3", "0.30 0.31 0.31")
-    stream += centered_text(family_name, 271, 23, "F4", "0.05 0.22 0.31")
+    stream += centered_text(award_name, 271, 23, "F4", "0.05 0.22 0.31")
     stream += centered_text(subtitle, 234, 12, "F1", "0.30 0.31 0.31")
     stream += centered_text("Completed %s" % completion_date, 194, 12, "F2", "0.11 0.36 0.46")
     stream += text_command("Student account: %s" % receipt["student_account"], 70, 130, 9, "F1", "0.30 0.31 0.31")
@@ -143,8 +132,10 @@ def make_pdf(path, receipt):
 
 
 def build_receipt(args, verified_jobs, completed_at):
+    if args.scope != "FINAL":
+        raise ValueError("only the final CMMC Level 1 certificate is supported")
     pod = "Pod%02d" % args.pod_id
-    families = FAMILY_ORDER if args.scope == "FINAL" else [args.scope]
+    families = FAMILY_ORDER
     labs = [lab for family in families for lab in LABS[family]]
     issued_at = dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat()
     core = {
@@ -152,7 +143,7 @@ def build_receipt(args, verified_jobs, completed_at):
         "issuer": "Digital Resilience Community Clinic",
         "program": "DRCC CMMC Level 1 Cyber Lab",
         "scope": args.scope,
-        "award_name": FAMILY_NAMES[args.scope],
+        "award_name": AWARD_NAME,
         "families": families,
         "labs": labs,
         "student_name": args.student_name.strip(),
@@ -175,7 +166,7 @@ def build_receipt(args, verified_jobs, completed_at):
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--scope", required=True, choices=FAMILY_ORDER + ["FINAL"])
+    parser.add_argument("--scope", required=True, choices=["FINAL"])
     parser.add_argument("--pod-id", required=True, type=int, choices=range(1, 21))
     parser.add_argument("--student-name", required=True)
     parser.add_argument("--student-account", required=True)
@@ -203,8 +194,9 @@ def main():
     verification_jobs = json.loads(args.verification_jobs)
     pod_key = "pod%02d" % args.pod_id
     if args.sample:
-        families = FAMILY_ORDER if args.scope == "FINAL" else [args.scope]
-        verified_jobs = {family: int(verification_jobs.get(family, 0)) for family in families}
+        verified_jobs = {
+            family: int(verification_jobs.get(family, 0)) for family in FAMILY_ORDER
+        }
         completed_at = dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat()
     else:
         host = os.environ.get("CRC_AWX_HOST") or os.environ.get("AWX_HOST", "")

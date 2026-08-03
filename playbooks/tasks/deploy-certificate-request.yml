@@ -38,12 +38,12 @@
 
       1. Double-click REQUEST-MY-CERTIFICATE.cmd in your Pod folder.
       2. Enter and confirm your full name exactly as it should appear.
-      3. Complete every lab in a family.
+      3. Complete all 57 labs across AC, IA, SI, SC, MP, and PE.
       4. Allow up to 30 minutes for automated verification and certificate generation.
-      5. Find issued PDF certificates and JSON receipts in this Certificates folder.
+      5. Find your issued PDF certificate and JSON receipt in this Certificates folder.
 
-      A family certificate is issued after AC, IA, SI, SC, MP, and PE.
-      A final CMMC Level 1 Cyber Lab certificate is issued after all six families.
+      One CMMC Level 1 Cyber Lab certificate is issued after all six families are complete.
+      Individual families and modules do not receive separate certificates.
       Contact your instructor if an already-issued certificate needs a name correction.
     dest: "C:\\CyberLab\\Pod{{ '%02d' | format(item) }}\\Certificates\\Certificate-Instructions.txt"
   loop: "{{ pod_list }}"

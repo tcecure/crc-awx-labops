@@ -2,9 +2,9 @@
 
 When a pod completes **every lab** in its current CMMC family, the next family is
 **automatically seeded for that pod only** — so students progress at their own
-pace without an instructor re-seeding, and without resetting completed work. When certificate launching is enabled, the same scheduled job also issues an idempotent PDF certificate and JSON receipt after each completed family when the student has submitted a certificate name.
+pace without an instructor re-seeding, and without resetting completed work. When certificate launching is enabled, the same scheduled job issues one idempotent PDF certificate and JSON receipt after all 57 labs are complete and the student has submitted a certificate name.
 
-Family order: **AC → IA → SI → SC → MP → PE**. A final certificate is issued after all six families.
+Family order: **AC → IA → SI → SC → MP → PE**. Individual families and modules do not receive separate certificates.
 
 ---
 
@@ -37,20 +37,20 @@ The Auto-Advance job (AWX Job Template **"Auto-Advance Families"**) evaluates th
    (12 for AC/IA/SI/SC, 3 for MP, and 6 for PE).
 2. **Reads seed state** from per-family marker files on DC01
    (`C:\CyberLab\PodNN\.families\<FAM>.seeded`).
-3. **Reads certificate state** from the student profile and issuance markers
-   (`Certificates\CertificateProfile.json` and `.certificates\<FAM>.issued`).
+3. **Reads certificate state** from the student profile and final issuance marker
+   (`Certificates\CertificateProfile.json` and `.certificates\FINAL.issued`).
 
 For each pod it finds the earliest family that is **100% complete** whose
 **successor is not yet seeded**, and launches that successor's **per-pod** seed
-template (AC=12, IA=15, SI=18, SC=21, MP=27, PE=30) with `pods=<N>`. Independently, each completed family without an issuance marker launches **Generate Completion Certificate** after the student submits a name. Certificate generation revalidates the referenced AWX verifier job before writing files.
+template (AC=12, IA=15, SI=18, SC=21, MP=27, PE=30) with `pods=<N>`. Independently, a pod with all six families complete, a student profile, and no `FINAL.issued` marker launches **Generate Completion Certificate**. Certificate generation revalidates all six referenced AWX verifier jobs and all 57 lab results before writing files.
 
 ### Why completion plus state markers?
 
 * **Completion** is the grading trigger: every declared lab must be complete in the latest successful verifier job.
 * **Seed markers** make advancement idempotent: an already-seeded family is never re-seeded.
-* **Certificate profiles and issuance markers** provide the student-supplied name and prevent duplicate certificates.
+* **The certificate profile and `FINAL.issued` marker** provide the student-supplied name and prevent duplicate issuance.
 
-The schedule can therefore run every 30 minutes without resetting completed work or reissuing an existing award.
+The schedule can therefore run every 30 minutes without resetting completed work or reissuing the final award.
 
 ---
 
@@ -66,11 +66,12 @@ The schedule can therefore run every 30 minutes without resetting completed work
 | `advance_enabled=0` | Report-only: never launch a family seed. |
 | Student-named | No certificate is issued until the student runs `REQUEST-MY-CERTIFICATE.cmd` and confirms a display name. |
 | Verified at issuance | The certificate job checks the AWX job status, verifier template, pod result, and every required lab again. |
-| Idempotent certificates | `.certificates\<FAM>.issued` and `FINAL.issued` prevent duplicate scheduled issuance. |
-| Preserved history | Family resets do not delete issued certificates or receipts. An instructor must explicitly reissue them. |
+| Final award only | A certificate action is created only after all 57 labs across all six families are complete. |
+| Idempotent certificate | `.certificates\FINAL.issued` prevents duplicate scheduled issuance. |
+| Preserved history | Family resets do not delete the issued final certificate or receipt. An instructor must explicitly reissue it. |
 | Safe rollout | `certificates_enabled=0` disables certificate launches without affecting family progression. |
 
-Seed markers are written by seed playbooks and cleared by reset playbooks. Certificate markers are written only after both pod and instructor copies are stored successfully.
+Seed markers are written by seed playbooks and cleared by reset playbooks. The final certificate marker is written only after both pod and instructor copies are stored successfully.
 
 ---
 
@@ -117,13 +118,12 @@ artifacts:
 The certificate workflow was deployed to all 20 pods and validated on scratch Pod20:
 
 * **Setup Certificate System** job 19008 deployed the name prompt and launcher.
-* Certificate job 19023 generated and archived a valid SI PDF/JSON receipt.
-* Job 19025 confirmed an ordinary rerun is an idempotent no-op.
-* Job 19026 confirmed `force_reissue=true` creates a replacement certificate.
-* Auto-Advance proposed SI before issuance and suppressed it after the `.issued` marker existed.
-* The temporary profile, SI certificate, archive copy, marker, and test helper were removed after validation.
+* Certificate job 19023 validated PDF/JSON generation, dual storage, receipt hashing, profile identity checks, and AWX revalidation using a controlled SI test under the earlier family-certificate design.
+* Jobs 19025 and 19026 validated idempotent reruns and explicit `force_reissue=true` replacement.
+* The temporary profile, certificate, archive copy, marker, and test helper were removed after validation.
+* The current final-only policy rejects family certificate scopes and requires all six verifier jobs covering all 57 labs.
 
-Certificate launching remains disabled on schedule 7 with `certificates_enabled: "0"`. Pod20 currently has a scratch SI verifier result of 12/12; enabling certificates before that state is reset or explicitly approved could issue a real-looking SI certificate when `student17` submits a name. Family auto-advance remains enabled and unaffected.
+Certificate launching remains controlled by schedule 7's `certificates_enabled` setting. A completed single family, including Pod20's scratch SI result, cannot trigger a certificate under the final-only policy.
 
 For a new deployment, first use **`backfill-family-markers.yml`** to mark only
 families proven already seeded. Run Auto-Advance once with
@@ -144,9 +144,9 @@ IA → SI → SC → MP → PE automatically as each family is completed.
 * **Certificate rollout:** set `certificates_enabled: "1"` only after scratch completion state has been cleared or approved. This flag does not change seed/advance behavior.
 * **Force a single pod now:** seed the next family manually with the per-pod
   seed template (`pods=<N>`); this also writes the family marker.
-* **Student certificate name:** run `C:\CyberLab\PodNN\REQUEST-MY-CERTIFICATE.cmd`, enter the full name, and confirm it. Issuance occurs after the next scheduled cycle for every already-completed family.
+* **Student certificate name:** run `C:\CyberLab\PodNN\REQUEST-MY-CERTIFICATE.cmd`, enter the full name, and confirm it. Issuance occurs after the next scheduled cycle once all 57 labs are complete.
 * **Certificate locations:** students receive PDF/JSON files in `C:\CyberLab\PodNN\Certificates`; the protected instructor archive is `C:\ProgramData\DRCC\InstructorCertificates\PodNN`.
-* **Correct a name:** update the student profile, then manually launch **Generate Completion Certificate** with the same pod/scope/job mapping and `force_reissue=true`.
+* **Correct a name:** update the student profile, then manually launch **Generate Completion Certificate** with the same pod, `certificate_scope=FINAL`, all six verifier job IDs, and `force_reissue=true`.
 * **Troubleshooting:**
   * *No actions though a family looks done* — confirm the latest **successful**
     verify job for that family shows every declared lab complete for the pod, and that the next

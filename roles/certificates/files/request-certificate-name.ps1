@@ -30,7 +30,7 @@ if (Test-Path $profilePath) {
 
 while ($true) {
     $displayName = [Microsoft.VisualBasic.Interaction]::InputBox(
-        "Enter your full name exactly as it should appear on DRCC completion certificates.`r`n`r`nUse letters, spaces, apostrophes, periods, and hyphens only.",
+        "Enter your full name exactly as it should appear on your DRCC CMMC Level 1 completion certificate.`r`n`r`nUse letters, spaces, apostrophes, periods, and hyphens only.",
         'DRCC Certificate Name',
         $currentName
     ).Trim()
@@ -70,7 +70,7 @@ while ($true) {
     }
 
     $confirmation = [System.Windows.Forms.MessageBox]::Show(
-        "Your certificates will display:`r`n`r`n$displayName`r`n`r`nIs this correct?",
+        "Your CMMC Level 1 completion certificate will display:`r`n`r`n$displayName`r`n`r`nIs this correct?",
         'Confirm Certificate Name',
         [System.Windows.Forms.MessageBoxButtons]::YesNo,
         [System.Windows.Forms.MessageBoxIcon]::Question
@@ -93,7 +93,7 @@ $profileJson = $profile | ConvertTo-Json
 [System.IO.File]::WriteAllText($profilePath, $profileJson, (New-Object System.Text.UTF8Encoding($false)))
 
 [System.Windows.Forms.MessageBox]::Show(
-    "Your certificate name has been saved as:`r`n`r`n$displayName`r`n`r`nCompleted-family certificates will be generated automatically after the next verification cycle. If a certificate was already issued, contact your instructor to request a corrected copy.",
+    "Your certificate name has been saved as:`r`n`r`n$displayName`r`n`r`nYour CMMC Level 1 certificate will be generated automatically after all 57 labs are verified complete. If it was already issued, contact your instructor to request a corrected copy.",
     'DRCC Certificate Profile Saved',
     [System.Windows.Forms.MessageBoxButtons]::OK,
     [System.Windows.Forms.MessageBoxIcon]::Information

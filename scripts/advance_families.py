@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Auto-advance CMMC lab families and issue completion certificates per pod.
+"""Auto-advance CMMC lab families and issue final completion certificates.
 
 Completion comes from each family's latest successful AWX verifier. Seed markers
-make family advancement idempotent. Certificate profiles and issuance markers
-make certificate delivery student-named and idempotent.
+make family advancement idempotent. A student profile and FINAL issuance marker
+make the single CMMC Level 1 certificate student-named and idempotent.
 
 Environment:
   CRC_AWX_HOST         AWX URL without /api/v2
@@ -44,7 +44,7 @@ SEED_MARKER_RE = re.compile(
     r"Pod0*(\d+)[\\/]\.families[\\/]([A-Z]{2})\.seeded$", re.IGNORECASE
 )
 ISSUED_MARKER_RE = re.compile(
-    r"Pod0*(\d+)[\\/]\.certificates[\\/]([A-Z]{2}|FINAL)\.issued$", re.IGNORECASE
+    r"Pod0*(\d+)[\\/]\.certificates[\\/](FINAL)\.issued$", re.IGNORECASE
 )
 PROFILE_RE = re.compile(
     r"Pod0*(\d+)[\\/]Certificates[\\/]CertificateProfile\.json$", re.IGNORECASE
@@ -135,25 +135,20 @@ def decide_advancement(completed, seeded):
 
 
 def decide_certificates(completed, issued, profiles, verification_jobs):
-    """Return certificate actions and student-name-pending awards."""
+    """Return final-certificate actions and student-name-pending awards."""
     actions = []
     pending_names = []
     for pod_key in sorted(completed):
         complete = completed.get(pod_key, set())
         issued_state = issued.get(pod_key, set())
-        for family in FAMILY_ORDER:
-            if family in complete and family not in issued_state:
-                if pod_key in profiles:
-                    actions.append((pod_key, family, {family: verification_jobs[family]}))
-                else:
-                    pending_names.append((pod_key, family))
-        if set(FAMILY_ORDER).issubset(complete) and "FINAL" not in issued_state:
-            if pod_key in profiles:
-                actions.append((pod_key, "FINAL", {
-                    family: verification_jobs[family] for family in FAMILY_ORDER
-                }))
-            else:
-                pending_names.append((pod_key, "FINAL"))
+        if not set(FAMILY_ORDER).issubset(complete) or "FINAL" in issued_state:
+            continue
+        if pod_key in profiles:
+            actions.append((pod_key, "FINAL", {
+                family: verification_jobs[family] for family in FAMILY_ORDER
+            }))
+        else:
+            pending_names.append((pod_key, "FINAL"))
     return actions, pending_names
 
 
