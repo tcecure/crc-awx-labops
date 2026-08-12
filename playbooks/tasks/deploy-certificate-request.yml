@@ -1,0 +1,68 @@
+---
+- name: Copy certificate-name prompt script to staging
+  ansible.windows.win_copy:
+    src: "{{ playbook_dir }}/../roles/certificates/files/request-certificate-name.ps1"
+    dest: C:\Windows\Temp\request-certificate-name.ps1
+
+- name: Create certificate directories
+  ansible.windows.win_file:
+    path: "C:\\CyberLab\\Pod{{ '%02d' | format(item) }}\\Certificates"
+    state: directory
+  loop: "{{ pod_list }}"
+  loop_control:
+    label: "Pod{{ '%02d' | format(item) }}"
+
+- name: Install certificate-name prompt for each pod
+  ansible.windows.win_copy:
+    src: C:\Windows\Temp\request-certificate-name.ps1
+    dest: "C:\\CyberLab\\Pod{{ '%02d' | format(item) }}\\Certificates\\Request-Certificate-Name.ps1"
+    remote_src: true
+  loop: "{{ pod_list }}"
+  loop_control:
+    label: "Pod{{ '%02d' | format(item) }}"
+
+- name: Create student certificate launcher
+  ansible.windows.win_copy:
+    content: |
+      @echo off
+      powershell.exe -NoProfile -ExecutionPolicy Bypass -File "C:\CyberLab\Pod{{ '%02d' | format(item) }}\Certificates\Request-Certificate-Name.ps1" -PodId {{ item }} -StudentAccount "{{ student_accounts_by_pod[item] }}"
+    dest: "C:\\CyberLab\\Pod{{ '%02d' | format(item) }}\\REQUEST-MY-CERTIFICATE.cmd"
+  loop: "{{ pod_list }}"
+  loop_control:
+    label: "Pod{{ '%02d' | format(item) }}"
+
+- name: Write certificate instructions
+  ansible.windows.win_copy:
+    content: |
+      DRCC CYBER LAB CERTIFICATES
+
+      1. Double-click REQUEST-MY-CERTIFICATE.cmd in your Pod folder.
+      2. Enter and confirm your full name exactly as it should appear.
+      3. Complete all 57 labs across AC, IA, SI, SC, MP, and PE.
+      4. Allow up to 30 minutes for automated verification and certificate generation.
+      5. Find your issued PDF certificate and JSON receipt in this Certificates folder.
+
+      One CMMC Level 1 Cyber Lab certificate is issued after all six families are complete.
+      Individual families and modules do not receive separate certificates.
+      Contact your instructor if an already-issued certificate needs a name correction.
+    dest: "C:\\CyberLab\\Pod{{ '%02d' | format(item) }}\\Certificates\\Certificate-Instructions.txt"
+  loop: "{{ pod_list }}"
+  loop_control:
+    label: "Pod{{ '%02d' | format(item) }}"
+
+- name: Create protected instructor certificate archive
+  ansible.windows.win_shell: |
+    $path = 'C:\ProgramData\DRCC\InstructorCertificates'
+    New-Item -ItemType Directory -Force -Path $path | Out-Null
+    $acl = New-Object System.Security.AccessControl.DirectorySecurity
+    $acl.SetAccessRuleProtection($true, $false)
+    $inherit = [System.Security.AccessControl.InheritanceFlags]'ContainerInherit, ObjectInherit'
+    $propagate = [System.Security.AccessControl.PropagationFlags]::None
+    foreach ($identity in @('SYSTEM', 'BUILTIN\Administrators')) {
+        $rule = New-Object System.Security.AccessControl.FileSystemAccessRule(
+            $identity, 'FullControl', $inherit, $propagate, 'Allow'
+        )
+        $acl.AddAccessRule($rule)
+    }
+    Set-Acl -Path $path -AclObject $acl
+  changed_when: false

@@ -1,0 +1,7 @@
+CMMC Level 1 Media Protection Labs — Pod{{ pod_id_padded }}
+
+MP-M1-L1: Inspect both VHDX media files, complete MediaClassificationWorksheet.docx, and enter the final classifications in MediaClassificationResponses.csv.
+
+MP-M1-L2: Reuse {{ prefix }}-FCI-USB.vhdx. Deleting files is not sanitization. Follow ACS-POL-MP-001: remove the existing partition, create a new NTFS partition, perform a full format, label it {{ prefix }}-SANITIZED, validate that prior content is unavailable, and complete MediaSanitizationLog.csv and MediaSanitizationCertificate.csv.
+
+MP-M1-L3: Review the asset record, serial number, chain of custody, vendor certificate, and incomplete disposition worksheet. Enter Reuse, Destroy, or Return to inventory and justify the decision.
