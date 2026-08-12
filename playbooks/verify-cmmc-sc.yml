@@ -80,6 +80,12 @@
         aggregate: false
         per_host: false
 
+    - name: Synchronize SC results with the DRCC portal
+      ansible.builtin.include_tasks: tasks/publish-progress.yml
+      vars:
+        progress_family: SC
+        progress_pods: "{{ pod_results_pub }}"
+
     - name: Write JSON artifact
       ansible.builtin.copy:
         content: "{{ {'course': 'CMMC Level 1 System & Communications Protection (SC)', 'pods': pod_results_pub, 'totals': {'completed': total_completed | int}} | to_nice_json }}"

@@ -62,6 +62,12 @@
         aggregate: false
         per_host: false
 
+    - name: Synchronize AC results with the DRCC portal
+      ansible.builtin.include_tasks: tasks/publish-progress.yml
+      vars:
+        progress_family: AC
+        progress_pods: "{{ pod_results }}"
+
     - name: Write JSON artifact
       ansible.builtin.copy:
         content: "{{ {'course': 'CMMC Level 1 Access Control (AC)', 'pods': pod_results, 'totals': {'completed': total_completed | int, 'incomplete': total_incomplete | int}} | to_nice_json }}"

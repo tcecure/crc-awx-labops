@@ -76,6 +76,12 @@
         aggregate: false
         per_host: false
 
+    - name: Synchronize SI results with the DRCC portal
+      ansible.builtin.include_tasks: tasks/publish-progress.yml
+      vars:
+        progress_family: SI
+        progress_pods: "{{ pod_results_pub }}"
+
     - name: Write JSON artifact
       ansible.builtin.copy:
         content: "{{ {'course': 'CMMC Level 1 System & Information Integrity (SI)', 'pods': pod_results, 'totals': {'completed': total_completed | int, 'incomplete': total_incomplete | int}} | to_nice_json }}"

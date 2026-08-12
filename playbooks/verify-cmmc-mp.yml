@@ -67,6 +67,12 @@
         aggregate: false
         per_host: false
 
+    - name: Synchronize MP results with the DRCC portal
+      ansible.builtin.include_tasks: tasks/publish-progress.yml
+      vars:
+        progress_family: MP
+        progress_pods: "{{ pod_results_pub }}"
+
     - name: Write MP verification report
       ansible.builtin.copy:
         content: "{{ {'course': 'CMMC Level 1 Media Protection (MP)', 'pods': pod_results_pub, 'totals': {'completed': total_completed | int, 'incomplete': total_incomplete | int}} | to_nice_json }}"

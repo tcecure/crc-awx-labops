@@ -1,0 +1,44 @@
+---
+- name: Publish verifier results to the DRCC portal
+  ansible.builtin.uri:
+    url: "{{ lookup('env', 'DRCC_PORTAL_URL') | regex_replace('/+$', '') }}/api/integrations/awx/progress"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ lookup('env', 'AWX_PROGRESS_SECRET') }}"
+    body_format: json
+    body: >-
+      {{
+        {
+          'family': progress_family,
+          'verifierJobId': awx_job_id | default(tower_job_id | default(0)) | int,
+          'verifiedAt': now(utc=true, fmt='%Y-%m-%dT%H:%M:%SZ'),
+          'pods': progress_pods
+        } | to_json
+      }}
+    status_code: 200
+    timeout: 30
+    validate_certs: true
+  register: drcc_progress_sync
+  changed_when: false
+  failed_when: false
+  no_log: true
+  when:
+    - lookup('env', 'DRCC_PORTAL_URL') | length > 0
+    - lookup('env', 'AWX_PROGRESS_SECRET') | length > 0
+
+- name: Confirm DRCC portal synchronization
+  ansible.builtin.debug:
+    msg: "DRCC portal accepted {{ progress_family }} progress (HTTP 200)."
+  when:
+    - drcc_progress_sync is not skipped
+    - drcc_progress_sync.status | default(0) == 200
+
+- name: Report DRCC portal synchronization failure
+  ansible.builtin.debug:
+    msg: >-
+      DRCC portal progress synchronization failed for {{ progress_family }}
+      (HTTP {{ drcc_progress_sync.status | default('unavailable') }}).
+      The next verifier run will retry.
+  when:
+    - drcc_progress_sync is not skipped
+    - drcc_progress_sync.status | default(0) != 200
