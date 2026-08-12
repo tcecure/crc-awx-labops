@@ -6,11 +6,15 @@
     headers:
       Authorization: "Bearer {{ lookup('env', 'AWX_PROGRESS_SECRET') }}"
     body_format: json
-    body:
-      family: "{{ progress_family }}"
-      verifierJobId: "{{ awx_job_id | default(tower_job_id | default(0)) | int }}"
-      verifiedAt: "{{ now(utc=true, fmt='%Y-%m-%dT%H:%M:%SZ') }}"
-      pods: "{{ progress_pods }}"
+    body: >-
+      {{
+        {
+          'family': progress_family,
+          'verifierJobId': awx_job_id | default(tower_job_id | default(0)) | int,
+          'verifiedAt': now(utc=true, fmt='%Y-%m-%dT%H:%M:%SZ'),
+          'pods': progress_pods
+        } | to_json
+      }}
     status_code: 200
     timeout: 30
     validate_certs: true

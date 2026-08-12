@@ -26,10 +26,9 @@ class ProgressPublisherTests(unittest.TestCase):
         self.assertTrue(request["url"].endswith("/api/integrations/awx/progress"))
         self.assertEqual(request["method"], "POST")
         self.assertIn("AWX_PROGRESS_SECRET", request["headers"]["Authorization"])
-        self.assertEqual(
-            set(request["body"]),
-            {"family", "verifierJobId", "verifiedAt", "pods"},
-        )
+        for key in ("family", "verifierJobId", "verifiedAt", "pods"):
+            self.assertIn(f"'{key}'", request["body"])
+        self.assertIn("| to_json", request["body"])
         self.assertTrue(request["validate_certs"])
         self.assertTrue(publish["no_log"])
         self.assertFalse(publish["failed_when"])
