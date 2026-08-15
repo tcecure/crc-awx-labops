@@ -231,18 +231,28 @@
     script: |
       $podName = "Pod{{ '%02d' | format(pod_id) }}"
       $dir = "C:\CyberLab\$podName\Lab4-3"
+      $required = @('enabled_users.csv', 'group_memberships.csv', 'review_summary.txt')
       if (Test-Path $dir) {
-        $files = Get-ChildItem -Path $dir -File
-        if ($files.Count -gt 0) {
-          $nonEmpty = @($files | Where-Object { $_.Length -gt 0 })
-          $empty = @($files | Where-Object { $_.Length -eq 0 })
-          if ($empty.Count -eq 0) {
-            @{ completed = $true; reason = "Lab4-3 dir exists with $($nonEmpty.Count) non-empty file(s)" }
-          } else {
-            @{ completed = $false; reason = "Lab4-3 has $($empty.Count) empty file(s): $($empty.Name -join ',')" }
+        $files = @(Get-ChildItem -Path $dir -File)
+        $reasons = @()
+        foreach ($name in $required) {
+          $file = $files | Where-Object { $_.Name -eq $name } | Select-Object -First 1
+          if (-not $file) { $reasons += "$name not found" }
+          elseif ($file.Length -eq 0) { $reasons += "$name is empty" }
+        }
+        $empty = @($files | Where-Object { $_.Length -eq 0 })
+        if ($empty.Count -gt 0) { $reasons += "empty file(s): $($empty.Name -join ',')" }
+        $users = Join-Path $dir 'enabled_users.csv'
+        if (Test-Path $users) {
+          $content = (Get-Content $users -Raw -ErrorAction SilentlyContinue)
+          if ($content -and $content.Trim() -match '^placeholder$') {
+            $reasons += 'enabled_users.csv still contains only the seeded placeholder'
           }
+        }
+        if ($reasons.Count -eq 0) {
+          @{ completed = $true; reason = "Lab4-3 has all $($required.Count) required evidence files with real content" }
         } else {
-          @{ completed = $false; reason = "Lab4-3 directory exists but contains no files" }
+          @{ completed = $false; reason = ($reasons -join '; ') }
         }
       } else {
         @{ completed = $false; reason = "Lab4-3 directory not found at $dir" }
