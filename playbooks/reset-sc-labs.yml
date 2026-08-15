@@ -6,14 +6,12 @@
   hosts: crc_pod_gateways
   gather_facts: false
   tasks:
-    - name: Copy reset script
-      ansible.builtin.copy:
-        src: "{{ playbook_dir }}/../roles/seed_sc_gw/files/reset-sc-labs.sh"
-        dest: /tmp/reset-sc-labs.sh
-        mode: '0755'
-
+    # pfSense has no usable Python interpreter, so copy+shell cannot be used here;
+    # script copies and executes in one step, the same way seed_sc_gw does.
     - name: Run SC reset on pfSense
-      ansible.builtin.shell: sh /tmp/reset-sc-labs.sh {{ pod_id }}
+      ansible.builtin.script: "{{ playbook_dir }}/../roles/seed_sc_gw/files/reset-sc-labs.sh {{ pod_id }}"
+      args:
+        executable: /bin/sh
       register: reset_result
 
     - name: Display reset result
