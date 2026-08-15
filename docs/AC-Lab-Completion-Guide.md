@@ -341,9 +341,9 @@ Module 3 focuses on the principle of least privilege — ensuring users have onl
 
 ### Lab L3.1 — User in Wrong Organizational Unit
 
-**Scenario:** A sales employee (`PXX-sales.user1`) has been placed in the **Executive** department OU instead of being in the **Staff** OU where they belong. Being in the wrong OU could give them access to executive-level resources through OU-based group policies.
+**Scenario:** A sales employee (`PXX-sales.user1`) has been placed in the **Executive** department OU instead of the **Sales** department OU where they belong. Being in the wrong OU could give them access to executive-level resources through OU-based group policies.
 
-**Your Task:** Move the user back to the correct OU.
+**Your Task:** Move the user back to the correct department OU.
 
 **Step-by-Step Instructions:**
 
@@ -351,9 +351,11 @@ Module 3 focuses on the principle of least privilege — ensuring users have onl
 2. You should see **PXX-sales.user1** in this OU (they should NOT be here)
 3. Right-click on **PXX-sales.user1**
 4. Select **Move...**
-5. Navigate to: **acs-p01.local → Students → PodXX → Users → Staff**
+5. Navigate to: **acs-p01.local → Students → PodXX → Resources → Departments → Sales**
 6. Click **OK**
-7. Verify: Navigate to **Users → Staff** and confirm the user is now there
+7. Verify: Navigate to **Resources → Departments → Sales** and confirm the user is now there
+
+> **Important:** the account must end up in the **Sales** OU. Moving it to `Users → Staff` (or any other OU) will not pass verification — the check requires `OU=Sales` in the account's distinguished name.
 
 **Why This Matters:** OU placement determines which group policies and access controls apply to a user. A user in the wrong OU may receive access they are not authorized to have.
 
@@ -454,22 +456,23 @@ Module 4 focuses on monitoring, reviewing, and documenting access control activi
    - Click the **Start** button
    - Type `PowerShell` and click **Windows PowerShell**
 
-2. Run the following command to export a list of all enabled users in your pod (replace `XX` with your pod number, e.g., `03`):
+2. Run the following command to export the access review to **`review.csv`** (replace `Pod03` with your pod, e.g. `Pod07`):
    ```powershell
-   Get-ADUser -Filter {Enabled -eq $true} -SearchBase "OU=Pod03,OU=Students,DC=acs-p01,DC=local" -Properties MemberOf | Select-Object Name, SamAccountName, Enabled | Export-Csv "C:\CyberLab\Pod03\Lab4-2\enabled_users.csv" -NoTypeInformation
+   Get-ADUser -Filter {Enabled -eq $true} -SearchBase "OU=Pod03,OU=Students,DC=acs-p01,DC=local" -Properties MemberOf | Select-Object Name, SamAccountName, Enabled | Export-Csv "C:\CyberLab\Pod03\Lab4-2\review.csv" -NoTypeInformation
    ```
-   *(Replace `Pod03` and `03` with your actual pod number)*
 
-3. Run this command to export group memberships:
+   > **The file must be named `review.csv`** and live in `C:\CyberLab\PodXX\Lab4-2\`. Verification looks for that exact name and requires it to be non-empty; any other file name will not pass.
+
+3. *(Optional supporting evidence)* export group memberships alongside it:
    ```powershell
    Get-ADGroup -Filter * -SearchBase "OU=Pod03,OU=Students,DC=acs-p01,DC=local" | ForEach-Object { $group = $_.Name; Get-ADGroupMember $_ -ErrorAction SilentlyContinue | Select-Object @{N='Group';E={$group}}, Name, SamAccountName } | Export-Csv "C:\CyberLab\Pod03\Lab4-2\group_memberships.csv" -NoTypeInformation
    ```
 
-4. Verify the files were created:
+4. Verify the file was created and is not empty:
    ```powershell
    Get-ChildItem "C:\CyberLab\Pod03\Lab4-2"
    ```
-   You should see `enabled_users.csv` and `group_memberships.csv`
+   You must see `review.csv` with a size greater than 0.
 
 **Why This Matters:** CMMC requires organizations to maintain evidence of access reviews. An empty evidence folder means the review was never conducted — a compliance failure.
 
@@ -500,7 +503,7 @@ Module 4 focuses on monitoring, reviewing, and documenting access control activi
    Get-ADGroup -Filter * -SearchBase "OU=Pod03,OU=Students,DC=acs-p01,DC=local" | ForEach-Object { $group = $_.Name; Get-ADGroupMember $_ -ErrorAction SilentlyContinue | Select-Object @{N='Group';E={$group}}, Name, SamAccountName } | Export-Csv "C:\CyberLab\Pod03\Lab4-3\group_memberships.csv" -NoTypeInformation
    ```
 
-4. Add a review summary document:
+4. Add a review summary document (every file in `Lab4-3` must be non-empty — an empty file anywhere in the folder fails the check):
    ```powershell
    $date = Get-Date -Format "yyyy-MM-dd"
    $summary = @"
