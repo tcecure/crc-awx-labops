@@ -1,0 +1,28 @@
+ACS ASSET DISCOVERY TASKING - Pod{{ pod_id_padded }}
+====================================================
+
+FROM:    ACS IT Operations Manager
+TO:      Pod{{ pod_id_padded }} Security Analyst
+SUBJECT: Annual asset inventory validation (CMMC SI practice support)
+
+ACS maintains a documented asset inventory for your area of responsibility. That
+inventory is attached as {{ prefix }}_Expected_Asset_Inventory.csv.
+
+During the last internal review, an auditor observed that our documented
+inventory has not been validated against the actual environment in over a year.
+
+TASKING
+-------
+1. Use CyDeploy Community Edition to discover the assets inside YOUR pod scope
+   only (Pod{{ pod_id_padded }}). Do not discover any other pod, the shared
+   domain, or the management network.
+2. Compare what CyDeploy reports against {{ prefix }}_Expected_Asset_Inventory.csv.
+3. Record every difference on {{ prefix }}_CyDeploy_Discovery_Worksheet.docx.
+4. Report your conclusion in the response file described in your lab guide.
+
+WHAT ACS NEEDS TO KNOW
+----------------------
+Is there anything operating in Pod{{ pod_id_padded }} that is NOT on the
+documented inventory? If so, what is it?
+
+Do not remediate anything in this lab. Discovery and documentation only.

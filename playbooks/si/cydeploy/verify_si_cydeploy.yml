@@ -1,0 +1,114 @@
+---
+# Verify the staged CyDeploy Community Edition SI labs (SI-M5-L1/L2/L3).
+#
+# STAGED: safe to run (read-only), but by default it does NOT publish to the
+# training tracker. Tracker publication is gated behind
+# cydeploy_publish_progress so current student completion percentages cannot
+# change before go-live.
+- name: "Verify Labs: CMMC SI CyDeploy Community Edition (staged) - Shared DC"
+  hosts: crc_shared_dcs[0]
+  gather_facts: false
+  vars:
+    pod_list: >-
+      {{ ((pods | default(pod_id) | default('') | string).split(',') | map('trim') | select('match', '^[0-9]+$') | map('int') | list)
+         if ((pods | default('') | string | trim) != '' or (pod_id | default('') | string | trim) != '')
+         else (range(1, (pod_count | default(20) | int) + 1) | list) }}
+  tasks:
+    - name: "Verify SI CyDeploy labs for Pod{{ '%02d' | format(item) }}"
+      ansible.builtin.include_role:
+        name: verify_si_cydeploy
+      vars:
+        pod_id: "{{ item }}"
+      loop: "{{ pod_list }}"
+
+- name: Consolidate SI CyDeploy results and produce report
+  hosts: localhost
+  gather_facts: false
+  connection: local
+  vars:
+    pod_list: >-
+      {{ ((pods | default(pod_id) | default('') | string).split(',') | map('trim') | select('match', '^[0-9]+$') | map('int') | list)
+         if ((pods | default('') | string | trim) != '' or (pod_id | default('') | string | trim) != '')
+         else (range(1, (pod_count | default(20) | int) + 1) | list) }}
+  tasks:
+    - name: Build SI CyDeploy per-pod results
+      ansible.builtin.set_fact:
+        pod_results: >-
+          {%- set pods_out = {} -%}
+          {%- set dc_host = groups['crc_shared_dcs'][0] -%}
+          {%- for i in pod_list -%}
+            {%- set pad = '%02d' | format(i | int) -%}
+            {%- set key = 'pod' ~ pad ~ '_si_cydeploy_results' -%}
+            {%- set _ = pods_out.update({'pod' ~ pad: hostvars[dc_host][key] | default({})}) -%}
+          {%- endfor -%}
+          {{ pods_out }}
+
+    - name: Build SI CyDeploy tracker artifacts
+      ansible.builtin.set_fact:
+        pod_results_pub: >-
+          {%- set pods_out = {} -%}
+          {%- for pod_key, pod_val in pod_results.items() -%}
+            {%- set labs = {} -%}
+            {%- for lab_key, lab_val in pod_val.items() -%}
+              {%- set _ = labs.update({'SI-' ~ lab_key: lab_val}) -%}
+            {%- endfor -%}
+            {%- set _ = pods_out.update({pod_key: labs}) -%}
+          {%- endfor -%}
+          {{ pods_out }}
+
+    - name: Compute SI CyDeploy totals
+      ansible.builtin.set_fact:
+        total_completed: >-
+          {%- set count = [0] -%}
+          {%- for pod_val in pod_results.values() -%}
+            {%- for lab_val in pod_val.values() -%}
+              {%- if lab_val.completed | default(false) -%}{%- set _ = count.append(count.pop() + 1) -%}{%- endif -%}
+            {%- endfor -%}
+          {%- endfor -%}
+          {{ count[0] }}
+        total_incomplete: >-
+          {%- set count = [0] -%}
+          {%- for pod_val in pod_results.values() -%}
+            {%- for lab_val in pod_val.values() -%}
+              {%- if not (lab_val.completed | default(false)) -%}{%- set _ = count.append(count.pop() + 1) -%}{%- endif -%}
+            {%- endfor -%}
+          {%- endfor -%}
+          {{ count[0] }}
+
+    - name: Publish SI CyDeploy results as AWX job artifacts
+      ansible.builtin.set_stats:
+        data: "{{ pod_results_pub }}"
+        aggregate: false
+        per_host: false
+
+    - name: Report that tracker synchronization is staged off
+      ansible.builtin.debug:
+        msg: >-
+          SI CyDeploy tracker synchronization is disabled
+          (cydeploy_publish_progress=false). Results were published as job
+          artifacts only; student completion percentages were not touched.
+      when: not (cydeploy_publish_progress | default(false) | bool)
+
+    - name: Synchronize SI CyDeploy results with the DRCC portal
+      ansible.builtin.include_tasks: ../../tasks/publish-progress.yml
+      vars:
+        progress_family: SI-CYDEPLOY
+        progress_pods: "{{ pod_results_pub }}"
+      when: cydeploy_publish_progress | default(false) | bool
+
+    - name: Write SI CyDeploy verification report
+      ansible.builtin.copy:
+        content: "{{ {'course': 'CMMC SI CyDeploy Community Edition (staged)', 'pods': pod_results_pub, 'totals': {'completed': total_completed | int, 'incomplete': total_incomplete | int}} | to_nice_json }}"
+        dest: /runner/artifacts/SI_CyDeploy_Verification_Report.json
+      failed_when: false
+
+    - name: Print SI CyDeploy completion matrix
+      ansible.builtin.debug:
+        msg: |
+          === CMMC SI CyDeploy Community Edition (STAGED) ===
+          {% for i in pod_list %}
+          {%- set pad = '%02d' | format(i | int) -%}
+          {%- set pod = pod_results['pod' ~ pad] -%}
+          POD{{ pad }}: M5 [L1 {{ 'C' if pod['M5-L1'].completed | default(false) else 'I' }} | L2 {{ 'C' if pod['M5-L2'].completed | default(false) else 'I' }} | L3 {{ 'C' if pod['M5-L3'].completed | default(false) else 'I' }}]
+          {% endfor %}
+          TOTAL: completed={{ total_completed }} incomplete={{ total_incomplete }}

@@ -1,0 +1,129 @@
+---
+- name: "Verify Pod{{ '%02d' | format(pod_id) }} SI CyDeploy evidence"
+  ansible.windows.win_powershell:
+    script: |
+      $podName = "Pod{{ '%02d' | format(pod_id) }}"
+      $prefix = "P{{ '%02d' | format(pod_id) }}"
+      $artifactDir = "C:\CyberLab\$podName\SI-Artifacts\CyDeploy"
+      $responseDir = Join-Path $artifactDir "StudentResponses"
+
+      function New-Result {
+          param([System.Collections.Generic.List[string]]$Reasons, [string]$Success)
+          if ($Reasons.Count -eq 0) { return @{ completed = $true; reason = $Success } }
+          return @{ completed = $false; reason = ($Reasons -join '; ') }
+      }
+
+      function Require-File {
+          param([System.Collections.Generic.List[string]]$Reasons, [string]$Name)
+          $path = Join-Path $artifactDir $Name
+          if (-not (Test-Path $path)) { $Reasons.Add("$Name not found") }
+          return $path
+      }
+
+      function Get-Response {
+          param([System.Collections.Generic.List[string]]$Reasons, [string]$Name)
+          $path = Join-Path $responseDir $Name
+          if (-not (Test-Path $path)) {
+              $Reasons.Add("$Name not found in StudentResponses")
+              return $null
+          }
+          try {
+              return (Get-Content -Path $path -Raw | ConvertFrom-Json)
+          } catch {
+              $Reasons.Add("$Name is not valid JSON")
+              return $null
+          }
+      }
+
+      function Test-Truthy {
+          param([object]$Value)
+          return ([string]$Value).Trim().ToLowerInvariant() -in @('yes','true','y')
+      }
+
+      function Test-Falsy {
+          param([object]$Value)
+          return ([string]$Value).Trim().ToLowerInvariant() -in @('no','false','n','none','none observed')
+      }
+
+      $results = @{}
+
+      # ------------------------------------------------------------------
+      # SI-M5-L1  CyDeploy Asset Discovery
+      # ------------------------------------------------------------------
+      $reasons = [System.Collections.Generic.List[string]]::new()
+      Require-File $reasons '_LAB_READY_SI-M5-L1.txt' | Out-Null
+      Require-File $reasons "${prefix}_Expected_Asset_Inventory.csv" | Out-Null
+      Require-File $reasons "${prefix}_CyDeploy_Discovery_Worksheet.docx" | Out-Null
+      Require-File $reasons "${prefix}_Discovery_Scenario.txt" | Out-Null
+      $response = Get-Response $reasons 'SI-M5-L1.json'
+      if ($response) {
+          if (-not (Test-Truthy $response.completed)) { $reasons.Add('response is not marked completed') }
+          if ([string]::IsNullOrWhiteSpace([string]$response.analyst)) { $reasons.Add('analyst name is missing') }
+          if (([string]$response.discovery_scope) -notmatch $podName) { $reasons.Add("discovery_scope must be limited to $podName") }
+          if (([string]$response.discovery_scope) -match '10\.50\.|192\.168\.1\.|acs-p01\.local|/16') { $reasons.Add('discovery_scope is outside the assigned pod') }
+          if (-not (Test-Truthy $response.undocumented_asset_identified)) { $reasons.Add('an undocumented asset must be identified') }
+          if (([string]$response.finding) -notmatch "$prefix-UNKNOWN01") { $reasons.Add("the finding must name the undocumented asset $prefix-UNKNOWN01") }
+          if (([string]$response.evidence).Length -lt 25) { $reasons.Add('finding requires supporting evidence from the discovery output') }
+      }
+      $results['M5-L1'] = New-Result $reasons "Discovered inventory reconciled against the documented inventory and $prefix-UNKNOWN01 reported"
+
+      # ------------------------------------------------------------------
+      # SI-M5-L2  Configuration & Security Findings
+      # ------------------------------------------------------------------
+      $reasons = [System.Collections.Generic.List[string]]::new()
+      Require-File $reasons '_LAB_READY_SI-M5-L2.txt' | Out-Null
+      Require-File $reasons "${prefix}_CyDeploy_Findings_Worksheet.docx" | Out-Null
+      Require-File $reasons "${prefix}_Approved_Software_List.csv" | Out-Null
+      Require-File $reasons "${prefix}_Configuration_Baseline.pdf" | Out-Null
+      Require-File $reasons "${prefix}_Exception_Register.csv" | Out-Null
+      $response = Get-Response $reasons 'SI-M5-L2.json'
+      if ($response) {
+          if (-not (Test-Truthy $response.completed)) { $reasons.Add('response is not marked completed') }
+          if ([string]::IsNullOrWhiteSpace([string]$response.analyst)) { $reasons.Add('analyst name is missing') }
+          $expected = @{
+              'OBS-01' = 'approved exception'
+              'OBS-02' = 'finding'
+              'OBS-03' = 'finding'
+              'OBS-04' = 'expected'
+              'OBS-05' = 'needs investigation'
+          }
+          $rows = @($response.findings)
+          foreach ($id in @('OBS-01','OBS-02','OBS-03','OBS-04','OBS-05')) {
+              $row = $rows | Where-Object { $_.id -eq $id } | Select-Object -First 1
+              if (-not $row) { $reasons.Add("$id is missing from the response"); continue }
+              $actual = ([string]$row.classification).Trim().ToLowerInvariant()
+              if ($actual -ne $expected[$id]) { $reasons.Add("$id is classified incorrectly") }
+              if (([string]$row.justification).Length -lt 15) { $reasons.Add("$id requires a justification") }
+          }
+      }
+      $results['M5-L2'] = New-Result $reasons 'Every observation is classified against the baseline, approved software list, and exception register with justification'
+
+      # ------------------------------------------------------------------
+      # SI-M5-L3  Change Impact Comparison
+      # ------------------------------------------------------------------
+      $reasons = [System.Collections.Generic.List[string]]::new()
+      Require-File $reasons '_LAB_READY_SI-M5-L3.txt' | Out-Null
+      Require-File $reasons "${prefix}_Change_Request.docx" | Out-Null
+      Require-File $reasons "${prefix}_Baseline_Worksheet.docx" | Out-Null
+      Require-File $reasons "${prefix}_Change_Validation_Report.docx" | Out-Null
+      $response = Get-Response $reasons 'SI-M5-L3.json'
+      if ($response) {
+          if (-not (Test-Truthy $response.completed)) { $reasons.Add('response is not marked completed') }
+          if ([string]::IsNullOrWhiteSpace([string]$response.analyst)) { $reasons.Add('analyst name is missing') }
+          if (([string]$response.change_id) -notmatch "CHG-$prefix-2026-0431") { $reasons.Add('response does not reference the approved change request') }
+          if (([string]$response.target_item) -notmatch 'LabTelemetry') { $reasons.Add('target_item must be the service named in the change request') }
+          if (-not (Test-Truthy $response.baseline_recorded)) { $reasons.Add('a baseline must be recorded before the change') }
+          if (([string]$response.baseline_state) -notmatch 'running|started|enabled|automatic') { $reasons.Add('baseline_state must describe the service state before the change') }
+          if (([string]$response.post_change_state) -notmatch 'stopped|disabled') { $reasons.Add('post_change_state must show the service stopped and disabled') }
+          if (-not (Test-Falsy $response.unintended_changes_observed)) { $reasons.Add('unintended_changes_observed must be answered, and the comparison must show no unintended change') }
+          if (([string]$response.determination).Trim().ToUpperInvariant() -ne 'PASS') { $reasons.Add('determination must be PASS once the intended change is confirmed with no side effects') }
+          if (([string]$response.evidence).Length -lt 25) { $reasons.Add('determination requires supporting before/after evidence') }
+      }
+      $results['M5-L3'] = New-Result $reasons 'Before-and-after comparison proves the intended change occurred with no unintended change'
+
+      $results
+  register: si_cydeploy_verify
+
+- name: "Consolidate Pod{{ '%02d' | format(pod_id) }} SI CyDeploy results"
+  ansible.builtin.set_fact:
+    "pod{{ '%02d' | format(pod_id) }}_si_cydeploy_results": "{{ si_cydeploy_verify.output[0] }}"

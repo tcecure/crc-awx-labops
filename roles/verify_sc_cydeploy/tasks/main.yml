@@ -1,0 +1,94 @@
+---
+# Document/response verification for the SC CyDeploy lab. This runs on the
+# shared DC and never touches a pod gateway.
+#
+# The authoritative check of the real firewall rule state stays with the
+# existing verify_sc_gw role. This role only evaluates the analyst's recorded
+# dependency analysis and change validation evidence, and (optionally, once
+# go-live is approved) correlates it with the gateway result that the SC
+# CyDeploy verify playbook collected.
+- name: "Verify Pod{{ '%02d' | format(pod_id) }} SC CyDeploy evidence"
+  ansible.windows.win_powershell:
+    parameters:
+      GatewayRuleTightened: "{{ (sc_cydeploy_gateway_tightened | default('unknown')) | string }}"
+      PermissiveRuleDescr: "{{ cydeploy_sc_permissive_rule_descr | default('P%02d-ALLOW-LAN-TO-ANY' | format(pod_id | int)) }}"
+    script: |
+      param([string]$GatewayRuleTightened = 'unknown', [string]$PermissiveRuleDescr = '')
+
+      $podName = "Pod{{ '%02d' | format(pod_id) }}"
+      $prefix = "P{{ '%02d' | format(pod_id) }}"
+      $artifactDir = "C:\CyberLab\$podName\SC-Artifacts\CyDeploy"
+      $responseDir = Join-Path $artifactDir "StudentResponses"
+
+      function New-Result {
+          param([System.Collections.Generic.List[string]]$Reasons, [string]$Success)
+          if ($Reasons.Count -eq 0) { return @{ completed = $true; reason = $Success } }
+          return @{ completed = $false; reason = ($Reasons -join '; ') }
+      }
+
+      function Require-File {
+          param([System.Collections.Generic.List[string]]$Reasons, [string]$Name)
+          $path = Join-Path $artifactDir $Name
+          if (-not (Test-Path $path)) { $Reasons.Add("$Name not found") }
+          return $path
+      }
+
+      function Test-Truthy {
+          param([object]$Value)
+          return ([string]$Value).Trim().ToLowerInvariant() -in @('yes','true','y')
+      }
+
+      $results = @{}
+      $reasons = [System.Collections.Generic.List[string]]::new()
+
+      Require-File $reasons '_LAB_READY_SC-M5-L1.txt' | Out-Null
+      Require-File $reasons "${prefix}_Firewall_Change_Request.docx" | Out-Null
+      Require-File $reasons "${prefix}_Required_Communication_Matrix.csv" | Out-Null
+      Require-File $reasons "${prefix}_Dependency_Worksheet.docx" | Out-Null
+      Require-File $reasons "${prefix}_Change_Validation_Report.docx" | Out-Null
+
+      $responsePath = Join-Path $responseDir 'SC-M5-L1.json'
+      $response = $null
+      if (-not (Test-Path $responsePath)) {
+          $reasons.Add('SC-M5-L1.json not found in StudentResponses')
+      } else {
+          try { $response = Get-Content -Path $responsePath -Raw | ConvertFrom-Json }
+          catch { $reasons.Add('SC-M5-L1.json is not valid JSON') }
+      }
+
+      if ($response) {
+          if (-not (Test-Truthy $response.completed)) { $reasons.Add('response is not marked completed') }
+          if ([string]::IsNullOrWhiteSpace([string]$response.analyst)) { $reasons.Add('analyst name is missing') }
+          if (([string]$response.change_id) -notmatch "CHG-$prefix-2026-0552") { $reasons.Add('response does not reference the approved change request') }
+          if ([string]::IsNullOrWhiteSpace($PermissiveRuleDescr)) { $PermissiveRuleDescr = "$prefix-ALLOW-LAN-TO-ANY" }
+          if (([string]$response.overly_broad_rule) -notmatch [regex]::Escape($PermissiveRuleDescr)) { $reasons.Add("the overly broad rule $PermissiveRuleDescr must be identified") }
+
+          $required = @($response.required_paths | ForEach-Object { ([string]$_).Trim().ToUpperInvariant() })
+          $unnecessary = @($response.unnecessary_paths | ForEach-Object { ([string]$_).Trim().ToUpperInvariant() })
+          foreach ($path in @('PATH-01','PATH-02','PATH-03','PATH-04')) {
+              if ($required -notcontains $path) { $reasons.Add("$path is business required and must be retained") }
+              if ($unnecessary -contains $path) { $reasons.Add("$path must not be classified as unnecessary") }
+          }
+          foreach ($path in @('PATH-05','PATH-06')) {
+              if ($unnecessary -notcontains $path) { $reasons.Add("$path is not required and must be removed") }
+              if ($required -contains $path) { $reasons.Add("$path must not be classified as required") }
+          }
+
+          if (([string]$response.dependency_source).Length -lt 15) { $reasons.Add('dependency_source must state how the dependencies were determined') }
+          if (-not (Test-Truthy $response.change_applied)) { $reasons.Add('the approved change must be applied to the pod gateway') }
+          if (-not (Test-Truthy $response.connectivity_validated)) { $reasons.Add('required connectivity must be re-tested after the change') }
+          if (([string]$response.determination).Trim().ToUpperInvariant() -ne 'PASS') { $reasons.Add('determination must be PASS once the change is applied and validated') }
+          if (([string]$response.evidence).Length -lt 25) { $reasons.Add('determination requires supporting evidence') }
+      }
+
+      if ($GatewayRuleTightened -eq 'false') {
+          $reasons.Add("the permissive rule is still present on $prefix-GW")
+      }
+
+      $results['M5-L1'] = New-Result $reasons 'Dependency analysis drove the gateway change, and the change was validated against the required communication matrix'
+      $results
+  register: sc_cydeploy_verify
+
+- name: "Consolidate Pod{{ '%02d' | format(pod_id) }} SC CyDeploy results"
+  ansible.builtin.set_fact:
+    "pod{{ '%02d' | format(pod_id) }}_sc_cydeploy_results": "{{ sc_cydeploy_verify.output[0] }}"

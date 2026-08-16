@@ -1,0 +1,29 @@
+---
+# CyDeploy Community Edition installation is STAGED and DISABLED by default.
+#
+# Nothing in this role runs until an administrator supplies the CyDeploy
+# Community Edition executable and fills in the variables below. The installer
+# filename, its command-line switches, the service it registers and the ports it
+# uses are intentionally left empty: they are unknown until the executable is
+# provided and inspected. Do not guess them.
+cydeploy_install_enabled: false
+
+# Absolute path to the installer as staged on the target host, e.g.
+# C:\CyberLab\_Tools\CyDeploy\<installer supplied by the administrator>
+cydeploy_installer_path: ""
+
+# Silent/unattended switches for the installer, verbatim from vendor docs.
+cydeploy_install_args: ""
+
+# Windows service name to check after installation, if the product registers one.
+cydeploy_expected_service: ""
+
+# Where the installer is staged from, on the AWX control node. Empty means the
+# installer is expected to be placed on the target host out of band.
+cydeploy_installer_src: ""
+
+# Directory used to stage the installer and record installation state.
+cydeploy_tools_dir: 'C:\CyberLab\_Tools\CyDeploy'
+
+# Seconds to allow the installer to run.
+cydeploy_install_timeout: 1800
