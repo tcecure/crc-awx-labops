@@ -56,6 +56,30 @@ Write-Host "  L2.2 reset: removed $prefix-consult.user1 from Sales"
 Remove-ADGroupMember -Identity "$prefix-SG-ACS-IT-Admins" -Members "$prefix-SG-ACS-All-Staff" -Confirm:$false -ErrorAction SilentlyContinue
 Write-Host "  L3.2 reset: removed $prefix-SG-ACS-All-Staff from IT-Admins"
 
+# L3.3: Remove any password-reset delegation the student granted it.helpdesk on the Staff OU
+$resetPwdGuid = [guid]"00299570-246d-11d0-a768-00aa006e0529"
+$helpdesk = Get-ADUser -Filter "SamAccountName -eq '$prefix-it.helpdesk'" -ErrorAction SilentlyContinue
+if ($helpdesk) {
+  try {
+    $acl = Get-Acl "AD:\$ouStaff"
+    $removed = 0
+    foreach ($ace in @($acl.Access)) {
+      if ($ace.ObjectType -eq $resetPwdGuid -and
+          ($ace.IdentityReference -match [regex]::Escape("$prefix-it.helpdesk") -or
+           $ace.IdentityReference -eq $helpdesk.SID)) {
+        $acl.RemoveAccessRuleSpecific($ace)
+        $removed++
+      }
+    }
+    if ($removed -gt 0) {
+      Set-Acl -Path "AD:\$ouStaff" -AclObject $acl
+      Write-Host "  L3.3 reset: removed $removed password-reset delegation ACE(s) for $prefix-it.helpdesk on Staff OU"
+    }
+  } catch {
+    Write-Host "  L3.3 reset: could not read/update Staff OU ACL ($($_.Exception.Message))"
+  }
+}
+
 # -------------------------------------------------------
 # 3. Restore user states modified by lab scenarios
 # -------------------------------------------------------
