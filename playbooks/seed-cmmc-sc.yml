@@ -14,9 +14,12 @@
   gather_facts: false
   vars:
     sc_lab_id: "{{ lab_id | default('ALL') }}"
+    # Gateways carry pod_id as a host var, so an empty survey answer for `pods`
+    # must fall through to it instead of yielding an empty target list.
+    pod_spec: "{{ (pods | default('') | string | trim) or (pod_id | default('') | string | trim) }}"
     pod_list: >-
-      {{ ((pods | default(pod_id) | default('') | string).split(',') | map('trim') | select('match', '^[0-9]+$') | map('int') | list)
-         if ((pods | default('') | string | trim) != '' or (pod_id | default('') | string | trim) != '')
+      {{ (pod_spec.split(',') | map('trim') | select('match', '^[0-9]+$') | map('int') | list)
+         if (pod_spec | length) > 0
          else (range(1, (pod_count | default(20) | int) + 1) | list) }}
     my_pod: "{{ inventory_hostname | regex_replace('^pod0*([0-9]+)-gw$', '\\1') | int }}"
   tasks:
