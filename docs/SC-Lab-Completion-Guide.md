@@ -204,8 +204,9 @@ You are the new cybersecurity analyst at ACS Consulting, a small defense contrac
 
 8. **Save your completed worksheet:**
    ```
-   Save as: C:\CyberLab\PodXX\SC-Artifacts\M1-L1_Boundary_Diagram.txt
+   Save as: C:\CyberLab\PodXX\SC-Artifacts\SC-M1-L1_Completed.txt
    ```
+   > This exact file name is required (`.txt`, `.csv`, or `.png` is accepted) and it must contain at least 50 characters of content.
 
 #### Why This Matters
 CMMC SC.L1-3.13.1 requires organizations to identify and protect their system boundaries. Without knowing where your boundaries are, you cannot protect them.
@@ -382,8 +383,9 @@ Using your pod's live pfSense configuration, create a complete organizational bo
 
 4. **Save your completed diagram:**
    ```
-   Save as: C:\CyberLab\PodXX\SC-Artifacts\M2-L1_OrgBoundary_Diagram.txt
+   Save as: C:\CyberLab\PodXX\SC-Artifacts\SC-M2-L1_Completed.txt
    ```
+   > This exact file name is required (`.txt`, `.csv`, or `.png` is accepted) and it must contain at least 50 characters of content.
 
 ---
 
@@ -688,8 +690,9 @@ Your firewall logs contain evidence of suspicious activity. As the security anal
 
 4. **Save evidence:**
    ```
-   Save as: C:\CyberLab\PodXX\SC-Artifacts\M4-L1_Investigation_Report.txt
+   Save as: C:\CyberLab\PodXX\SC-Artifacts\SC-M4-L1_Completed.txt
    ```
+   > This exact file name is required (`.txt` or `.csv`) and it must contain at least 50 characters of content.
 
 ---
 
@@ -737,9 +740,10 @@ You are performing a simplified CMMC assessor walkthrough. Using the compliance 
 
 4. **Save evidence:**
    ```
-   Save all screenshots to: C:\CyberLab\PodXX\SC-Artifacts\M4-L2_Compliance_Evidence\
-   Save checklist to: C:\CyberLab\PodXX\SC-Artifacts\M4-L2_Compliance_Checklist.txt
+   Save your completed checklist to: C:\CyberLab\PodXX\SC-Artifacts\SC-M4-L2_Completed.txt
+   Save any screenshots to:          C:\CyberLab\PodXX\SC-Artifacts\M4-L2_Compliance_Evidence\
    ```
+   > `SC-M4-L2_Completed.txt` (or `.csv`) is the file verification looks for, and it must contain at least 50 characters of content. Screenshots are supporting evidence only.
 
 ---
 

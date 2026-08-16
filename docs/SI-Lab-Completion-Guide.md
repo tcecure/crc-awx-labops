@@ -177,7 +177,7 @@ Module 1 focuses on identifying, classifying, and understanding information syst
 | Configuration Flaw | The software works correctly but is configured insecurely | SMBv1 enabled (Finding #1), LDAP signing disabled (Finding #3), TLS 1.0 enabled (Finding #5) |
 | Patching Gap | A known patch exists but has not been applied | Failed cumulative update (Finding #4) |
 
-7. Save your completed worksheet as: **SI-M1-L1_Completed.txt** in the same folder
+7. Save your completed worksheet as: **SI-M1-L1_Completed.txt** in the same folder — write out your full answers, the file must contain at least 100 characters
 
 **Why This Matters:** CMMC SI.L1-3.14.1 requires organizations to identify system flaws. Before you can fix a problem, you must correctly classify what kind of problem it is — the remediation approach differs for each type.
 
@@ -209,7 +209,7 @@ Module 1 focuses on identifying, classifying, and understanding information syst
    - **Actionable:** Should this generate a remediation ticket? (Yes/No)
    - **Justification:** Why did you make this determination?
 6. Answer the three summary questions at the bottom of the worksheet
-7. Save your completed worksheet as: **SI-M1-L2_Completed.txt**
+7. Save your completed worksheet as: **SI-M1-L2_Completed.txt** — write out your full answers, the file must contain at least 100 characters
 
 **Key Concept — Source Reliability:**
 | Source Type | Reliability | Why |
@@ -460,7 +460,7 @@ Module 2 focuses on reading real vulnerability scan output, analyzing patch mana
      - Route to IT Administrator (for patching) AND CISO (Critical finding)
    - **Section 6 — Verification:**
      - Method: Re-scan after patch installation
-4. Save the completed report as: **SI-M2-L3_Report_Completed.txt**
+4. Save the completed report as: **SI-M2-L3_Completed.txt** *(this exact name is required)*
 5. Now open the ticket template: **SI-M2-L3_Ticket_Template.txt**
 6. Fill in the remediation ticket:
    - Reference Finding: `SI-2026-001`
@@ -468,7 +468,7 @@ Module 2 focuses on reading real vulnerability scan output, analyzing patch mana
    - CVE and CVSS from the report
    - Due Date: calculate using policy reference at **SI-M2-L3_Timeline_Reference.txt**
    - Remediation Steps: List the specific actions IT must take (apply patch, verify, re-scan)
-7. Save the completed ticket as: **SI-M2-L3_Ticket_Completed.txt**
+7. Save the completed ticket as: **SI-M2-L3_Remediation_Ticket.txt** *(this exact name is required, and it must be at least 50 characters of content)*
 
 **Why This Matters:** Formal documentation is required by CMMC for all identified vulnerabilities. A vulnerability that is not documented cannot be tracked, assigned, or verified as remediated. The report creates the compliance paper trail.
 
