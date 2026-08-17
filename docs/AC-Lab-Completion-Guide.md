@@ -83,15 +83,17 @@ You should now see the Windows Server desktop in your browser.
 
 ## How to Open Active Directory Users and Computers
 
-1. On the server desktop, look for the **Server Manager** window (it usually opens automatically)
-2. Click **Tools** in the top-right menu bar
-3. Select **Active Directory Users and Computers** from the dropdown menu
-
-**Alternative method:**
-1. Press **Windows key + R** to open the Run dialog
-2. Type `dsa.msc` and press Enter
+On the server desktop, double-click the **Active Directory Users and Computers** shortcut.
 
 You should now see the ADUC window with a tree structure on the left side.
+
+**Important — do not launch ADUC any other way.** Your account has permission over your own pod only, and it is deliberately not an administrator of the domain controller (all 20 pods share that server). If you start ADUC from **Server Manager → Tools**, from `dsa.msc`, or by adding the snap-in to a blank MMC console, Windows tries to launch it elevated and shows a **User Account Control** prompt asking for an administrator username and password. Your student account is not an administrator, so entering it there is always rejected — that is expected and does not mean your password is wrong. Click **No** and use the desktop shortcut instead.
+
+**Alternative method** (if the shortcut is missing):
+1. Press **Windows key + R** to open the Run dialog
+2. Paste `cmd /c "set __COMPAT_LAYER=RunAsInvoker&& start "" mmc.exe dsa.msc"` and press Enter
+
+Everything in these labs can also be done from **PowerShell** (each lab below lists the commands), which never prompts for elevation.
 
 ---
 
@@ -568,7 +570,7 @@ Module 4 focuses on monitoring, reviewing, and documenting access control activi
 - If you accidentally modify the wrong account, tell your instructor — they can reset your pod
 - If you can't find a user account, make sure you are looking in the correct OU (Staff vs. Admins)
 - If a command in PowerShell gives an error, check that you replaced `PodXX` and `PXX` with your actual pod number
-- If ADUC won't open, try the Run dialog method: **Windows + R → dsa.msc → Enter**
+- If ADUC won't open, use the **Active Directory Users and Computers** desktop shortcut — do not use `dsa.msc` or Server Manager → Tools, which ask for administrator credentials your student account does not have
 
 ---
 

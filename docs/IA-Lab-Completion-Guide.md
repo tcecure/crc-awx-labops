@@ -91,15 +91,15 @@ You will connect to the lab through **Apache Guacamole** — a web-based remote 
 ## How to Open Your Tools
 
 **Active Directory Users and Computers (ADUC)**
-1. On the server desktop, find the **Server Manager** window (it usually opens automatically)
-2. Click **Tools** in the top-right menu bar
-3. Select **Active Directory Users and Computers**
+- On the server desktop, double-click the **Active Directory Users and Computers** shortcut.
 
-*Alternative:* press **Windows + R**, type `dsa.msc`, press Enter.
+**Important — do not launch ADUC any other way.** Your account administers your own pod only and is deliberately not an administrator of the shared domain controller. Launching ADUC from **Server Manager → Tools**, from `dsa.msc`, or from a blank MMC console makes Windows try to start it elevated and show a **User Account Control** prompt for an administrator username and password; your student account will always be rejected there. That is expected and does not mean your password is wrong — click **No** and use the desktop shortcut. If the shortcut is missing, press **Windows + R** and paste `cmd /c "set __COMPAT_LAYER=RunAsInvoker&& start "" mmc.exe dsa.msc"`.
 
 **PowerShell**
-1. Right-click the **Start** button → **Windows PowerShell** (use **(Admin)** where a lab says so)
-2. *Alternative:* **Windows + R** → `powershell` → Enter
+1. Right-click the **Start** button → **Windows PowerShell**
+2. *Alternative:* **Windows + R** → **powershell** → Enter
+
+Run PowerShell normally — do **not** choose **Windows PowerShell (Admin)**. Every command in this guide works with your own delegated permissions, and (Admin) triggers the same UAC prompt described above.
 
 **Task Scheduler** (needed for M2-L1)
 1. **Windows + R** → `taskschd.msc` → Enter, or Server Manager → **Tools → Task Scheduler**
