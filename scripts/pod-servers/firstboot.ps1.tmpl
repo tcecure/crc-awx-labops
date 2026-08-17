@@ -1,0 +1,66 @@
+$ErrorActionPreference = 'Continue'
+Start-Transcript -Path 'C:\Windows\Temp\crc-firstboot.log' -Append
+
+# One-shot bootstrap: drop the service registration that launched this script.
+& "$env:SystemRoot\System32\sc.exe" delete CRCFirstBoot
+
+$ip  = '__IP__'
+$gw  = '__GW__'
+$dns = @('10.50.1.10', '10.50.1.11')
+
+$nic = $null
+for ($i = 0; $i -lt 60; $i++) {
+    $nic = Get-NetAdapter -Physical -ErrorAction SilentlyContinue |
+        Where-Object { $_.Status -eq 'Up' } | Select-Object -First 1
+    if ($nic) { break }
+    Start-Sleep -Seconds 5
+}
+
+if ($nic) {
+    Get-NetIPAddress -InterfaceIndex $nic.ifIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+        Remove-NetIPAddress -Confirm:$false -ErrorAction SilentlyContinue
+    Get-NetRoute -InterfaceIndex $nic.ifIndex -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue |
+        Remove-NetRoute -Confirm:$false -ErrorAction SilentlyContinue
+    Set-NetIPInterface -InterfaceIndex $nic.ifIndex -Dhcp Disabled -ErrorAction SilentlyContinue
+    New-NetIPAddress -InterfaceIndex $nic.ifIndex -IPAddress $ip -PrefixLength 24 -DefaultGateway $gw -ErrorAction Continue
+    Set-DnsClientServerAddress -InterfaceIndex $nic.ifIndex -ServerAddresses $dns -ErrorAction Continue
+    Set-NetConnectionProfile -InterfaceIndex $nic.ifIndex -NetworkCategory Private -ErrorAction SilentlyContinue
+}
+
+# Local automation account used only by AWX over WinRM.
+$pwFile = 'C:\Windows\Temp\crc-bootstrap.dat'
+if (Test-Path $pwFile) {
+    $plain = (Get-Content -LiteralPath $pwFile -Raw).Trim()
+    $pw = ConvertTo-SecureString $plain -AsPlainText -Force
+    if (Get-LocalUser -Name 'crcsvc' -ErrorAction SilentlyContinue) {
+        Set-LocalUser -Name 'crcsvc' -Password $pw -PasswordNeverExpires $true
+    } else {
+        New-LocalUser -Name 'crcsvc' -Password $pw -PasswordNeverExpires -AccountNeverExpires |
+            Out-Null
+    }
+    Enable-LocalUser -Name 'crcsvc' -ErrorAction SilentlyContinue
+    Add-LocalGroupMember -Group 'Administrators' -Member 'crcsvc' -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $pwFile -Force -ErrorAction SilentlyContinue
+    $plain = $null
+}
+
+Set-Service -Name WinRM -StartupType Automatic
+Start-Service -Name WinRM -ErrorAction SilentlyContinue
+& "$env:SystemRoot\System32\winrm.cmd" quickconfig -quiet -force
+Enable-PSRemoting -Force -SkipNetworkProfileCheck -ErrorAction Continue
+New-NetFirewallRule -DisplayName 'CRC WinRM 5985' -Direction Inbound -Protocol TCP `
+    -LocalPort 5985 -Action Allow -ErrorAction SilentlyContinue | Out-Null
+New-NetFirewallRule -DisplayName 'CRC ICMPv4 Echo' -Direction Inbound -Protocol ICMPv4 `
+    -IcmpType 8 -Action Allow -ErrorAction SilentlyContinue | Out-Null
+
+# Remote Desktop for the student's Guacamole session.
+Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server' `
+    -Name fDenyTSConnections -Value 0
+Enable-NetFirewallRule -DisplayGroup 'Remote Desktop' -ErrorAction SilentlyContinue
+
+# Local accounts must keep their admin token over the network for WinRM.
+New-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System' `
+    -Name LocalAccountTokenFilterPolicy -Value 1 -PropertyType DWord -Force | Out-Null
+
+Stop-Transcript
+Remove-Item -LiteralPath $PSCommandPath -Force -ErrorAction SilentlyContinue

@@ -1,0 +1,12 @@
+---
+# Two-digit pod label used for the computer name, OU and evidence directory.
+pod_tag: "Pod{{ '%02d' | format(pod_id | int) }}"
+pod_server_name: "POD{{ '%02d' | format(pod_id | int) }}-SRV"
+pod_student: "student{{ '%02d' | format(pod_id | int) }}"
+pod_evidence_dir: "C:\\CyberLab\\{{ pod_tag }}"
+pod_servers_ou_name: PodServers
+pod_server_features:
+  - RSAT-AD-Tools
+  - RSAT-AD-PowerShell
+  - RSAT-ADDS
+  - GPMC
