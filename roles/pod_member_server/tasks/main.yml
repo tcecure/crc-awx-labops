@@ -1,0 +1,123 @@
+---
+# Turns a freshly cloned Windows Server 2022 VM into the pod's member server:
+# named, domain-joined, RSAT-equipped, and administered by that pod's student
+# only. Idempotent, so it is safe to re-run against an already-built server.
+- name: Verify the join credential is attached
+  ansible.builtin.assert:
+    that:
+      - domain_join_user is defined and domain_join_user | length > 0
+      - domain_join_password is defined and domain_join_password | length > 0
+    fail_msg: >-
+      Attach the "CRC Domain Join" credential so domain_join_user and
+      domain_join_password are available.
+
+- name: Read the current name and domain membership
+  ansible.windows.win_shell: |
+    $cs = Get-CimInstance Win32_ComputerSystem
+    "{0}|{1}" -f $cs.Name, $cs.PartOfDomain
+  register: current_identity
+  changed_when: false
+
+- name: Note what still has to change
+  ansible.builtin.set_fact:
+    pod_server_joined: "{{ (current_identity.stdout | trim).split('|')[1] | bool }}"
+    pod_server_named: "{{ (current_identity.stdout | trim).split('|')[0] | upper == pod_server_name | upper }}"
+
+# Add-Computer is used rather than a collection module so the role works on any AWX
+# execution environment; ansible.windows.win_domain_membership was removed in 3.0.0
+# and microsoft.ad is not guaranteed to be present.
+- name: Join the domain and rename in one pass
+  ansible.windows.win_shell: |
+    $ErrorActionPreference = 'Stop'
+    $pw = ConvertTo-SecureString '{{ domain_join_password }}' -AsPlainText -Force
+    $cred = New-Object System.Management.Automation.PSCredential(
+      '{{ domain_join_user }}@{{ shared_domain }}', $pw)
+    Add-Computer -DomainName '{{ shared_domain }}' -Credential $cred `
+      -OUPath 'OU={{ pod_servers_ou_name }},{{ shared_domain_dn }}' `
+      -NewName '{{ pod_server_name }}' -Force
+  no_log: true
+  when: not pod_server_joined
+
+- name: Rename an already-joined server that still has its template name
+  ansible.windows.win_shell: |
+    $ErrorActionPreference = 'Stop'
+    $pw = ConvertTo-SecureString '{{ domain_join_password }}' -AsPlainText -Force
+    $cred = New-Object System.Management.Automation.PSCredential(
+      '{{ domain_join_user }}@{{ shared_domain }}', $pw)
+    Rename-Computer -NewName '{{ pod_server_name }}' -DomainCredential $cred -Force
+  no_log: true
+  when: pod_server_joined and not pod_server_named
+
+- name: Reboot to complete the join and rename
+  ansible.windows.win_reboot:
+    reboot_timeout: 900
+    post_reboot_delay: 45
+  when: not (pod_server_joined and pod_server_named)
+
+- name: Install the AD management tools the lab guides use
+  ansible.windows.win_feature:
+    name: "{{ pod_server_features }}"
+    include_management_tools: true
+    state: present
+  register: features
+
+- name: Reboot when a feature asked for it
+  ansible.windows.win_reboot:
+    reboot_timeout: 900
+    post_reboot_delay: 30
+  when: features.reboot_required | default(false)
+
+- name: Make the pod's student a local administrator of their own server
+  ansible.windows.win_group_membership:
+    name: Administrators
+    members:
+      - "{{ shared_domain_netbios }}\\{{ pod_student }}"
+    state: present
+
+- name: Allow the pod's student to sign in over RDP
+  ansible.windows.win_group_membership:
+    name: Remote Desktop Users
+    members:
+      - "{{ shared_domain_netbios }}\\{{ pod_student }}"
+    state: present
+
+- name: Create the pod evidence directory
+  ansible.windows.win_file:
+    path: "{{ pod_evidence_dir }}"
+    state: directory
+
+- name: Give the student full control of their own evidence directory
+  ansible.windows.win_acl:
+    path: "{{ pod_evidence_dir }}"
+    user: "{{ shared_domain_netbios }}\\{{ pod_student }}"
+    rights: FullControl
+    type: allow
+    inherit: ContainerInherit, ObjectInherit
+    propagation: None
+
+- name: Enable Remote Desktop
+  ansible.windows.win_regedit:
+    path: HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server
+    name: fDenyTSConnections
+    data: 0
+    type: dword
+
+- name: Open the Remote Desktop firewall rules
+  ansible.windows.win_shell: |
+    Enable-NetFirewallRule -DisplayGroup 'Remote Desktop'
+  changed_when: false
+
+- name: Report what the server ended up as
+  ansible.windows.win_shell: |
+    $cs = Get-CimInstance Win32_ComputerSystem
+    "name={0}" -f $cs.Name
+    "domain={0}" -f $cs.Domain
+    "partOfDomain={0}" -f $cs.PartOfDomain
+    "localAdmins={0}" -f ((Get-LocalGroupMember Administrators).Name -join ';')
+    "rsat={0}" -f ((Get-WindowsFeature RSAT-AD-PowerShell).InstallState)
+  register: server_state
+  changed_when: false
+
+- name: Show the server state
+  ansible.builtin.debug:
+    msg: "{{ server_state.stdout_lines }}"
