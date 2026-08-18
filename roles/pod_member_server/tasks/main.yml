@@ -35,14 +35,15 @@
   ansible.builtin.set_fact:
     pod_server_unjoin: "{{ pod_server_joined and not (pod_server_named and pod_server_trusted) }}"
 
+# The unjoin is local-only (option 0): such a server's computer account is stale or
+# already gone, so Remove-Computer's AD-side cleanup only fails with access denied.
 - name: Leave the domain before rebuilding the identity
   ansible.windows.win_shell: |
     $ErrorActionPreference = 'Stop'
-    $pw = ConvertTo-SecureString '{{ domain_join_password }}' -AsPlainText -Force
-    $cred = New-Object System.Management.Automation.PSCredential(
-      '{{ domain_join_user }}@{{ shared_domain }}', $pw)
-    Remove-Computer -UnjoinDomainCredential $cred -WorkgroupName WORKGROUP -Force
-  no_log: true
+    $result = (Get-WmiObject Win32_ComputerSystem).UnjoinDomainOrWorkgroup($null, $null, 0)
+    if ($result.ReturnValue -ne 0) {
+      throw "local unjoin failed with code $($result.ReturnValue)"
+    }
   when: pod_server_unjoin
 
 - name: Reboot into the workgroup
