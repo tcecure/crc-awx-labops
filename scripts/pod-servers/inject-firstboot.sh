@@ -37,8 +37,15 @@ Windows Registry Editor Version 5.00
 "ImagePath"="C:\\Windows\\System32\\cmd.exe /c start \"CRCFirstBoot\" /min C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\\Windows\\Temp\\crc-firstboot.ps1"
 REG
 
-printf 'y\n' | reged -I "${MNT}/Windows/System32/config/SYSTEM" "\\\\" /tmp/crc-svc-${VMID}.reg
+# reged exits non-zero even on a successful import, so its own report is the check.
+reged_out="$(printf 'y\n' | reged -I "${MNT}/Windows/System32/config/SYSTEM" "\\\\" \
+  /tmp/crc-svc-${VMID}.reg 2>&1 || true)"
 rm -f /tmp/crc-svc-${VMID}.reg
+if ! grep -q 'operation SUCCEEDED' <<<"$reged_out"; then
+  echo "$reged_out" >&2
+  echo "registry import failed for vmid=${VMID}" >&2
+  exit 1
+fi
 
 sync
 echo "injected vmid=${VMID} ip=${IP}"
