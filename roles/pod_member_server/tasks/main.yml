@@ -11,10 +11,14 @@
       Attach the "CRC Domain Join" credential so domain_join_user and
       domain_join_password are available.
 
-- name: Read the current name and domain membership
+- name: Read the current name, domain membership and trust health
   ansible.windows.win_shell: |
     $cs = Get-CimInstance Win32_ComputerSystem
-    "{0}|{1}" -f $cs.Name, $cs.PartOfDomain
+    $trust = $false
+    if ($cs.PartOfDomain) {
+      try { $trust = Test-ComputerSecureChannel -ErrorAction Stop } catch { $trust = $false }
+    }
+    "{0}|{1}|{2}" -f $cs.Name, $cs.PartOfDomain, $trust
   register: current_identity
   changed_when: false
 
@@ -22,37 +26,64 @@
   ansible.builtin.set_fact:
     pod_server_joined: "{{ (current_identity.stdout | trim).split('|')[1] | bool }}"
     pod_server_named: "{{ (current_identity.stdout | trim).split('|')[0] | upper == pod_server_name | upper }}"
+    pod_server_trusted: "{{ (current_identity.stdout | trim).split('|')[2] | bool }}"
+
+# A clone that reached the domain under the template name shares one computer account
+# with its siblings, so its trust breaks as soon as the next pod joins. Such a server
+# is put back into a workgroup and rebuilt from scratch under its own name.
+- name: Decide whether the server has to be rebuilt from a workgroup
+  ansible.builtin.set_fact:
+    pod_server_unjoin: "{{ pod_server_joined and not (pod_server_named and pod_server_trusted) }}"
+
+- name: Leave the domain before rebuilding the identity
+  ansible.windows.win_shell: |
+    $ErrorActionPreference = 'Stop'
+    $pw = ConvertTo-SecureString '{{ domain_join_password }}' -AsPlainText -Force
+    $cred = New-Object System.Management.Automation.PSCredential(
+      '{{ domain_join_user }}@{{ shared_domain }}', $pw)
+    Remove-Computer -UnjoinDomainCredential $cred -WorkgroupName WORKGROUP -Force
+  no_log: true
+  when: pod_server_unjoin
+
+- name: Reboot into the workgroup
+  ansible.windows.win_reboot:
+    reboot_timeout: 900
+    post_reboot_delay: 45
+  when: pod_server_unjoin
+
+# Every clone boots with the template's name, so renaming happens before the join:
+# joining first races all the pods onto a single shared computer account.
+- name: Rename the workgroup clone to its pod name
+  ansible.windows.win_shell: |
+    $ErrorActionPreference = 'Stop'
+    Rename-Computer -NewName '{{ pod_server_name }}' -Force
+  when: not pod_server_named and (pod_server_unjoin or not pod_server_joined)
+
+- name: Reboot so the new name takes effect before joining
+  ansible.windows.win_reboot:
+    reboot_timeout: 900
+    post_reboot_delay: 45
+  when: not pod_server_named and (pod_server_unjoin or not pod_server_joined)
 
 # Add-Computer is used rather than a collection module so the role works on any AWX
 # execution environment; ansible.windows.win_domain_membership was removed in 3.0.0
 # and microsoft.ad is not guaranteed to be present.
-- name: Join the domain and rename in one pass
+- name: Join the domain
   ansible.windows.win_shell: |
     $ErrorActionPreference = 'Stop'
     $pw = ConvertTo-SecureString '{{ domain_join_password }}' -AsPlainText -Force
     $cred = New-Object System.Management.Automation.PSCredential(
       '{{ domain_join_user }}@{{ shared_domain }}', $pw)
     Add-Computer -DomainName '{{ shared_domain }}' -Credential $cred `
-      -OUPath 'OU={{ pod_servers_ou_name }},{{ shared_domain_dn }}' `
-      -NewName '{{ pod_server_name }}' -Force
+      -OUPath 'OU={{ pod_servers_ou_name }},{{ shared_domain_dn }}' -Force
   no_log: true
-  when: not pod_server_joined
+  when: pod_server_unjoin or not pod_server_joined
 
-- name: Rename an already-joined server that still has its template name
-  ansible.windows.win_shell: |
-    $ErrorActionPreference = 'Stop'
-    $pw = ConvertTo-SecureString '{{ domain_join_password }}' -AsPlainText -Force
-    $cred = New-Object System.Management.Automation.PSCredential(
-      '{{ domain_join_user }}@{{ shared_domain }}', $pw)
-    Rename-Computer -NewName '{{ pod_server_name }}' -DomainCredential $cred -Force
-  no_log: true
-  when: pod_server_joined and not pod_server_named
-
-- name: Reboot to complete the join and rename
+- name: Reboot to complete the join
   ansible.windows.win_reboot:
     reboot_timeout: 900
     post_reboot_delay: 45
-  when: not (pod_server_joined and pod_server_named)
+  when: pod_server_unjoin or not pod_server_joined
 
 - name: Install the AD management tools the lab guides use
   ansible.windows.win_feature:
