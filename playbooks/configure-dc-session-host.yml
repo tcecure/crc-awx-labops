@@ -1,0 +1,85 @@
+---
+# Lifts the shared DC's 2-concurrent-session limit so a full cohort can work at
+# once, and trims idle host overhead. Installing RDS-RD-Server requires one
+# reboot; set dc_rdsh_allow_reboot=false to stage the change and reboot later in
+# a maintenance window.
+#
+# This is the stopgap for the shared-DC model. The end state is per-pod member
+# servers (see docs/runbooks/POD-MEMBER-SERVERS.md), where no student session
+# lands on a domain controller at all.
+- name: "Shared DC: configure Remote Desktop Session Host and session limits"
+  hosts: crc_shared_dcs[0]
+  gather_facts: false
+  vars:
+    dc_rdsh_allow_reboot: true
+    # Per-user licensing: 4 = Per User, 2 = Per Device.
+    dc_rdsh_licensing_mode: 4
+    dc_rdsh_max_disconnection_ms: 3600000  # disconnected sessions end after 1h
+    dc_rdsh_max_idle_ms: 7200000           # idle sessions end after 2h
+    dc_rdsh_evidence_root: C:\CyberLab
+  tasks:
+    - name: Install the Remote Desktop Session Host role
+      ansible.windows.win_feature:
+        name: RDS-RD-Server
+        include_management_tools: true
+      register: rdsh_feature
+
+    - name: Apply session limits and per-user licensing
+      ansible.windows.win_regedit:
+        path: HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services
+        name: "{{ item.name }}"
+        data: "{{ item.data }}"
+        type: dword
+      loop:
+        - { name: LicensingMode, data: "{{ dc_rdsh_licensing_mode }}" }
+        - { name: MaxDisconnectionTime, data: "{{ dc_rdsh_max_disconnection_ms }}" }
+        - { name: MaxIdleTime, data: "{{ dc_rdsh_max_idle_ms }}" }
+        - { name: fSingleSessionPerUser, data: 1 }
+        - { name: MaxInstanceCount, data: 999999 }
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Disable the Windows Search indexer
+      ansible.windows.win_service:
+        name: WSearch
+        start_mode: disabled
+        state: stopped
+
+    - name: Exclude the lab evidence tree from Defender scanning
+      ansible.windows.win_shell: |
+        $paths = (Get-MpPreference).ExclusionPath
+        if ($paths -notcontains '{{ dc_rdsh_evidence_root }}') {
+          Add-MpPreference -ExclusionPath '{{ dc_rdsh_evidence_root }}'
+          'added'
+        } else { 'present' }
+      register: defender_exclusion
+      changed_when: "'added' in defender_exclusion.stdout"
+
+    - name: Reboot so the session host role takes effect
+      ansible.windows.win_reboot:
+        reboot_timeout: 1200
+        post_reboot_delay: 60
+      when: rdsh_feature.reboot_required | default(false) and dc_rdsh_allow_reboot | bool
+
+    - name: Read back the resulting state
+      ansible.windows.win_shell: |
+        $cs = Get-CimInstance Win32_ComputerSystem
+        $f = (Get-WindowsFeature RDS-RD-Server).InstallState
+        $ts = Get-Service TermService
+        "cpu={0} ramGB={1} rdsh={2} termservice={3}" -f `
+          $cs.NumberOfLogicalProcessors,
+          [math]::Round($cs.TotalPhysicalMemory / 1GB),
+          $f, $ts.Status
+      register: rdsh_state
+      changed_when: false
+
+    - name: Report the resulting state
+      ansible.builtin.debug:
+        msg: "{{ rdsh_state.stdout | trim }}"
+
+    - name: Warn when a reboot is still pending
+      ansible.builtin.debug:
+        msg: >-
+          RDS-RD-Server was installed but the host has not rebooted yet, so the
+          2-session limit is still in force. Reboot during a maintenance window.
+      when: rdsh_feature.reboot_required | default(false) and not (dc_rdsh_allow_reboot | bool)
