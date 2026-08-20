@@ -69,8 +69,10 @@ After logging in, you will see a list of available connections:
 
 | Connection Name | What It Is |
 |---|---|
-| **PODXX-DC** | Domain Controller — use for lab artifacts and saving evidence |
-| **PODXX-GW** | Gateway/Firewall — **primary tool for all SC labs** |
+| **PODXX-DC** | Domain Controller — your desktop for every lab, including the firewall labs |
+
+The pfSense firewall is not a separate connection. You reach it from a browser
+inside **PODXX-DC**, as described in the next section.
 
 1. Click on **PODXX-DC** (where XX is your pod number, e.g., **POD03-DC**)
 2. The remote desktop session will open in your browser
@@ -82,17 +84,11 @@ After logging in, you will see a list of available connections:
 
 ## How to Access the pfSense Firewall
 
-Most SC labs require you to log into the pfSense firewall web interface. There are two ways:
-
-### Option A: Through Guacamole (Recommended)
-
-1. From the Guacamole home screen, click **PODXX-GW**
-2. This opens the pfSense web interface directly in your browser
-
-### Option B: From the Domain Controller
+Most SC labs require you to log into the pfSense firewall web interface. Do it
+from inside your remote desktop:
 
 1. Connect to **PODXX-DC** via Guacamole
-2. Open a web browser (Edge or Firefox)
+2. Open a web browser (Edge or Firefox) **on that desktop**
 3. Navigate to: **http://10.51.XX.1** (replace XX with your pod number)
    - Pod 01 → `http://10.51.1.1`
    - Pod 05 → `http://10.51.5.1`
