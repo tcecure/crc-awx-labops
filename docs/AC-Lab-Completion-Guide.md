@@ -83,13 +83,18 @@ You should now see the Windows Server desktop in your browser.
 
 ## How to Open Active Directory Users and Computers
 
-1. On the server desktop, look for the **Server Manager** window (it usually opens automatically)
-2. Click **Tools** in the top-right menu bar
-3. Select **Active Directory Users and Computers** from the dropdown menu
+1. On the server desktop, double-click the **Active Directory Users and Computers** shortcut
 
 **Alternative method:**
 1. Press **Windows key + R** to open the Run dialog
 2. Type `dsa.msc` and press Enter
+
+> **Do not use Server Manager.** It requires administrator rights on the shared
+> server, which student accounts do not have. If you open it you will get a
+> credential prompt that ends in *"Logon failure: the user has not been granted
+> the requested logon type at this computer"*. Close the prompt and use the
+> desktop shortcut above — your own account already has the rights you need for
+> every lab in this guide.
 
 You should now see the ADUC window with a tree structure on the left side.
 
