@@ -521,12 +521,20 @@ Having a policy is not enough — you must be able to show it exists and is revi
 
 ### Lab M3-L2 — Weak Password Policy
 
-**Difficulty:** Intermediate | **Time:** 25 minutes | **Type:** Hands-on (PowerShell or GPO)
+**Difficulty:** Intermediate | **Time:** 15 minutes | **Type:** Review and verify
+
+> **This cohort:** changing the domain password policy requires Domain Admin
+> rights, and the policy is shared by all 20 pods — one student's change would
+> apply to everyone. The instructor has therefore applied the hardened policy
+> centrally. Work through the settings below and **verify** the live policy in
+> step 2; do not attempt the `Set-` command or the GPO edit (both will be denied).
+> When pods move to their own servers you will set this policy yourself, on your
+> own server.
 
 #### Scenario
-The domain password policy is dangerously weak: minimum length 6, complexity disabled, and no account lockout.
+The domain password policy was dangerously weak: minimum length 6, complexity disabled, and no account lockout.
 
-> **Note:** the password policy is **domain-wide**, shared by every pod. Fixing it fixes it for everyone, and it is the one IA lab whose change is not isolated to your pod. Do not weaken it again after you have strengthened it.
+> **Note:** the password policy is **domain-wide**, shared by every pod — it is the one IA lab whose change is not isolated to your pod.
 
 #### Required Settings
 
@@ -538,29 +546,33 @@ The domain password policy is dangerously weak: minimum length 6, complexity dis
 
 #### Steps
 
-**Option A — PowerShell (recommended):**
+1. **Verify the live policy** (this is what is graded):
 
-```powershell
-Set-ADDefaultDomainPasswordPolicy -Identity (Get-ADDomain).DNSRoot `
-    -MinPasswordLength 12 `
-    -ComplexityEnabled $true `
-    -LockoutThreshold 10 `
-    -PasswordHistoryCount 24 `
-    -MaxPasswordAge (New-TimeSpan -Days 90) `
-    -MinPasswordAge (New-TimeSpan -Days 1)
+   ```powershell
+   Get-ADDefaultDomainPasswordPolicy | Select-Object MinPasswordLength, ComplexityEnabled, LockoutThreshold, PasswordHistoryCount, MaxPasswordAge, MinPasswordAge
+   ```
 
-gpupdate /force
-Get-ADDefaultDomainPasswordPolicy
-```
+   Confirm minimum length 12, complexity `True`, and lockout threshold 10 — then
+   note in your own words which weakness each setting removes.
 
-**Option B — Group Policy Management:**
-1. **Windows + R** → `gpmc.msc` → Enter
-2. **Forest → Domains → acs-p01.local → Default Domain Policy** → right-click → **Edit**
-3. **Computer Configuration → Policies → Windows Settings → Security Settings → Account Policies → Password Policy**
-   - **Minimum password length** → `12`
-   - **Password must meet complexity requirements** → `Enabled`
-4. **Account Lockout Policy** → **Account lockout threshold** → `10` invalid logon attempts
-5. Close the editor and run `gpupdate /force`
+2. **Reference — how the policy is applied** (administrator step, do not attempt this cohort):
+
+   ```powershell
+   Set-ADDefaultDomainPasswordPolicy -Identity (Get-ADDomain).DNSRoot `
+       -MinPasswordLength 12 `
+       -ComplexityEnabled $true `
+       -LockoutThreshold 10 `
+       -PasswordHistoryCount 24 `
+       -MaxPasswordAge (New-TimeSpan -Days 90) `
+       -MinPasswordAge (New-TimeSpan -Days 1)
+
+   gpupdate /force
+   ```
+
+   The equivalent GUI path is `gpmc.msc` → **Forest → Domains → acs-p01.local →
+   Default Domain Policy** → **Computer Configuration → Policies → Windows
+   Settings → Security Settings → Account Policies**, setting minimum password
+   length, complexity, and the lockout threshold.
 
 #### Completion Criteria
 - [ ] `MinPasswordLength` is 12 or more
@@ -846,7 +858,7 @@ Hardcoded credentials are CWE-798, a top software weakness. They end up in versi
 | PowerShell AD commands not recognized | Run `Import-Module ActiveDirectory` first |
 | Task Scheduler won't save the change | Enter the service account password when prompted |
 | File saved as `.txt` instead of `.csv` | In Save As, set **Save as type** to **All Files (\*.\*)** |
-| New password rejected as too weak | After M3-L2 the domain requires 12+ characters with complexity |
+| New password rejected as too weak | The domain requires 12+ characters with complexity (M3-L2) |
 
 ---
 

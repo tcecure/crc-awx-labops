@@ -1,0 +1,8 @@
+---
+# MP M1-L1 and M1-L2 ask the student to mount and re-create a VHDX volume. Both
+# operations need local admin on the shared DC (mounting fails with "A required
+# privilege is not held by the client"), which students intentionally do not
+# have, so the media-inspection half is credited automatically and the
+# classification and sanitization paperwork is still graded. Set to false once
+# pods run on their own member servers, where students are local admins.
+mp_media_mount_waived: true

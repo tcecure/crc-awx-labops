@@ -135,6 +135,47 @@ function New-LabVhdx {
     return $volumeUniqueId
 }
 
+function Write-MediaListing {
+    param([string]$Path)
+
+    # Students on the shared DC cannot mount a VHDX (that needs local admin), so
+    # the seed publishes a read-only listing of each image next to it. Contents
+    # match what File Explorer would show with hidden items enabled.
+    $listing = [System.IO.Path]::ChangeExtension($Path, $null).TrimEnd('.') + "-Contents.txt"
+    $mountedHere = $false
+    try {
+        $image = Get-DiskImage -ImagePath $Path -ErrorAction Stop
+        if (-not $image.Attached) {
+            Mount-DiskImage -ImagePath $Path -Access ReadOnly -ErrorAction Stop | Out-Null
+            $mountedHere = $true
+        }
+        $volume = Get-DiskImage -ImagePath $Path | Get-Disk | Get-Partition | Get-Volume |
+            Where-Object FileSystem | Select-Object -First 1
+        if (-not $volume) { throw "no formatted volume found" }
+        $lines = @(
+            "Media file  : $(Split-Path $Path -Leaf)"
+            "Volume label: $($volume.FileSystemLabel)"
+            "Listed at   : $(Get-Date -Format o)"
+            ""
+            "All files and folders, including hidden items:"
+            ""
+        )
+        $lines += Get-ChildItem -LiteralPath $volume.Path -Recurse -Force |
+            Sort-Object FullName |
+            ForEach-Object {
+                $relative = $_.FullName.Substring($volume.Path.Length)
+                if ($_.PSIsContainer) { "[DIR ] $relative" }
+                else { "[FILE] $relative  ($($_.Length) bytes)" }
+            }
+        Set-Content -Path $listing -Value $lines
+        Write-Host "[DEPLOYED] $(Split-Path $listing -Leaf)"
+    } catch {
+        Write-Host "[WARN] could not write media listing for $(Split-Path $Path -Leaf): $($_.Exception.Message)"
+    } finally {
+        if ($mountedHere) { Dismount-DiskImage -ImagePath $Path -ErrorAction SilentlyContinue | Out-Null }
+    }
+}
+
 function Ensure-FciMedia {
     $path = Join-Path $artifactDir "$prefix-FCI-USB.vhdx"
     $metadata = Join-Path $artifactDir "MP-M1-L2_SeedMetadata.json"
@@ -156,6 +197,8 @@ function Seed-M1-L1 {
     Deploy-Template "MediaClassificationWorksheet.docx" "MediaClassificationWorksheet.docx"
     Deploy-Template "MediaClassificationResponses.csv" "MediaClassificationResponses.csv"
     Deploy-Template "MediaDisposalPolicy.pdf" "MediaDisposalPolicy.pdf"
+    Write-MediaListing -Path (Join-Path $artifactDir "$prefix-FCI-USB.vhdx")
+    Write-MediaListing -Path $handbookPath
     Set-LabMarker "M1-L1"
 }
 
