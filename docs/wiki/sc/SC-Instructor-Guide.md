@@ -35,8 +35,11 @@ ansible-playbook playbooks/verify-cmmc-sc.yml -i inventories/prod.ini
 ### Student Access
 
 Students connect via Guacamole (`https://crc.guac.01.tcecure.com`):
-- **PODXX-DC** — for lab artifacts and saving evidence
-- **PODXX-GW** — for pfSense web UI (primary SC tool)
+- **PODXX-DC** — the only student connection; lab artifacts, evidence, and the
+  pfSense web UI (browse to `http://10.51.XX.1` from that desktop)
+
+There is no `PODXX-GW` connection: Guacamole speaks RDP/VNC/SSH, not HTTP, so a
+firewall web UI cannot be a connection tile.
 
 pfSense credentials: `admin` / `pfsense`
 
