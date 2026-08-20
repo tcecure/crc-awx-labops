@@ -5,6 +5,7 @@
       $podName = "Pod{{ '%02d' | format(pod_id) }}"
       $prefix = "P{{ '%02d' | format(pod_id) }}"
       $artifactDir = "C:\CyberLab\$podName\MP-Artifacts"
+      $mountWaived = ${{ mp_media_mount_waived | default(true) | bool | ternary('true', 'false') }}
 
       function New-Result {
           param([System.Collections.Generic.List[string]]$Reasons, [string]$Success)
@@ -66,7 +67,10 @@
           }
       }
 
-      if ((Test-Path $vhdxPath) -and (Test-Path $metadataPath)) {
+      if ($mountWaived) {
+          # Media re-creation needs local admin on the shared DC; grade the paperwork only.
+          $results['M1-L2'] = New-Result $reasons 'Sanitization log and certificate documented for approved reuse; media re-creation waived (requires admin on shared DC)'
+      } elseif ((Test-Path $vhdxPath) -and (Test-Path $metadataPath)) {
           $mountedHere = $false
           try {
               $image = Get-DiskImage -ImagePath $vhdxPath -ErrorAction Stop
@@ -91,7 +95,9 @@
               if ($mountedHere) { Dismount-DiskImage -ImagePath $vhdxPath -ErrorAction SilentlyContinue | Out-Null }
           }
       }
-      $results['M1-L2'] = New-Result $reasons 'Media was recreated, validated empty, and documented for approved reuse'
+      if (-not $mountWaived) {
+          $results['M1-L2'] = New-Result $reasons 'Media was recreated, validated empty, and documented for approved reuse'
+      }
 
       $reasons = [System.Collections.Generic.List[string]]::new()
       Require-File $reasons '_LAB_READY_MP-M1-L3.txt' | Out-Null

@@ -28,9 +28,9 @@ This guide provides step-by-step instructions for completing all 3 Media Protect
 
 ### What You Will Be Doing
 
-In these labs you will work with **simulated removable media**. Each "USB drive" is a virtual disk file (`.vhdx`) that you mount on the domain controller exactly like a real thumb drive. You will inspect what is on the media, decide whether it contains FCI, sanitize media so it can be safely reused, and complete the paperwork (logs, certificates, worksheets) that an assessor would ask to see.
+In these labs you will work with **simulated removable media**. Each "USB drive" is a virtual disk file (`.vhdx`) in your pod folder, and a contents listing published next to it shows everything on that drive. You will inspect what is on the media, decide whether it contains FCI, sanitize media so it can be safely reused, and complete the paperwork (logs, certificates, worksheets) that an assessor would ask to see.
 
-**The key lesson of this family:** deleting files is not sanitization. Your work is checked by inspecting the media itself, not just your paperwork.
+**The key lesson of this family:** deleting files is not sanitization — media must be classified, sanitized by an approved method, and documented before it is reused or disposed of.
 
 ### CMMC Context
 
@@ -98,13 +98,14 @@ You will connect to the lab through **Apache Guacamole** — a web-based remote 
 | `MP-Lab-Instructions.txt` | Short summary of all three labs |
 | `PXX-FCI-USB.vhdx` | Simulated USB drive that contains contract data |
 | `PXX-Employee-Handbook.vhdx` | Simulated USB drive with general company documents |
+| `PXX-FCI-USB-Contents.txt`, `PXX-Employee-Handbook-Contents.txt` | Full contents listing of each drive, including hidden items — read these instead of mounting |
 | `MediaInventory.xlsx` | Media inventory spreadsheet |
 | `MediaClassificationWorksheet.docx` | Worksheet you fill in for M1-L1 |
 | `MediaClassificationResponses.csv` | **Your graded answer file** for M1-L1 |
 | `MediaDisposalPolicy.pdf` | Policy reference (ACS-POL-MP-001) |
 | `MediaSanitizationLog.csv` | **Graded answer file** for M1-L2 |
 | `MediaSanitizationCertificate.csv` | **Graded answer file** for M1-L2 |
-| `MP-M1-L2_SeedMetadata.json` | Do **not** edit or delete — used to verify the media was truly re-created |
+| `MP-M1-L2_SeedMetadata.json` | Do **not** edit or delete |
 | `LaptopAssetRecord.csv`, `ChainOfCustody.csv`, `VendorDestructionCertificate.txt` | Evidence for M1-L3 |
 | `MP-M1-L3_DispositionWorksheet.csv` | **Graded answer file** for M1-L3 |
 | `_LAB_READY_MP-M1-*.txt` | Markers confirming the lab was seeded |
@@ -137,37 +138,31 @@ Throughout this guide, replace **XX** with your pod number and **PXX** with your
 
 ## Working With the Lab Media (VHDX Files)
 
-A `.vhdx` file behaves like a physical USB drive once you mount it.
+A `.vhdx` file behaves like a physical USB drive. Mounting one is an
+administrator operation on Windows, and on this shared server student accounts
+are deliberately not administrators — so for this cohort **you do not mount the
+media yourself**. Each drive image ships with a full contents listing that was
+captured from the mounted media, and you classify and document from that.
 
-### Mount media (read it)
+### Read what is on a drive
 
 1. In File Explorer, open `C:\CyberLab\PodXX\MP-Artifacts\`
-2. **Double-click** the `.vhdx` file (or right-click → **Mount**)
-3. A new drive letter appears under **This PC** — open it to browse the contents
-
-### Show hidden files (you will need this in M1-L1)
-
-In File Explorer: **View** ribbon → check **Hidden items**.
-
-Or in PowerShell:
-
-```powershell
-Get-ChildItem -Path E:\ -Recurse -Force
-```
-
-*(Replace `E:\` with the drive letter that appeared when you mounted the media.)*
-
-### Eject media
-
-Right-click the drive under **This PC** → **Eject**.
+2. Open the listing next to the drive image:
+   - `PXX-FCI-USB-Contents.txt`
+   - `PXX-Employee-Handbook-Contents.txt`
+3. Each listing shows the volume label and **every** file and folder on that
+   drive — including hidden items — with sizes
 
 Or in PowerShell:
 
 ```powershell
-Dismount-DiskImage -ImagePath "C:\CyberLab\PodXX\MP-Artifacts\PXX-FCI-USB.vhdx"
+Get-Content C:\CyberLab\PodXX\MP-Artifacts\PXX-FCI-USB-Contents.txt
 ```
 
-> **Tip:** Always eject media before moving on to the next lab so the checker can inspect it cleanly.
+> **If you try to mount a `.vhdx`** you will get *"A required privilege is not
+> held by the client"*, or Windows will ask for administrator credentials that
+> your account does not have. That is expected — use the contents listing
+> instead. Nothing is broken and no lab credit depends on mounting.
 
 ---
 
@@ -191,15 +186,14 @@ Two USB drives were found in an unlocked desk drawer at ACS Consulting. Before e
 1. **Read the policy first:**
    - Open `MediaDisposalPolicy.pdf` and note how the policy defines FCI and what handling it requires
 
-2. **Mount and inspect the first drive:**
-   - Double-click `PXX-FCI-USB.vhdx`
-   - Turn on **Hidden items** in the View ribbon
-   - Browse every folder: `Contracts`, `Purchase Orders`, `Drawings`, `Invoices`, `General Office`, and the hidden `Hidden Archive` and `Temp` folders
-   - Open a few files. Look for the contract number `FA-2026-PXX` — that is a federal contract reference
-   - Note that some FCI is hidden or in a temp file. Media is classified by the **most sensitive** thing on it, so one contract file is enough to make the whole drive FCI
+2. **Inspect the first drive:**
+   - Open `PXX-FCI-USB-Contents.txt`
+   - Read every folder listed: `Contracts`, `Purchase Orders`, `Drawings`, `Invoices`, `General Office`, and the hidden `Hidden Archive` and `Temp` folders
+   - Look for file names referencing the federal contract `FA-2026-PXX`
+   - Note that some FCI is in hidden folders or a temp file. Media is classified by the **most sensitive** thing on it, so one contract file is enough to make the whole drive FCI
 
-3. **Mount and inspect the second drive:**
-   - Double-click `PXX-Employee-Handbook.vhdx`
+3. **Inspect the second drive:**
+   - Open `PXX-Employee-Handbook-Contents.txt`
    - Review `Policies\Employee-Handbook.txt`, `Benefits\Benefits-Guide.txt`, `General Office\Holiday-Calendar.txt`
    - These are internal general business documents — no contract data, no government deliverables
 
@@ -222,8 +216,6 @@ Two USB drives were found in an unlocked desk drawer at ACS Consulting. Before e
    PXX-Employee-Handbook.vhdx,Non-FCI,Only general internal documents: employee handbook, benefits guide, holiday calendar
    ```
 
-6. **Eject both drives** when finished
-
 #### Completion Criteria
 - [ ] `PXX-FCI-USB.vhdx` is classified as `FCI`
 - [ ] `PXX-Employee-Handbook.vhdx` is classified as `Non-FCI`
@@ -237,15 +229,20 @@ You cannot protect FCI you have not identified. Media classification is the firs
 
 ### Lab M1-L2: Sanitize Media for Reuse
 
-**Difficulty:** Intermediate | **Time:** 40 minutes | **Type:** Hands-on (disk management)
+**Difficulty:** Intermediate | **Time:** 25 minutes | **Type:** Sanitization records
+
+> **This cohort:** re-creating and formatting a volume requires administrator
+> rights on this shared server, so the disk-management step is performed by the
+> instructor and is not graded. Read step 3 so you know how it is done, then
+> complete the log and certificate in step 5 — that is what is graded. When pods
+> move to their own servers you will perform the sanitization yourself.
 
 #### Scenario
 `PXX-FCI-USB` is being reassigned to a non-federal project team. Before release for reuse it must be sanitized in accordance with **ACS-POL-MP-001**. A previous employee "sanitized" a drive by selecting the files and pressing Delete — the data was recovered by an auditor two weeks later. You will do it properly.
 
 #### What You Need
-- `PXX-FCI-USB.vhdx`
+- `PXX-FCI-USB-Contents.txt` (what is on the media today)
 - Answer files: `MediaSanitizationLog.csv`, `MediaSanitizationCertificate.csv`
-- Windows **Disk Management** (`diskmgmt.msc`) or PowerShell
 
 #### Steps
 
@@ -255,10 +252,10 @@ You cannot protect FCI you have not identified. Media classification is the firs
    - **Destroy** — physically render the media unusable (used when media will not be reused)
    - Deleting files, emptying the Recycle Bin, and quick-deleting a folder are **none** of these
 
-2. **Confirm what is on the media before you sanitize (evidence for your log):**
-   - Mount `PXX-FCI-USB.vhdx` and note the current volume label (`PXX-FCI-MEDIA`) and the folders present
+2. **Confirm what is on the media before it is sanitized (evidence for your log):**
+   - Open `PXX-FCI-USB-Contents.txt` and note the current volume label (`PXX-FCI-MEDIA`) and the folders present
 
-3. **Eject the media, then re-create the volume.** The checker verifies that the volume itself was re-created — not merely emptied. Use one of the following.
+3. **How the volume is re-created** (reference for this cohort — administrator step, do not attempt): the volume is deleted and a new one created and fully formatted, not merely emptied.
 
    **Option A — Disk Management (GUI):**
    - Press **Windows + R**, type `diskmgmt.msc`, press Enter
@@ -295,30 +292,22 @@ You cannot protect FCI you have not identified. Media classification is the firs
 
    *(Replace `PodXX` / `PXX` with your pod values. `-Full` performs the overwriting format.)*
 
-4. **Validate your work before writing the paperwork:**
-   - Re-mount the media and confirm the label reads `PXX-SANITIZED`
-   - Confirm the volume is empty — `System Volume Information` and `$RECYCLE.BIN` are the only things allowed
-   - Eject the media
+4. **Validation** (performed with the sanitization): the label reads `PXX-SANITIZED` and the volume is empty apart from `System Volume Information` and `$RECYCLE.BIN`.
 
 5. **Complete `MediaSanitizationLog.csv` and `MediaSanitizationCertificate.csv`.** Both files use the same columns and both must be filled in:
 
    | Column | What to enter |
    |---|---|
    | `MediaId` | Leave as `PXX-FCI-USB` |
-   | `Method` | `Clear` or `Purge` (the method you actually performed) |
+   | `Method` | `Clear` or `Purge` (the method used on this media) |
    | `Result` | `Pass` (replace `Pending`) |
    | `Disposition` | `Reuse` |
    | `SanitizedBy` | Your name |
-   | `Date` | The date you performed it, e.g., `2026-06-10` |
+   | `Date` | The date the sanitization was performed, e.g., `2026-06-10` |
 
 #### Completion Criteria
-- [ ] The volume was **deleted and re-created** (not just emptied)
-- [ ] Volume label is exactly `PXX-SANITIZED`
-- [ ] The volume contains no files or folders
 - [ ] Sanitization **log** and **certificate** both record `Clear` or `Purge`, `Pass`, `Reuse`, a `SanitizedBy` name, and a valid date
 - [ ] `MP-M1-L2_SeedMetadata.json` is still present and unmodified
-
-> **Hint:** If the checker says *"volume identity is unchanged; recreate and format the volume rather than deleting files"*, you emptied the drive instead of re-creating the volume. Repeat step 3.
 
 #### Why This Matters
 MP.L1-3.8.3 requires sanitization **before** media is released for reuse. Deleted files remain recoverable, so an assessor tests the media and the records — which is exactly what this lab does.
@@ -391,12 +380,8 @@ MP.L1-3.8.3 gives you two valid outcomes for FCI media: sanitize it or destroy i
 | Task | Where to Go |
 |---|---|
 | Open the artifacts folder | `C:\CyberLab\PodXX\MP-Artifacts\` |
-| Mount simulated media | Double-click the `.vhdx`, or **Disk Management → Action → Attach VHD** |
-| Eject simulated media | Right-click drive → **Eject**, or **Detach VHD** |
-| Show hidden files | File Explorer → **View** → **Hidden items** |
-| Delete/create/format a volume | **Windows + R** → `diskmgmt.msc` |
+| Read what is on simulated media | Open `PXX-<name>-Contents.txt` in the artifacts folder |
 | Open PowerShell | **Windows + R** → `powershell` |
-| Check volume label and contents | `Get-Volume` / `Get-ChildItem -Force` |
 | Check your lab progress | https://training.status.tcecure.com/pod/XX |
 
 ### Media Handling Terms
@@ -416,21 +401,18 @@ MP.L1-3.8.3 gives you two valid outcomes for FCI media: sanitize it or destroy i
 | Mistake | Solution |
 |---|---|
 | Deleting files and calling it sanitization | Delete the **volume** and create a new one, then full-format it |
-| Quick format instead of full format | Uncheck "Perform a quick format" (GUI) or use `-Full` (PowerShell) |
-| Wrong volume label | It must be exactly `PXX-SANITIZED` with your own pod prefix |
 | Filling in only the sanitization log | The **certificate** must be completed with the same values |
-| Leaving `Result` as `Pending` | Change it to `Pass` after you validate the media |
+| Leaving `Result` as `Pending` | Change it to `Pass` |
 | One-word evidence or rationale | The checker requires real explanatory text |
-| Media left mounted | Eject the `.vhdx` before verification runs |
-| Editing or deleting `MP-M1-L2_SeedMetadata.json` | Leave it alone — it proves the volume was re-created |
+| Editing or deleting `MP-M1-L2_SeedMetadata.json` | Leave it alone |
 | Renaming the answer CSVs | Keep the exact file names; the checker looks for them |
-| Missing hidden FCI in M1-L1 | Turn on **Hidden items**; check `Hidden Archive` and `Temp` |
+| Missing hidden FCI in M1-L1 | The contents listing includes hidden items — read `Hidden Archive` and `Temp` |
 
 ### Getting Unstuck
 
-- **Cannot mount the VHDX?** It may already be attached — check **This PC**, or run `Dismount-DiskImage` and try again
-- **Verification still failing?** Re-mount the media and check the label and that the volume is empty; then re-read the exact wording of the failure reason on your progress page
-- **Broke the media?** Ask your instructor to reseed the MP family for your pod
+- **Asked for administrator credentials when opening a `.vhdx`?** Expected — cancel the prompt and read the `-Contents.txt` listing instead
+- **Verification still failing?** Re-read the exact wording of the failure reason on your progress page and check the answer CSVs against the tables above
+- **Missing artifacts?** Ask your instructor to reseed the MP family for your pod
 
 ---
 
@@ -445,8 +427,7 @@ MP.L1-3.8.3 gives you two valid outcomes for FCI media: sanitize it or destroy i
 **After completing each lab:**
 1. Confirm your answer CSVs are saved in `C:\CyberLab\PodXX\MP-Artifacts\` with their original names
 2. Confirm all seeded evidence files are still present
-3. Eject any mounted media
-4. Check your status at https://training.status.tcecure.com/pod/XX
+3. Check your status at https://training.status.tcecure.com/pod/XX
 
 ---
 
