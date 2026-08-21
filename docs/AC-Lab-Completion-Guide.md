@@ -33,11 +33,20 @@ In these labs you will use **Active Directory Users and Computers (ADUC)** — t
 
 ### CMMC Context
 
-These labs align with **CMMC Level 1 Access Control (AC)** requirements:
-- **AC.L1-3.1.1** — Limit system access to authorized users
-- **AC.L1-3.1.2** — Limit system access to the types of transactions and functions authorized users are permitted to execute
-- **AC.L1-3.1.20** — Verify and control connections to external systems
-- **AC.L1-3.1.22** — Control information posted or processed on publicly accessible systems
+The 12 labs in this guide practice two **CMMC Level 1 Access Control (AC)**
+requirements:
+
+| Requirement | How these labs address it |
+|---|---|
+| **AC.L1-3.1.1** — Limit system access to authorized users | Joiner/mover/leaver work: disabling terminated accounts, provisioning approved accounts, offboarding, contractor expiration, access-review evidence (L1.1, L2.1–L2.3, L4.1–L4.3) |
+| **AC.L1-3.1.2** — Limit access to the transactions and functions users are authorized to perform | Least-privilege work: correcting group membership, removing nested privilege, delegating a single permission instead of admin rights (L1.2, L1.3, L3.1–L3.3) |
+
+The other two Level 1 AC requirements — **AC.L1-3.1.20** (connections to external
+systems) and **AC.L1-3.1.22** (publicly accessible systems) — are **not**
+practiced in these Active Directory exercises. Boundary control is exercised in
+the System & Communications Protection (SC) firewall labs (SC.L1-3.13.1), and the
+remaining policy elements are covered in classroom material rather than a hands-on
+lab.
 
 ---
 
@@ -594,15 +603,15 @@ Use this checklist to track your progress:
 
 | Lab | Task | Done? |
 |---|---|---|
-| L1.1 | Disable the terminated employee (PXX-ex.employee) | [ ] |
-| L1.2 | Remove PXX-hr.user1 from Finance group | [ ] |
-| L1.3 | Remove PXX-it.helpdesk from IT-Admins group | [ ] |
-| L2.1 | Create the new user account (PXX-new.user1) | [ ] |
-| L2.2 | Remove PXX-consult.user1 from Consulting group | [ ] |
-| L2.3 | Disable, de-group, and move PXX-fin.user1 to Terminated OU | [ ] |
-| L3.1 | Move PXX-sales.user1 from Executive OU back to Staff | [ ] |
-| L3.2 | Remove PXX-SG-ACS-All-Staff from IT-Admins group | [ ] |
-| L3.3 | Delegate password reset for Staff OU to PXX-it.helpdesk | [ ] |
-| L4.1 | Set expiration date on PXX-contractor.user1 | [ ] |
-| L4.2 | Create access review evidence in Lab4-2 folder | [ ] |
-| L4.3 | Replace placeholder with real audit data in Lab4-3 folder | [ ] |
+| L1.1 | Disable the terminated employee (PXX-ex.employee) | ☐ |
+| L1.2 | Remove PXX-hr.user1 from Finance group | ☐ |
+| L1.3 | Remove PXX-it.helpdesk from IT-Admins group | ☐ |
+| L2.1 | Create the new user account (PXX-new.user1) | ☐ |
+| L2.2 | Remove PXX-consult.user1 from Consulting group | ☐ |
+| L2.3 | Disable, de-group, and move PXX-fin.user1 to Terminated OU | ☐ |
+| L3.1 | Move PXX-sales.user1 from Executive OU back to Staff | ☐ |
+| L3.2 | Remove PXX-SG-ACS-All-Staff from IT-Admins group | ☐ |
+| L3.3 | Delegate password reset for Staff OU to PXX-it.helpdesk | ☐ |
+| L4.1 | Set expiration date on PXX-contractor.user1 | ☐ |
+| L4.2 | Create access review evidence in Lab4-2 folder | ☐ |
+| L4.3 | Replace placeholder with real audit data in Lab4-3 folder | ☐ |
