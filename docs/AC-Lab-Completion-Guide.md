@@ -64,12 +64,14 @@ You will connect to the lab through **Apache Guacamole** — a web-based remote 
 
 ### Step 3: Connect to the Domain Controller
 
-After logging in, you will see a list of available connections. Each student has two pre-configured connections:
+After logging in you will see one connection for your pod:
 
 | Connection Name | What It Is |
 |---|---|
-| **PODXX-DC** | Domain Controller — **use this for all AC labs** |
-| **PODXX-WS01** | Workstation (used for other lab families) |
+| **PODXX-DC** | Domain Controller — your desktop for the AC labs and every other lab family |
+
+Your pod's pfSense firewall (used in the SC labs) is not a connection here: you
+reach it by browsing to `http://10.51.XX.1` from inside this desktop.
 
 1. Click on **PODXX-DC** (where XX is your pod number, e.g., **POD03-DC**)
 2. The remote desktop session will open directly in your browser — no extra login is needed (credentials are pre-configured)
@@ -259,7 +261,11 @@ Module 2 focuses on the lifecycle of user accounts — when people join the orga
    - **Last name:** User1
    - **User logon name:** `PXX-new.user1` (replace PXX with your pod prefix, e.g., `P03-new.user1`)
 7. Click **Next**
-8. Enter a password (use the lab password your instructor provided)
+8. Enter a password. The domain now enforces a strong policy, so it must be **at
+   least 12 characters** and include an upper-case letter, a lower-case letter, a
+   number and a symbol (for example `LabUser!2026#ac`). A shorter or simpler
+   password is rejected with *"Windows cannot set the password ... it does not
+   meet the length, complexity, or history requirement of the domain."*
 9. Uncheck **"User must change password at next logon"** (for lab purposes)
 10. Click **Next**, then **Finish**
 11. Now add the user to the appropriate group:
@@ -574,6 +580,11 @@ Module 4 focuses on monitoring, reviewing, and documenting access control activi
 - If you can't find a user account, make sure you are looking in the correct OU (Staff vs. Admins)
 - If a command in PowerShell gives an error, check that you replaced `PodXX` and `PXX` with your actual pod number
 - If ADUC won't open, try the Run dialog method: **Windows + R → dsa.msc → Enter**
+- If Windows refuses a password you typed, it is the domain password policy, not
+  your account: use 12+ characters with upper case, lower case, a number and a
+  symbol, and do not reuse a recent password
+- If a **Windows Security** credential prompt appears (usually from Server
+  Manager), click **Cancel** — no lab in this guide needs an administrator tool
 
 ---
 
