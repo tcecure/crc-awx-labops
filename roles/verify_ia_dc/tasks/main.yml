@@ -64,18 +64,24 @@
     script: |
       $p = "{{ prefix }}"
       $podName = "Pod{{ '%02d' | format(pod_id) }}"
+      $waived = ${{ ia_m2l1_task_step_waived | default(true) | bool | ternary('true', 'false') }}
       $reasons = @()
       $taskName = "$podName ACS Nightly Backup"
       try {
         $task = Get-ScheduledTask -TaskName $taskName -ErrorAction Stop
         $principal = $task.Principal.UserId
-        if ($principal -match [regex]::Escape("$p-s.jenkins")) { $reasons += "still running as $p-s.jenkins" }
+        if ($principal -match [regex]::Escape("$p-s.jenkins")) {
+          if (-not $waived) { $reasons += "still running as $p-s.jenkins" }
+        }
         elseif ($principal -notmatch "svc") { $reasons += "principal '$principal' does not appear to be a service account" }
-      } catch { $reasons += "task '$taskName' not found" }
+      } catch { if (-not $waived) { $reasons += "task '$taskName' not found" } }
       # svc_backup should exist
       $svc = Get-ADUser -Filter "SamAccountName -eq '$p-svc_backup'" -ErrorAction SilentlyContinue
       if (-not $svc) { $reasons += "$p-svc_backup not created" }
-      if ($reasons.Count -eq 0) { @{ completed=$true; reason="Task running as service account" } }
+      if ($reasons.Count -eq 0) {
+        if ($waived) { @{ completed=$true; reason="$p-svc_backup created; task retarget waived (requires admin on shared DC)" } }
+        else { @{ completed=$true; reason="Task running as service account" } }
+      }
       else { @{ completed=$false; reason=($reasons -join "; ") } }
   register: v_m2l1
 

@@ -329,7 +329,9 @@ Module 2 covers the identities that are not people — service accounts, automat
 
 ### Lab M2-L1 — Scheduled Task Running as a Human Account
 
-**Difficulty:** Intermediate | **Time:** 25 minutes | **Type:** Hands-on (ADUC + Task Scheduler)
+**Difficulty:** Intermediate | **Time:** 10 minutes | **Type:** Hands-on (ADUC) — task retarget step is instructor-credited this cohort
+
+> **Read first — this cohort:** Step 2 (repointing the scheduled task) cannot be done from a student account on the shared domain controller. Windows only lets a local administrator save a task credential, and students are intentionally not administrators there. Complete **Step 1** (create `PXX-svc_backup`), read Step 2 so you know how it is done, then move on to **M2-L2**. Step 2 is credited automatically and no longer affects your completion status. Pods get their own member servers in a later release, where you will perform this step yourself.
 
 #### Scenario
 The nightly backup task **`PodXX ACS Nightly Backup`** runs under a real employee's account, `PXX-s.jenkins`. Automated jobs should run as dedicated service accounts: when Steve leaves, the backup breaks, and his credentials are needlessly exposed.
@@ -346,7 +348,7 @@ The nightly backup task **`PodXX ACS Nightly Backup`** runs under a real employe
    - Click **Next**, enter a strong password, check **"Password never expires"**, uncheck *"User must change password at next logon"* → **Next → Finish**
    - Double-click the account and add a **Description:** `Service account for nightly backup automation`
 
-2. **Point the task at the service account:**
+2. **Point the task at the service account** *(reference only this cohort — expect "Access is denied"; do not troubleshoot it)*:
    - Open **Task Scheduler** (**Windows + R** → `taskschd.msc`)
    - Click **Task Scheduler Library** and find **`PodXX ACS Nightly Backup`**
    - Right-click → **Properties** → **General** tab
@@ -362,8 +364,7 @@ The nightly backup task **`PodXX ACS Nightly Backup`** runs under a real employe
 
 #### Completion Criteria
 - [ ] `PXX-svc_backup` exists in Active Directory
-- [ ] The task no longer runs as `PXX-s.jenkins`
-- [ ] The task principal is the service account (its name must contain `svc`)
+- [ ] Task principal change — credited automatically this cohort (requires administrator on the shared DC)
 
 #### Why This Matters
 IA.L1-3.5.1 covers "processes acting on behalf of users". A dedicated service account gives the automated process its own identity and its own accountability.

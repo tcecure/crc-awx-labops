@@ -77,6 +77,34 @@ function Remove-IfExists($sam) {
   }
 }
 
+# A scheduled task is only listed in a session whose user appears in the task's
+# security descriptor. Without this the student sees no task at all and reports
+# it as missing.
+function Grant-TaskVisibility($taskName, $runAsUser) {
+  $student = "student{0:D2}" -f $PodId
+  try {
+    $sid = (New-Object System.Security.Principal.NTAccount("$netBIOS\$student")).Translate(
+      [System.Security.Principal.SecurityIdentifier]).Value
+  } catch {
+    Write-Host "  WARNING: $student not found, task visibility unchanged"
+    return
+  }
+
+  # SYSTEM and Administrators keep full control; the student gets read/write/execute.
+  $sddl = "D:(A;;FA;;;SY)(A;;FA;;;BA)(A;;0x1301bf;;;$sid)"
+  try {
+    $svc = New-Object -ComObject Schedule.Service
+    $svc.Connect()
+    $folder = $svc.GetFolder("\")
+    $xml = $folder.GetTask($taskName).Xml
+    # 6 = TASK_CREATE_OR_UPDATE, 1 = TASK_LOGON_PASSWORD
+    $folder.RegisterTask($taskName, $xml, 6, $runAsUser, $SeedPassword, 1, $sddl) | Out-Null
+    Write-Host "  Task '$taskName' made visible to $student"
+  } catch {
+    Write-Host "  WARNING: could not set SDDL on '$taskName': $($_.Exception.Message)"
+  }
+}
+
 function Drop-Marker($labTag) {
   $ts = Get-Date -Format "o"
   Set-Content -Path "$podRoot\_LAB_READY_$labTag.txt" `
@@ -137,6 +165,7 @@ function Apply-Lab($id) {
       schtasks.exe /Create /TN $taskName /SC DAILY /ST 02:00 `
         /TR "powershell.exe -ExecutionPolicy Bypass -Command Write-Output 'Backup started'" `
         /RU "$netBIOS\$prefix-s.jenkins" /RP $SeedPassword /RL HIGHEST /F | Out-Null
+      Grant-TaskVisibility $taskName "$netBIOS\$prefix-s.jenkins"
       Drop-Marker "IA-M2-L1"
       Write-Host "  M2-L1 seeded: task '$taskName' running as $prefix-s.jenkins"
     }

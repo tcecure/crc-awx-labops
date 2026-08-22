@@ -1,0 +1,8 @@
+---
+# IA M2-L1 asks the student to repoint "PodNN ACS Nightly Backup" from
+# PNN-s.jenkins to PNN-svc_backup. On the shared DC that step needs local
+# admin (Windows requires SeTcbPrivilege to store a task credential), which
+# students intentionally do not have, so it is credited automatically while
+# the account-creation half is still graded. Set to false once pods run on
+# their own member servers, where students are local admins.
+ia_m2l1_task_step_waived: true
