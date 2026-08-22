@@ -66,7 +66,8 @@ You will connect to the lab through **Apache Guacamole** — a web-based remote 
 | Connection Name | What It Is |
 |---|---|
 | **PODXX-DC** | Domain Controller — **use this for all MP labs** |
-| **PODXX-WS01** | Workstation (used for other lab families) |
+
+This is the only connection you get: every MP lab is done on this desktop.
 
 1. Click on **PODXX-DC** (where XX is your pod number, e.g., **POD03-DC**)
 2. The remote desktop session opens directly in your browser — no extra login is needed

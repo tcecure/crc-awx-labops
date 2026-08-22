@@ -72,7 +72,8 @@ You will connect to the lab through **Apache Guacamole** — a web-based remote 
 | Connection Name | What It Is |
 |---|---|
 | **PODXX-DC** | Domain Controller — **use this for all IA labs** |
-| **PODXX-WS01** | Workstation (used for other lab families) |
+
+This is the only connection you get: every IA lab is done on this desktop.
 
 1. Click on **PODXX-DC** (where XX is your pod number, e.g., **POD03-DC**)
 2. The remote desktop session opens directly in your browser — no extra login is needed
@@ -93,17 +94,29 @@ You will connect to the lab through **Apache Guacamole** — a web-based remote 
 **Active Directory Users and Computers (ADUC)**
 1. On the server desktop, double-click the **Active Directory Users and Computers** shortcut
 
-*Alternative:* press **Windows + R**, type `dsa.msc`, press Enter.
+*If the shortcut is missing:* press **Windows + R** and paste this line exactly, then press Enter:
 
-> **Do not use Server Manager.** It needs administrator rights on the shared
-> server, which student accounts do not have, so it ends in *"Logon failure: the
-> user has not been granted the requested logon type at this computer"*. Close
-> that prompt and use the desktop shortcut — your account already has the rights
-> these labs need.
+```
+cmd /c "set __COMPAT_LAYER=RunAsInvoker&& start "" mmc.exe dsa.msc"
+```
+
+> **Do not open ADUC any other way.** Plain `dsa.msc`, **Server Manager → Tools**
+> and a blank MMC console all make Windows try to start it elevated and show a
+> **User Account Control** prompt for administrator credentials. Student accounts
+> are deliberately not administrators of the shared domain controller, so that
+> prompt always fails with *"Logon failure: the user has not been granted the
+> requested logon type at this computer"* — nothing is broken. Click **No** and
+> use the shortcut (or the command above), which runs ADUC with your own
+> delegated pod permissions.
 
 **PowerShell**
-1. Right-click the **Start** button → **Windows PowerShell** (use **(Admin)** where a lab says so)
+1. Right-click the **Start** button → **Windows PowerShell**
 2. *Alternative:* **Windows + R** → `powershell` → Enter
+
+> Run PowerShell normally. Do **not** choose **Windows PowerShell (Admin)** or
+> **Run as administrator** — every command in this guide works with your own
+> delegated permissions, and elevating triggers the same UAC prompt described
+> above.
 
 **Task Scheduler** (needed for M2-L1)
 1. **Windows + R** → `taskschd.msc` → Enter
@@ -261,7 +274,9 @@ $p = "PXX"
 Disable-ADAccount -Identity "$p-tom.davis"
 Get-ADUser "$p-tom.davis" -Properties MemberOf | Select-Object -ExpandProperty MemberOf |
     ForEach-Object { Remove-ADGroupMember -Identity $_ -Members "$p-tom.davis" -Confirm:$false }
-$ou = (Get-ADOrganizationalUnit -Filter "Name -eq 'Terminated'" -SearchBase (Get-ADUser "$p-tom.davis").DistinguishedName.Split(',',2)[1]).DistinguishedName
+$parent = (Get-ADUser "$p-tom.davis").DistinguishedName.Split(',', 2)[1]
+$ou = (Get-ADOrganizationalUnit -Filter "Name -eq 'Terminated'" `
+    -SearchBase $parent).DistinguishedName
 Move-ADObject -Identity (Get-ADUser "$p-tom.davis").DistinguishedName -TargetPath $ou
 ```
 
@@ -356,11 +371,15 @@ The nightly backup task **`PodXX ACS Nightly Backup`** runs under a real employe
    - Click **Change User or Group...**, type `PXX-svc_backup`, click **Check Names → OK**
    - Click **OK** and enter the service account password when prompted
 
-3. **Verify:** the task's **Run As** / *Author* column should now show the service account.
+3. **Look at the task, read-only.** You can open the task and view its settings;
+   you cannot save a change to the account it runs under. This command shows the
+   account it currently uses:
 
    ```powershell
    (Get-ScheduledTask -TaskName "PodXX ACS Nightly Backup").Principal.UserId
    ```
+
+   It still returns `PXX-s.jenkins`, and that is the expected result this cohort.
 
 #### Completion Criteria
 - [ ] `PXX-svc_backup` exists in Active Directory

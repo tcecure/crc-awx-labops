@@ -16,6 +16,7 @@ This guide provides step-by-step instructions for completing all 12 System & Inf
 8. [Module 4: GPO Enforcement and Rogue Developer (Labs L4.1 – L4.3)](#module-4-gpo-enforcement-and-rogue-developer)
 9. [Quick Reference: Where to Find Things](#quick-reference-where-to-find-things)
 10. [Tips and Common Mistakes](#tips-and-common-mistakes)
+11. [Lab Completion Checklist](#lab-completion-checklist)
 
 ---
 
@@ -64,12 +65,13 @@ You will connect to the lab through **Apache Guacamole** — a web-based remote 
 
 ### Step 3: Connect to the Domain Controller
 
-After logging in, you will see a list of available connections. Each student has two pre-configured connections:
+After logging in you will see one pre-configured connection for your pod:
 
 | Connection Name | What It Is |
 |---|---|
 | **PODXX-DC** | Domain Controller — **use this for all SI labs** |
-| **PODXX-WS01** | Workstation (used for other lab families) |
+
+This is the only connection you get: every SI lab is done on this desktop.
 
 1. Click on **PODXX-DC** (where XX is your pod number, e.g., **POD03-DC**)
 2. The remote desktop session will open directly in your browser — no extra login is needed (credentials are pre-configured)

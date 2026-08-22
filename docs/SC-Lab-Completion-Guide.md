@@ -137,7 +137,7 @@ Your Pod (PodXX)
 │   ├── Lab artifacts: C:\CyberLab\PodXX\SC-Artifacts\
 │   └── Shared with AC, IA, SI labs
 │
-└── PODXX-GW (Gateway/Firewall)
+└── PODXX-GW (Gateway/Firewall — reached from a browser on PODXX-DC)
     ├── WAN Interface: Connected to external network
     ├── LAN Interface: 10.51.XX.1/24
     ├── Web UI: http://10.51.XX.1

@@ -16,6 +16,7 @@ This guide provides step-by-step instructions for completing all 12 Access Contr
 8. [Module 4: Audit and Accountability (Labs L4.1 – L4.3)](#module-4-audit-and-accountability)
 9. [Quick Reference: Where to Find Things in ADUC](#quick-reference-where-to-find-things)
 10. [Tips and Common Mistakes](#tips-and-common-mistakes)
+11. [Lab Completion Checklist](#lab-completion-checklist)
 
 ---
 
@@ -96,16 +97,21 @@ You should now see the Windows Server desktop in your browser.
 
 1. On the server desktop, double-click the **Active Directory Users and Computers** shortcut
 
-**Alternative method:**
-1. Press **Windows key + R** to open the Run dialog
-2. Type `dsa.msc` and press Enter
+**If the shortcut is missing:** press **Windows key + R** and paste this line
+exactly, then press Enter:
 
-> **Do not use Server Manager.** It requires administrator rights on the shared
-> server, which student accounts do not have. If you open it you will get a
-> credential prompt that ends in *"Logon failure: the user has not been granted
-> the requested logon type at this computer"*. Close the prompt and use the
-> desktop shortcut above — your own account already has the rights you need for
-> every lab in this guide.
+```
+cmd /c "set __COMPAT_LAYER=RunAsInvoker&& start "" mmc.exe dsa.msc"
+```
+
+> **Do not open ADUC any other way.** Plain `dsa.msc`, **Server Manager → Tools**
+> and a blank MMC console all make Windows try to start ADUC elevated and prompt
+> for administrator credentials. Student accounts are deliberately not
+> administrators of the shared domain controller, so that prompt always ends in
+> *"Logon failure: the user has not been granted the requested logon type at this
+> computer"* — nothing is broken. Click **No**, then use the desktop shortcut or
+> the command above; it runs ADUC with your own delegated pod permissions, which
+> are all these labs need.
 
 You should now see the ADUC window with a tree structure on the left side.
 
@@ -588,7 +594,7 @@ Module 4 focuses on monitoring, reviewing, and documenting access control activi
 - If you accidentally modify the wrong account, tell your instructor — they can reset your pod
 - If you can't find a user account, make sure you are looking in the correct OU (Staff vs. Admins)
 - If a command in PowerShell gives an error, check that you replaced `PodXX` and `PXX` with your actual pod number
-- If ADUC won't open, try the Run dialog method: **Windows + R → dsa.msc → Enter**
+- If ADUC won't open, use the Run dialog command from *How to Open Active Directory Users and Computers* (the `RunAsInvoker` line) rather than plain `dsa.msc`
 - If Windows refuses a password you typed, it is the domain password policy, not
   your account: use 12+ characters with upper case, lower case, a number and a
   symbol, and do not reuse a recent password

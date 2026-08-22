@@ -41,8 +41,9 @@ for f in "$@"; do
   base="$f-Lab-Completion-Guide"
   pandoc "$src" -f gfm -t docx --toc --toc-depth=2 -o "$OUT/$base.docx"
   fix_docx_tables "$OUT/$base.docx"
+  title="$(sed -n 's/^# //p' "$src" | head -1)"
   pandoc "$src" -f gfm -t html5 --standalone --toc --toc-depth=2 \
-    --metadata title="CRC Cyber Lab" -c "$CSS" -o "$OUT/$base.html"
+    --metadata title="$title" -c "$CSS" -o "$OUT/$base.html"
   weasyprint "$OUT/$base.html" "$OUT/$base.pdf"
   rm -f "$OUT/$base.html"
   [ "$OUT" = "$DOCS" ] || cp "$OUT/$base.docx" "$OUT/$base.pdf" "$DOCS/"
