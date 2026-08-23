@@ -27,7 +27,10 @@ This guide provides step-by-step instructions for completing all 12 Identificati
 
 - Your **Pod number** (your instructor will assign this, e.g., Pod01, Pod05, Pod12)
 - Your **Guacamole login credentials** (your instructor will provide your username and password)
-- The **lab password** your instructor gives you for creating new accounts
+- A password you choose for the accounts you create: **at least 12 characters**
+  with an upper-case letter, a lower-case letter, a number and a symbol (for
+  example `LabUser!2026#ia`). Your own sign-in password is shorter than this and
+  will be rejected
 - A computer with a web browser (Chrome, Firefox, or Edge) — no special software needed
 
 ### What You Will Be Doing
@@ -210,7 +213,10 @@ The front desk uses one shared account, `PXX-frontdesk`, that multiple reception
    - Right-click the **Staff** OU → **New → User**
    - **First name:** `Karen`, **Last name:** `OMalley`
    - **User logon name:** `PXX-k.omalley` — the prefix is required
-   - Click **Next**, enter the lab password, uncheck *"User must change password at next logon"*, click **Next → Finish**
+   - Click **Next**, enter a password that meets the domain policy (12+
+     characters with upper case, lower case, a number and a symbol, e.g.
+     `LabUser!2026#ia`), uncheck *"User must change password at next logon"*,
+     click **Next → Finish**
 
 3. **Create the temporary worker's account** the same way, with logon name `PXX-temp.agency01`
 
@@ -360,7 +366,9 @@ The nightly backup task **`PodXX ACS Nightly Backup`** runs under a real employe
 1. **Create the service account:**
    - ADUC → **Students → PodXX → Users** → right-click → **New → User**
    - **Full name / logon name:** `PXX-svc_backup`
-   - Click **Next**, enter a strong password, check **"Password never expires"**, uncheck *"User must change password at next logon"* → **Next → Finish**
+   - Click **Next**, enter a password that meets the domain policy (12+
+     characters with upper case, lower case, a number and a symbol), check
+     **"Password never expires"**, uncheck *"User must change password at next logon"* → **Next → Finish**
    - Double-click the account and add a **Description:** `Service account for nightly backup automation`
 
 2. **Point the task at the service account** *(reference only this cohort — expect "Access is denied"; do not troubleshoot it)*:
