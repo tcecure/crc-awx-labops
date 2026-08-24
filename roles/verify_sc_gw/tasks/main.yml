@@ -162,19 +162,30 @@
 - name: "Verify M3-L2 (Rule Ordering)"
   when: (sc_lab_id is not defined or sc_lab_id == 'ALL' or sc_lab_id == 'M3-L2') and fw_info is defined
   block:
-    - name: Check block rule is last
+    - name: Check the LAN default deny is the last LAN rule
       ansible.builtin.raw: |
         php -r "
         require_once('config.inc');
         \$config = parse_config(true);
-        \$rules = \$config['filter']['rule'];
-        // Check that no block-all appears before allow rules
-        \$block_pos = -1; \$last_allow = -1;
-        foreach (\$rules as \$i => \$r) {
-          if (\$r['type'] == 'block' && isset(\$r['source']['any']) && isset(\$r['destination']['any'])) \$block_pos = \$i;
-          if (\$r['type'] == 'pass') \$last_allow = \$i;
+        // The lab reorders Firewall > Rules > LAN only, and pfSense keeps a
+        // separate ordered list per interface, so positions are compared
+        // within the LAN interface. The catch-all deny may be written either
+        // as any/any or as 'LAN net' to any, which is what the pfSense UI
+        // produces, so only the destination is required to be any.
+        \$lan = array();
+        foreach (\$config['filter']['rule'] as \$r) {
+          if (isset(\$r['interface']) && \$r['interface'] == 'lan') \$lan[] = \$r;
         }
-        echo (\$block_pos > \$last_allow && \$block_pos >= 0) ? 'PASS:OrderCorrect' : 'FAIL:OrderWrong';
+        \$n = count(\$lan);
+        if (\$n == 0) { echo 'FAIL:NoLANRules'; exit; }
+        \$allows = 0;
+        foreach (\$lan as \$r) { if (\$r['type'] == 'pass') \$allows++; }
+        \$last = \$lan[\$n - 1];
+        \$deny_last = (\$last['type'] == 'block' && isset(\$last['destination']['any'])
+                       && !isset(\$last['destination']['port']));
+        if (\$deny_last && \$allows > 0) { echo 'PASS:OrderCorrect'; }
+        elseif (\$allows == 0) { echo 'FAIL:NoAllowRules'; }
+        else { echo 'FAIL:OrderWrong'; }
         "
       register: m3l2_check
       changed_when: false
@@ -245,8 +256,14 @@
         }
         \$checks['no_telnet'] = !\$telnet;
 
-        // Check 4: Logging enabled
-        \$checks['logging'] = isset(\$config['syslog']['filterdescriptions']);
+        // Check 4: Logging enabled on the block rules (Task 4). pfSense
+        // records this per rule; \$config['syslog'] holds log *display* and
+        // remote-server settings, not whether rules log.
+        \$blocks = 0; \$blocks_logged = 0;
+        foreach (\$config['filter']['rule'] as \$r) {
+          if (\$r['type'] == 'block') { \$blocks++; if (isset(\$r['log'])) \$blocks_logged++; }
+        }
+        \$checks['logging'] = (\$blocks > 0 && \$blocks == \$blocks_logged);
 
         // Check 5: Has VLANs or segmentation
         \$checks['segmentation'] = isset(\$config['vlans']['vlan']) && count(\$config['vlans']['vlan']) >= 2;
