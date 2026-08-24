@@ -72,3 +72,52 @@ kill -9 "$pid"; sleep 4; qm start 305
 ```
 
 Give pfSense about a minute to boot, then re-run the curl loop above.
+
+## Recovering a pod firewall a student locked themselves out of
+
+Symptom: the student reports `10.51.XX.1` is unreachable ("Destination host
+unreachable") while the VM is running, and `ping 10.51.XX.1` from pve1 fails
+with no ARP entry (`ip neigh show dev podXXnet` shows `FAILED`). Cause is a
+student deleting the LAN interface assignment or all firewall rules from
+**Interfaces** / **Firewall → Rules** — pfSense then boots WAN-only, so nothing
+on the pod network can reach it.
+
+pfSense writes the previous configuration to `/cf/conf/backup/config-<epoch>.xml`
+before every save, so the state from just before the mistake is recoverable from
+the console. There is no network path in, so drive the VGA console with
+`qm sendkey` and read it back with `qm screendump` (helper scripts live in this
+repo's `scripts/` directory as `pf-console-type.py` / `pf-console-shot.sh`).
+
+1. Confirm what was lost:
+
+   ```sh
+   # console option 8 (Shell)
+   echo lan=$(grep -c '<lan>' /cf/conf/config.xml) rules=$(grep -c '<rule>' /cf/conf/config.xml)
+   ```
+
+   `lan=1 rules=0` means both the LAN interface and the rules are gone.
+
+2. Pick the newest backup that still has the LAN interface and the student's
+   rules:
+
+   ```sh
+   for f in $(ls -t /cf/conf/backup/config-*.xml | head -8); do
+     echo $f lan=$(grep -c '<lan>' $f) r=$(grep -c '<rule>' $f)
+   done
+   ```
+
+3. Restore it, keeping the broken copy for the incident record, and reboot:
+
+   ```sh
+   cp /cf/conf/config.xml /root/broken-config-$(date +%s).xml
+   cp /cf/conf/backup/config-<epoch>.xml /cf/conf/config.xml
+   rm -f /tmp/config.cache
+   reboot
+   ```
+
+4. Verify from pve1 — `ping 10.51.XX.1` answers and
+   `curl -o /dev/null -w '%{http_code}' http://10.51.XX.1/` returns `200`.
+
+The webConfigurator password is part of the restored configuration, so the
+instructor-provided credentials keep working. The student resumes the lab from
+whatever state that backup captured; tell them which of their rules survived.
