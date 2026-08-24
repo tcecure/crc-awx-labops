@@ -272,29 +272,29 @@ if (!isset(\$config['aliases']['alias']) || !is_array(\$config['aliases']['alias
 \$config['aliases']['alias'][] = array(
     'name' => 'TASK_HR_SUBNET',
     'type' => 'network',
-    'address' => '${LAN_NET}.0/26',
-    'descr' => 'TASK: Create VLAN 10 for HR (${LAN_NET}.0/26)',
+    'address' => '10.61.${POD_NUM}.0/24',
+    'descr' => 'TASK: Create VLAN 10 for HR (10.61.${POD_NUM}.0/24)',
     'detail' => 'HR Department'
 );
 \$config['aliases']['alias'][] = array(
     'name' => 'TASK_FINANCE_SUBNET',
     'type' => 'network',
-    'address' => '${LAN_NET}.64/26',
-    'descr' => 'TASK: Create VLAN 20 for Finance (${LAN_NET}.64/26)',
+    'address' => '10.62.${POD_NUM}.0/24',
+    'descr' => 'TASK: Create VLAN 20 for Finance (10.62.${POD_NUM}.0/24)',
     'detail' => 'Finance Department'
 );
 \$config['aliases']['alias'][] = array(
     'name' => 'TASK_ENGINEERING_SUBNET',
     'type' => 'network',
-    'address' => '${LAN_NET}.128/26',
-    'descr' => 'TASK: Create VLAN 30 for Engineering (${LAN_NET}.128/26)',
+    'address' => '10.63.${POD_NUM}.0/24',
+    'descr' => 'TASK: Create VLAN 30 for Engineering (10.63.${POD_NUM}.0/24)',
     'detail' => 'Engineering Department'
 );
 \$config['aliases']['alias'][] = array(
     'name' => 'TASK_GUEST_SUBNET',
     'type' => 'network',
-    'address' => '${LAN_NET}.192/26',
-    'descr' => 'TASK: Create VLAN 40 for Guest WiFi (${LAN_NET}.192/26)',
+    'address' => '10.64.${POD_NUM}.0/24',
+    'descr' => 'TASK: Create VLAN 40 for Guest WiFi (10.64.${POD_NUM}.0/24)',
     'detail' => 'Guest Network'
 );
 "

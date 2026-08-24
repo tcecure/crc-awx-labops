@@ -401,11 +401,28 @@ ACS Consulting's public web server is sitting on the internal LAN at 10.51.XX.50
    - Note the NAT rule pointing to the LAN
 
 2. **Create a DMZ interface:**
-   - Go to **Interfaces → Assignments**
-   - If you have an available interface, click **+ Add**
-   - Rename the new interface to **DMZ**
-   - Set the IP: `10.51.XX.200` with subnet `/24`
-   - Enable the interface → Save → Apply
+
+   Your firewall has only two physical ports (WAN and LAN), so **Interfaces →
+   Assignments** has no **+ Add** button until you create a VLAN for the DMZ to
+   sit on. Do it in this order:
+
+   - Go to **Interfaces → VLANs → + Add**
+     - Parent Interface: `vtnet1` (LAN)
+     - VLAN Tag: `50`
+     - Description: `DMZ`
+     - Save
+   - Go to **Interfaces → Assignments** — **+ Add** is now available; add the
+     `VLAN 50 on vtnet1` interface (it appears as **OPT1**)
+   - Go to **Interfaces → OPT1**
+     - Tick **Enable interface**
+     - Description: `DMZ`
+     - IPv4 Configuration Type: **Static IPv4**
+     - IPv4 Address: `10.52.XX.1` / `24` (replace XX with your pod number)
+     - Save → **Apply Changes**
+
+   > The DMZ must use a subnet of its own. Do not give it an address inside
+   > `10.51.XX.0/24` — that range already belongs to the LAN and pfSense will
+   > reject the overlap.
 
 3. **Update firewall rules:**
 
@@ -436,6 +453,10 @@ ACS Consulting's public web server is sitting on the internal LAN at 10.51.XX.50
 
 > **Hint:** The key concept is that a DMZ is a "semi-trusted" zone. External users can reach the web server, but if the web server is compromised, the attacker cannot reach the internal LAN.
 
+**How the automated check scores this lab:** it passes as soon as the firewall
+has an assigned optional interface (the DMZ you added in step 2). The rules, NAT
+change and verification evidence are graded by your instructor.
+
 ---
 
 ### Lab M2-L3: Internal Segmentation with VLANs
@@ -463,11 +484,24 @@ ACS Consulting has four departments on a flat network — HR, Finance, Engineeri
      - VLAN 40 — Guest WiFi
 
 3. **Assign VLAN interfaces:**
-   - Go to **Interfaces → Assignments**
+   - Go to **Interfaces → Assignments** (the **+ Add** button only appears once
+     at least one VLAN exists)
    - Assign each VLAN as a new interface (OPT1 through OPT4)
    - Rename them: HR, FINANCE, ENGINEERING, GUEST
-   - Set each interface IP (e.g., 10.51.XX.10.1/24 for HR)
+   - Set each interface to **Static IPv4** with its own subnet — replace XX with
+     your pod number:
+
+     | Interface | VLAN | IPv4 address |
+     |---|---|---|
+     | HR | 10 | `10.61.XX.1/24` |
+     | FINANCE | 20 | `10.62.XX.1/24` |
+     | ENGINEERING | 30 | `10.63.XX.1/24` |
+     | GUEST | 40 | `10.64.XX.1/24` |
+
    - Enable each interface → Save → Apply
+
+   > Do not give a VLAN an address inside `10.51.XX.0/24`; that range belongs to
+   > the LAN and pfSense rejects the overlap.
 
 4. **Configure DHCP (optional):**
    - Go to **Services → DHCP Server**
@@ -506,6 +540,10 @@ ACS Consulting has four departments on a flat network — HR, Finance, Engineeri
    Save as: C:\CyberLab\PodXX\SC-Artifacts\M2-L3_VLAN_Config.png
    Save as: C:\CyberLab\PodXX\SC-Artifacts\M2-L3_Isolation_Test.txt
    ```
+
+**How the automated check scores this lab:** it passes when two or more VLANs
+exist on the firewall. The isolation rules and test evidence are graded by your
+instructor.
 
 #### Why This Matters
 Network segmentation limits the blast radius of a breach. If an attacker compromises a guest device, they cannot reach HR or Finance data. This is a core CMMC SC requirement.
