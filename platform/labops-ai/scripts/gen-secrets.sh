@@ -18,7 +18,11 @@ set_var() {
   echo "set ${key} (value not shown)"
 }
 
-set_var LABOPS_AGENT_SERVER_API_KEY "$(openssl rand -hex 32)"
+AGENT_KEY="$(openssl rand -hex 32)"
+set_var LABOPS_AGENT_SERVER_API_KEY "$AGENT_KEY"
+# The container reads SESSION_API_KEY; docker's env_file does not interpolate, so the
+# same value is written twice rather than referenced.
+set_var SESSION_API_KEY             "$AGENT_KEY"
 set_var LABOPS_AGENT_WEBHOOK_SECRET "$(openssl rand -hex 32)"
 set_var OH_SECRET_KEY               "$(openssl rand -hex 32)"
 

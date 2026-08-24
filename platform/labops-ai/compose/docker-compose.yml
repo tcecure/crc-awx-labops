@@ -17,18 +17,24 @@ services:
     volumes:
       - agent-state:/workspace
     tmpfs:
-      - /tmp:size=1g,mode=1777
+      # exec is required: the agent-server entrypoint maps shared objects out of /tmp,
+      # and a noexec /tmp makes it fail with "failed to map segment from shared object".
+      - /tmp:size=1g,mode=1777,exec
+      # writable config/cache under the read-only rootfs, otherwise tool discovery
+      # errors on every start trying to mkdir /home/openhands/.config
+      - /home/openhands/.config:size=64m,mode=0700,uid=10001,gid=10001
+      - /home/openhands/.cache:size=256m,mode=0700,uid=10001,gid=10001
     read_only: true
     security_opt:
       - no-new-privileges:true
     cap_drop:
       - ALL
-    pids_limit: 2048
     deploy:
       resources:
         limits:
           cpus: "4"
           memory: 8g
+          pids: 2048
     logging:
       driver: json-file
       options:
