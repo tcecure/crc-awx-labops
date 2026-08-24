@@ -1,0 +1,53 @@
+# DigitalRCC LabOps AI — private agent server on drcc-labops-01.
+#
+# Digest-pinned to OpenHands SDK 1.42.1, the version OpenHands v1.15.0 pins.
+# Never use a floating tag here. Bound to loopback: the gateway on the same host is the
+# only client, and nothing else may reach this port.
+services:
+  agent-server:
+    image: ghcr.io/openhands/agent-server:1.42.1-python@sha256:141a3628925a18ad55f07a09c0a1e3db9852ab0043458dbe7c8003c92396d143
+    container_name: labops-agent-server
+    restart: on-failure:3
+    env_file: /etc/labops/labops.env
+    environment:
+      OH_TELEMETRY_EXPORTER: none
+      DO_NOT_TRACK: "1"
+    ports:
+      - "127.0.0.1:8000:8000"   # loopback only — never 0.0.0.0
+    volumes:
+      - agent-state:/workspace
+    tmpfs:
+      - /tmp:size=1g,mode=1777
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 2048
+    deploy:
+      resources:
+        limits:
+          cpus: "4"
+          memory: 8g
+    logging:
+      driver: json-file
+      options:
+        max-size: 20m
+        max-file: "5"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    networks:
+      - labops-internal
+
+volumes:
+  agent-state:
+
+networks:
+  labops-internal:
+    driver: bridge
+    internal: false        # the agent server needs api.openai.com; host egress is
+                           # allow-listed by nftables, see docs/deployment-plan.md
