@@ -1,24 +1,26 @@
 ---
 # Current Guacamole student assignment by pod (not a credential).
 # Update this map and rerun setup-certificate-system.yml when assignments change.
+# Verified against the live Guacamole connection permissions: each studentNN has
+# exactly one connection, PODNN-DC.
 student_accounts_by_pod:
-  1: student09
-  2: student10
-  3: student04
-  4: student02
-  5: student08
-  6: student05
-  7: student06
-  8: student01
-  9: student03
-  10: student07
-  11: student15
-  12: student16
-  13: student12
-  14: student11
-  15: student20
-  16: student13
-  17: student18
-  18: student14
+  1: student01
+  2: student02
+  3: student03
+  4: student04
+  5: student05
+  6: student06
+  7: student07
+  8: student08
+  9: student09
+  10: student10
+  11: student11
+  12: student12
+  13: student13
+  14: student14
+  15: student15
+  16: student16
+  17: student17
+  18: student18
   19: student19
-  20: student17
+  20: student20
