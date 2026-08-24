@@ -603,6 +603,13 @@ The firewall has all the right rules, but they are in the wrong order. A "Block 
 
 > **Key Takeaway:** In firewall administration, the ORDER of rules is as important as the rules themselves. A correctly written rule in the wrong position is useless.
 
+**How the automated check scores this lab:** only the **LAN** tab is examined.
+It passes when the LAN tab has at least one allow rule and the last LAN rule is
+a block rule to any destination. The deny rule may have a source of `LAN net`
+or `any` — either is accepted, so this lab and M3-L1 (which is about removing
+overly broad and duplicate allow rules) cannot contradict each other. Rules on
+the WAN, DMZ or VLAN tabs do not affect this lab.
+
 ---
 
 ### Lab M3-L3: Least Privilege Access
@@ -778,7 +785,9 @@ This lab is the practical assessment for the entire SC module. You will use ever
    - *(Apply everything you learned in Lab M2-L3)*
 
 5. **TASK 4: Enable Logging** (5 min)
-   - Enable logging on all block rules
+   - Enable logging on **every** block rule (edit the rule and tick **Log
+     packets that are handled by this rule**) — the automated check requires all
+     block rules to log
    - Enable logging on critical allow rules
    - Verify logs appear in **Status → System Logs**
 
@@ -808,6 +817,13 @@ All 6 tasks must be completed with evidence:
 - [ ] Logging enabled and generating entries
 - [ ] Required communications verified working
 - [ ] All evidence screenshots saved
+
+**How the automated check scores this lab:** the verifier reads the firewall
+configuration and reports 5 checks — `deny_by_default`, `wan_secured`,
+`no_telnet`, `logging` (the **Log packets** box ticked on every block rule) and
+`segmentation` (2 or more VLANs). Task 5 and Task 6 are graded from your saved
+evidence by your instructor, not by the automated check, so "5 of 5" is a full
+pass. If the tracker shows fewer than 5, it now names the failing check.
 
 ---
 
