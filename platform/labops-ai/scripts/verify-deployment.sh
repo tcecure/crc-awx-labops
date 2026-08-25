@@ -31,18 +31,29 @@ echo "== image pin =="
 check "agent image matches pinned digest"    "$(dirname "$0")/check-image-pin.sh"
 
 echo "== isolation =="
-check "agent server bound to loopback only"  "ss -ltnp | grep -q '127.0.0.1:8000' && ! ss -ltn | grep -q '0.0.0.0:8000'"
-check "nftables default-deny inbound"        "nft list chain inet filter input | grep -qE 'policy drop|drop'"
+# grep -q would exit before its producer finishes, and `set -o pipefail` then reports the
+# producer's SIGPIPE as a failed check, so these greps read their whole input.
+check "agent server bound to loopback only"  "ss -ltn | grep -E '127.0.0.1:8000' >/dev/null && ! ss -ltn | grep -E '0.0.0.0:8000' >/dev/null"
+check "nftables default-deny inbound"        "nft list chain inet filter input | grep -E 'policy drop' >/dev/null"
 deny  "agent server unreachable off-host"    "curl -m 5 -sf -o /dev/null http://\$(hostname -I | awk '{print \$1}'):8000/health"
 check "workspace containers have no host mounts" \
       "! docker ps -q --filter label=openhands.workspace | xargs -r docker inspect -f '{{json .HostConfig.Binds}}' | grep -q '/'"
 check "no docker socket in containers"       "! docker ps -q | xargs -r docker inspect -f '{{json .Mounts}}' | grep -q docker.sock"
 check "telemetry disabled"                   "docker inspect labops-agent-server -f '{{json .Config.Env}}' | grep -q 'DO_NOT_TRACK=1'"
 
+echo "== public edge =="
+EDGE=labops.drcc.digitalrcc.com
+check "edge serves the console over TLS"     "curl -m 15 -sf -o /dev/null https://$EDGE/"
+check "edge health denies anonymous"         "curl -m 15 -s https://$EDGE/api/labops/health | grep -E unauthenticated >/dev/null"
+check "edge redirects http to https"         "[ \"\$(curl -m 15 -s -o /dev/null -w '%{http_code}' http://$EDGE/)\" = 301 ]"
+deny  "agent server unreachable from public" "curl -m 8 -sf -o /dev/null http://108.31.169.90:8000/health"
+deny  "gateway port unreachable from public" "curl -m 8 -sf -o /dev/null http://108.31.169.90:3100/"
+
 echo "== no secret leakage =="
-BODY=$(curl -m 10 -sf http://127.0.0.1:3100/api/labops/health || true)
+BODY=$(curl -m 10 -s http://127.0.0.1:3100/api/labops/health || true)
+BODY="$BODY$(curl -m 15 -s https://$EDGE/ || true)"
 for pat in 'sk-' 'service_role' 'Bearer '; do
-  if printf '%s' "$BODY" | grep -q "$pat"; then bad "health body contains '$pat'"; else ok "health body free of '$pat'"; fi
+  if printf '%s' "$BODY" | grep -q "$pat"; then bad "response bodies contain '$pat'"; else ok "response bodies free of '$pat'"; fi
 done
 
 echo "== capacity =="

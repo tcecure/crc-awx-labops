@@ -99,11 +99,31 @@ URL, anon key and service-role key, `LABOPS_OWNER_EMAIL`, `PORT=3100` and
 owner installs the real key on this host. Point the file at the production Supabase project
 only when the pilot leaves staging validation.
 
+## Edge / TLS
+
+The edge is `crc-proxy-gateway-01` (VMID 101 on pve1, 192.168.1.55): nginx 1.18 with
+per-host files in `sites-available` and certbot-managed certificates. SSH to it is still
+unavailable, but the QEMU guest agent is enabled, so the vhost was installed through
+`qm guest exec` from pve1.
+
+- `nginx/labops.drcc.digitalrcc.com.conf` proxies to `192.168.1.65:3100`, disables
+  buffering and raises the read timeout to an hour so the SSE activity relay survives long
+  investigations.
+- `certbot --nginx --redirect -d labops.drcc.digitalrcc.com` issued the certificate and
+  added the HTTP 301; renewal uses the host's existing scheduled task.
+- `nginx -t` was run before the reload, and the other nine vhosts were re-checked after it
+  (`crc.ai`, `my.digitalrcc.com`, `drcc.wiki`, the tracker) — all unchanged.
+
+| Public check | Result |
+| --- | --- |
+| `https://labops.drcc.digitalrcc.com/` | 200 |
+| `https://labops.drcc.digitalrcc.com/api/labops/health` | 401 unauthenticated |
+| `https://labops.drcc.digitalrcc.com/admin/labops` | 307 to `/login` |
+| `http://labops.drcc.digitalrcc.com/` | 301 to https |
+| `108.31.169.90:8000` and `:3100` | no route |
+
 ## Not done yet
 
 - OpenAI key installation — owner-supplied, this host only.
 - AWX read-only token installation — owner-supplied.
-- Edge nginx vhost for `labops.drcc.digitalrcc.com`. The DNS A record exists and resolves
-  to 108.31.169.90; the edge answers HTTP 404 for the host and has no certificate for it,
-  and SSH to that host is still unavailable.
 - PBS backup job for VMID 100.
