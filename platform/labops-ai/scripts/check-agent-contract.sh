@@ -51,5 +51,16 @@ if [ -z "$ID" ]; then
   exit 1
 fi
 
+# The gateway starts the loop explicitly after creating the conversation. Creation with an
+# initial message already starts it, so 409 is the expected answer here and the gateway
+# treats it as success; anything else means the start hop has drifted.
+START=$(curl -m 30 -sS -o /dev/null -w '%{http_code}' -X POST "$AGENT/api/conversations/$ID/run" \
+  -H "X-Session-API-Key: $LABOPS_AGENT_SERVER_API_KEY")
+
 curl -m 20 -sS -o /dev/null -X DELETE "$AGENT/api/conversations/$ID" \
   -H "X-Session-API-Key: $LABOPS_AGENT_SERVER_API_KEY"
+
+case "$START" in
+  200|202|204|409) ;;
+  *) echo "start hop returned $START" >&2; exit 1 ;;
+esac
