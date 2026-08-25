@@ -980,15 +980,15 @@ Use this checklist to track your progress:
 
 | Lab | Task | Done? |
 |---|---|---|
-| L1.1 | Classify 5 system flaws and complete the identification worksheet | [ ] |
-| L1.2 | Evaluate 3 vulnerability sources and complete the classification worksheet | [ ] |
-| L1.3 | Calculate exposure windows for 8 findings and write analysis report | [ ] |
-| L2.1 | Analyze Nessus scan report and identify compliance violations | [ ] |
-| L2.2 | Review patch history and determine true patch status | [ ] |
-| L2.3 | Complete vulnerability report form and remediation ticket | [ ] |
-| L3.1 | Audit AV coverage across 6 endpoints and identify gaps | [ ] |
-| L3.2 | Verify scan schedules and log analysis across all systems | [ ] |
-| L3.3 | Check definition currency and identify systems requiring isolation | [ ] |
-| L4.1 | Review GPO settings and identify the Tamper Protection gap | [ ] |
-| L4.2 | Reconstruct incident timeline from Defender event log | [ ] |
-| L4.3 | Complete full rogue developer investigation with exclusion form | [ ] |
+| L1.1 | Classify 5 system flaws and complete the identification worksheet | ☐ |
+| L1.2 | Evaluate 3 vulnerability sources and complete the classification worksheet | ☐ |
+| L1.3 | Calculate exposure windows for 8 findings and write analysis report | ☐ |
+| L2.1 | Analyze Nessus scan report and identify compliance violations | ☐ |
+| L2.2 | Review patch history and determine true patch status | ☐ |
+| L2.3 | Complete vulnerability report form and remediation ticket | ☐ |
+| L3.1 | Audit AV coverage across 6 endpoints and identify gaps | ☐ |
+| L3.2 | Verify scan schedules and log analysis across all systems | ☐ |
+| L3.3 | Check definition currency and identify systems requiring isolation | ☐ |
+| L4.1 | Review GPO settings and identify the Tamper Protection gap | ☐ |
+| L4.2 | Reconstruct incident timeline from Defender event log | ☐ |
+| L4.3 | Complete full rogue developer investigation with exclusion form | ☐ |

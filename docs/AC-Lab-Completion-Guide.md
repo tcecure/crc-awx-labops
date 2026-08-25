@@ -33,11 +33,20 @@ In these labs you will use **Active Directory Users and Computers (ADUC)** — t
 
 ### CMMC Context
 
-These labs align with **CMMC Level 1 Access Control (AC)** requirements:
-- **AC.L1-3.1.1** — Limit system access to authorized users
-- **AC.L1-3.1.2** — Limit system access to the types of transactions and functions authorized users are permitted to execute
-- **AC.L1-3.1.20** — Verify and control connections to external systems
-- **AC.L1-3.1.22** — Control information posted or processed on publicly accessible systems
+The 12 labs in this guide practice two **CMMC Level 1 Access Control (AC)**
+requirements:
+
+| Requirement | How these labs address it |
+|---|---|
+| **AC.L1-3.1.1** — Limit system access to authorized users | Joiner/mover/leaver work: disabling terminated accounts, provisioning approved accounts, offboarding, contractor expiration, access-review evidence (L1.1, L2.1–L2.3, L4.1–L4.3) |
+| **AC.L1-3.1.2** — Limit access to the transactions and functions users are authorized to perform | Least-privilege work: correcting group membership, removing nested privilege, delegating a single permission instead of admin rights (L1.2, L1.3, L3.1–L3.3) |
+
+The other two Level 1 AC requirements — **AC.L1-3.1.20** (connections to external
+systems) and **AC.L1-3.1.22** (publicly accessible systems) — are **not**
+practiced in these Active Directory exercises. Boundary control is exercised in
+the System & Communications Protection (SC) firewall labs (SC.L1-3.13.1), and the
+remaining policy elements are covered in classroom material rather than a hands-on
+lab.
 
 ---
 
@@ -64,12 +73,14 @@ You will connect to the lab through **Apache Guacamole** — a web-based remote 
 
 ### Step 3: Connect to the Domain Controller
 
-After logging in, you will see a list of available connections. Each student has two pre-configured connections:
+After logging in you will see one connection for your pod:
 
 | Connection Name | What It Is |
 |---|---|
-| **PODXX-DC** | Domain Controller — **use this for all AC labs** |
-| **PODXX-WS01** | Workstation (used for other lab families) |
+| **PODXX-DC** | Domain Controller — your desktop for the AC labs and every other lab family |
+
+Your pod's pfSense firewall (used in the SC labs) is not a connection here: you
+reach it by browsing to `http://10.51.XX.1` from inside this desktop.
 
 1. Click on **PODXX-DC** (where XX is your pod number, e.g., **POD03-DC**)
 2. The remote desktop session will open directly in your browser — no extra login is needed (credentials are pre-configured)
@@ -83,13 +94,18 @@ You should now see the Windows Server desktop in your browser.
 
 ## How to Open Active Directory Users and Computers
 
-1. On the server desktop, look for the **Server Manager** window (it usually opens automatically)
-2. Click **Tools** in the top-right menu bar
-3. Select **Active Directory Users and Computers** from the dropdown menu
+1. On the server desktop, double-click the **Active Directory Users and Computers** shortcut
 
 **Alternative method:**
 1. Press **Windows key + R** to open the Run dialog
 2. Type `dsa.msc` and press Enter
+
+> **Do not use Server Manager.** It requires administrator rights on the shared
+> server, which student accounts do not have. If you open it you will get a
+> credential prompt that ends in *"Logon failure: the user has not been granted
+> the requested logon type at this computer"*. Close the prompt and use the
+> desktop shortcut above — your own account already has the rights you need for
+> every lab in this guide.
 
 You should now see the ADUC window with a tree structure on the left side.
 
@@ -254,7 +270,11 @@ Module 2 focuses on the lifecycle of user accounts — when people join the orga
    - **Last name:** User1
    - **User logon name:** `PXX-new.user1` (replace PXX with your pod prefix, e.g., `P03-new.user1`)
 7. Click **Next**
-8. Enter a password (use the lab password your instructor provided)
+8. Enter a password. The domain now enforces a strong policy, so it must be **at
+   least 12 characters** and include an upper-case letter, a lower-case letter, a
+   number and a symbol (for example `LabUser!2026#ac`). A shorter or simpler
+   password is rejected with *"Windows cannot set the password ... it does not
+   meet the length, complexity, or history requirement of the domain."*
 9. Uncheck **"User must change password at next logon"** (for lab purposes)
 10. Click **Next**, then **Finish**
 11. Now add the user to the appropriate group:
@@ -569,6 +589,11 @@ Module 4 focuses on monitoring, reviewing, and documenting access control activi
 - If you can't find a user account, make sure you are looking in the correct OU (Staff vs. Admins)
 - If a command in PowerShell gives an error, check that you replaced `PodXX` and `PXX` with your actual pod number
 - If ADUC won't open, try the Run dialog method: **Windows + R → dsa.msc → Enter**
+- If Windows refuses a password you typed, it is the domain password policy, not
+  your account: use 12+ characters with upper case, lower case, a number and a
+  symbol, and do not reuse a recent password
+- If a **Windows Security** credential prompt appears (usually from Server
+  Manager), click **Cancel** — no lab in this guide needs an administrator tool
 
 ---
 
@@ -578,15 +603,15 @@ Use this checklist to track your progress:
 
 | Lab | Task | Done? |
 |---|---|---|
-| L1.1 | Disable the terminated employee (PXX-ex.employee) | [ ] |
-| L1.2 | Remove PXX-hr.user1 from Finance group | [ ] |
-| L1.3 | Remove PXX-it.helpdesk from IT-Admins group | [ ] |
-| L2.1 | Create the new user account (PXX-new.user1) | [ ] |
-| L2.2 | Remove PXX-consult.user1 from Consulting group | [ ] |
-| L2.3 | Disable, de-group, and move PXX-fin.user1 to Terminated OU | [ ] |
-| L3.1 | Move PXX-sales.user1 from Executive OU back to Staff | [ ] |
-| L3.2 | Remove PXX-SG-ACS-All-Staff from IT-Admins group | [ ] |
-| L3.3 | Delegate password reset for Staff OU to PXX-it.helpdesk | [ ] |
-| L4.1 | Set expiration date on PXX-contractor.user1 | [ ] |
-| L4.2 | Create access review evidence in Lab4-2 folder | [ ] |
-| L4.3 | Replace placeholder with real audit data in Lab4-3 folder | [ ] |
+| L1.1 | Disable the terminated employee (PXX-ex.employee) | ☐ |
+| L1.2 | Remove PXX-hr.user1 from Finance group | ☐ |
+| L1.3 | Remove PXX-it.helpdesk from IT-Admins group | ☐ |
+| L2.1 | Create the new user account (PXX-new.user1) | ☐ |
+| L2.2 | Remove PXX-consult.user1 from Consulting group | ☐ |
+| L2.3 | Disable, de-group, and move PXX-fin.user1 to Terminated OU | ☐ |
+| L3.1 | Move PXX-sales.user1 from Executive OU back to Staff | ☐ |
+| L3.2 | Remove PXX-SG-ACS-All-Staff from IT-Admins group | ☐ |
+| L3.3 | Delegate password reset for Staff OU to PXX-it.helpdesk | ☐ |
+| L4.1 | Set expiration date on PXX-contractor.user1 | ☐ |
+| L4.2 | Create access review evidence in Lab4-2 folder | ☐ |
+| L4.3 | Replace placeholder with real audit data in Lab4-3 folder | ☐ |

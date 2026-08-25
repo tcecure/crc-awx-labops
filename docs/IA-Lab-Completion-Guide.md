@@ -91,18 +91,22 @@ You will connect to the lab through **Apache Guacamole** — a web-based remote 
 ## How to Open Your Tools
 
 **Active Directory Users and Computers (ADUC)**
-1. On the server desktop, find the **Server Manager** window (it usually opens automatically)
-2. Click **Tools** in the top-right menu bar
-3. Select **Active Directory Users and Computers**
+1. On the server desktop, double-click the **Active Directory Users and Computers** shortcut
 
 *Alternative:* press **Windows + R**, type `dsa.msc`, press Enter.
+
+> **Do not use Server Manager.** It needs administrator rights on the shared
+> server, which student accounts do not have, so it ends in *"Logon failure: the
+> user has not been granted the requested logon type at this computer"*. Close
+> that prompt and use the desktop shortcut — your account already has the rights
+> these labs need.
 
 **PowerShell**
 1. Right-click the **Start** button → **Windows PowerShell** (use **(Admin)** where a lab says so)
 2. *Alternative:* **Windows + R** → `powershell` → Enter
 
 **Task Scheduler** (needed for M2-L1)
-1. **Windows + R** → `taskschd.msc` → Enter, or Server Manager → **Tools → Task Scheduler**
+1. **Windows + R** → `taskschd.msc` → Enter
 
 **File Explorer**
 - **Windows + E**, or the folder icon on the taskbar
