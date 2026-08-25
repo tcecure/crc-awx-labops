@@ -57,14 +57,25 @@
       register: m1l2_check
       changed_when: false
 
-    - name: Check default deny exists as last rule
+    - name: Check default deny exists as the last LAN rule
       ansible.builtin.raw: |
         php -r "
         require_once('config.inc');
         \$config = parse_config(true);
-        \$rules = \$config['filter']['rule'];
-        \$last = end(\$rules);
-        echo (\$last['type'] == 'block') ? 'PASS:DefaultDenyLast' : 'FAIL:NoDefaultDeny';
+        // Later SC labs append DMZ and VLAN rules after the LAN ruleset, and pfSense
+        // keeps a separate ordered list per interface, so the deny is judged as the
+        // last LAN rule rather than the last rule in config.xml. The pfSense UI writes
+        // the catch-all as either any/any or 'LAN net' to any.
+        \$lan = array();
+        foreach (\$config['filter']['rule'] as \$r) {
+          if (isset(\$r['interface']) && \$r['interface'] == 'lan') \$lan[] = \$r;
+        }
+        \$n = count(\$lan);
+        if (\$n == 0) { echo 'FAIL:NoLANRules'; exit; }
+        \$last = \$lan[\$n - 1];
+        \$deny = (\$last['type'] == 'block' && isset(\$last['destination']['any'])
+                  && !isset(\$last['destination']['port']));
+        echo \$deny ? 'PASS:DefaultDenyLast' : 'FAIL:NoDefaultDeny';
         "
       register: m1l2_deny
       changed_when: false
