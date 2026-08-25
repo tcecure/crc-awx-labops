@@ -155,6 +155,11 @@ knowing before reading `/api/labops/health`, which covers the first two but not 
    provides it (a tmpfs would drop every investigation on restart), `bootstrap-host.sh`
    sets the ownership, and `verify-deployment.sh` now checks the mount is writable.
 
+4. **Tool names.** The registry keys are `terminal`, `file_editor`, `task_tracker`; class
+   names like `TerminalTool` raise `KeyError` during agent initialization, which only
+   happens once a conversation carries an `initial_message` — so a bare create probe
+   returns 201 while every real start 500s.
+
 `/health` on the agent server answers even when the key is wrong and even when the store is
 unwritable, which is why the gateway's health check makes an authenticated call and the
 verification script probes the mount directly.
