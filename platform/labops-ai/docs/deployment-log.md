@@ -109,12 +109,33 @@ grep -rl <other-project-ref>   /opt/labops/app/current/.next   # must be empty
 
 ### Environment file state
 
-`/etc/labops/labops.env` (root:labops-gateway 0640) now carries the DRCC-staging Supabase
-URL, anon key and service-role key, `LABOPS_OWNER_EMAIL`, `PORT=3100` and
+`/etc/labops/labops.env` (root:labops-gateway 0640) carries the Supabase URL, anon key and
+service-role key, `LABOPS_OWNER_EMAIL`, `PORT=3100` and
 `LABOPS_PUBLIC_URL=https://labops.drcc.digitalrcc.com`. `LABOPS_LLM_API_KEY` is still the
 `REPLACE_ON_HOST_ONLY` placeholder: investigations will fail at the provider call until the
-owner installs the real key on this host. Point the file at the production Supabase project
-only when the pilot leaves staging validation.
+owner installs the real key on this host.
+
+## Production cutover
+
+The owner approved moving the pilot off DRCC-staging so portal logins work on the LabOps
+host. Applied in this order:
+
+1. The `ai_*` tables, RLS policies and helper functions were applied to the production
+   project through the management API, then re-audited: 9 tables, RLS on all of them, 9
+   policies, 3 helper functions, 0 rows.
+2. The grant audit showed `anon`/`authenticated` still holding `TRUNCATE`, `TRIGGER` and
+   `REFERENCES` from Supabase's defaults — none of which row-level security filters. They
+   were revoked, leaving `authenticated` with `SELECT` only; the migration now revokes them
+   too so a fresh apply matches.
+3. A release was built with the production `NEXT_PUBLIC_*` values (the build machine's
+   `.env.local` still names staging, so they are passed explicitly), verified with the grep
+   check above (production ref in 7 files, staging ref in 0), then unpacked to
+   `/opt/labops/app/releases/<utc-timestamp>` and promoted.
+4. `/etc/labops/labops.env` was pointed at the production project; the previous file is kept
+   as `labops.env.staging.bak` on the host for rollback.
+
+Rollback is the symlink plus the env backup: repoint `current` at the previous release,
+restore `labops.env.staging.bak`, restart `labops-gateway`.
 
 ## Edge / TLS
 
@@ -126,6 +147,9 @@ unavailable, but the QEMU guest agent is enabled, so the vhost was installed thr
 - `nginx/labops.drcc.digitalrcc.com.conf` proxies to `192.168.1.65:3100`, disables
   buffering and raises the read timeout to an hour so the SSE activity relay survives long
   investigations.
+- `location = /` returns `302 /labops` so the LabOps host lands on its own branded sign-in
+  page instead of the shared portal home. It pointed at `/admin/labops` first, which worked
+  but cost anonymous visitors a second hop through the auth redirect.
 - `certbot --nginx --redirect -d labops.drcc.digitalrcc.com` issued the certificate and
   added the HTTP 301; renewal uses the host's existing scheduled task.
 - `nginx -t` was run before the reload, and the other nine vhosts were re-checked after it
@@ -133,9 +157,10 @@ unavailable, but the QEMU guest agent is enabled, so the vhost was installed thr
 
 | Public check | Result |
 | --- | --- |
-| `https://labops.drcc.digitalrcc.com/` | 200 |
+| `https://labops.drcc.digitalrcc.com/` | 302 to `/labops` |
+| `https://labops.drcc.digitalrcc.com/labops` | 200, login box only |
 | `https://labops.drcc.digitalrcc.com/api/labops/health` | 401 unauthenticated |
-| `https://labops.drcc.digitalrcc.com/admin/labops` | 307 to `/login` |
+| `https://labops.drcc.digitalrcc.com/admin/labops` | 307 to `/labops` |
 | `http://labops.drcc.digitalrcc.com/` | 301 to https |
 | `108.31.169.90:8000` and `:3100` | no route |
 
