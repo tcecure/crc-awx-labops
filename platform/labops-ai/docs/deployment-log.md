@@ -90,6 +90,23 @@ service is reachable from the edge proxy and the admin network, never from the i
 only happen if the endpoint stops requiring a session. The check now asserts the gateway
 serves and that the health endpoint denies anonymous callers.
 
+### Releases are environment-specific
+
+The first release authenticated against the *production* Supabase project even though
+`/etc/labops/labops.env` named staging: `NEXT_PUBLIC_*` values are inlined by
+`npm run build`, and the build machine's `.env.local` pointed at production. Logins with
+staging accounts failed with "Invalid login credentials" while the server-side reads used
+staging. Build each release with the same project the host env names, and check the artifact
+before promoting it:
+
+```
+grep -rl <expected-project-ref> /opt/labops/app/current/.next   # must match
+grep -rl <other-project-ref>   /opt/labops/app/current/.next   # must be empty
+```
+
+`lib/env.ts` also validates `NEXT_PUBLIC_APP_URL`; without it every render throws a
+`ZodError` and the host answers 500. It is now in the env file and the template.
+
 ### Environment file state
 
 `/etc/labops/labops.env` (root:labops-gateway 0640) now carries the DRCC-staging Supabase
