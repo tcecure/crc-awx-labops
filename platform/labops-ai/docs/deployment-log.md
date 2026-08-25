@@ -189,6 +189,21 @@ knowing before reading `/api/labops/health`, which covers the first two but not 
 unwritable, which is why the gateway's health check makes an authenticated call and the
 verification script probes the mount directly.
 
+## Release 20260825235156 — rebuilt from merged main
+
+After application PR #4 merged, `origin/main` carried one commit the running release
+predated (`fix: embed existing training tracker`), so the host was rebuilt from the merge
+commit with the production Supabase values the host env names and promoted:
+
+| Check | Result |
+| --- | --- |
+| Artifact carries production ref / staging ref | 16 files / 0 files |
+| Deployed release under `/opt/labops/app/current/.next` | 7 files production, 0 staging |
+| `labops-gateway` after restart | active |
+| `/`, `/labops` on 127.0.0.1:3100 | 200, 200 |
+| `/admin/labops`, `/api/labops/health` anonymous | 307, 401 |
+| Public `/` and `/labops` | 302 → `/labops`, 200 |
+
 ## Not done yet
 
 - OpenAI key installation — owner-supplied, this host only.
