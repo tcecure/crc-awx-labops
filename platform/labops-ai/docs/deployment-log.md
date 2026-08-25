@@ -139,6 +139,26 @@ unavailable, but the QEMU guest agent is enabled, so the vhost was installed thr
 | `http://labops.drcc.digitalrcc.com/` | 301 to https |
 | `108.31.169.90:8000` and `:3100` | no route |
 
+## Agent-server contract defects found by live testing
+
+Three separate hops fail independently, and only the last one is the provider — worth
+knowing before reading `/api/labops/health`, which covers the first two but not the third.
+
+1. **Authentication.** `SESSION_API_KEY` is presented as `X-Session-API-Key`. The server's
+   OpenAPI also advertises a bearer scheme, but that is a different credential and returns
+   401 for this key.
+2. **Conversation tags.** Tag keys must match `^[a-z0-9]+$`; `run_id` is a 422. The gateway
+   sends `runid` / `supportrequestid`.
+3. **Conversation store.** The container has a read-only rootfs, so
+   `/home/openhands/.openhands` must be a writable volume owned by uid 10001, otherwise
+   every `POST /api/conversations` 500s on `.../profiles`. `agent-home` in the compose file
+   provides it (a tmpfs would drop every investigation on restart), `bootstrap-host.sh`
+   sets the ownership, and `verify-deployment.sh` now checks the mount is writable.
+
+`/health` on the agent server answers even when the key is wrong and even when the store is
+unwritable, which is why the gateway's health check makes an authenticated call and the
+verification script probes the mount directly.
+
 ## Not done yet
 
 - OpenAI key installation — owner-supplied, this host only.

@@ -38,6 +38,9 @@ check "nftables default-deny inbound"        "nft list chain inet filter input |
 deny  "agent server unreachable off-host"    "curl -m 5 -sf -o /dev/null http://\$(hostname -I | awk '{print \$1}'):8000/health"
 check "workspace containers have no host mounts" \
       "! docker ps -q --filter label=openhands.workspace | xargs -r docker inspect -f '{{json .HostConfig.Binds}}' | grep -q '/'"
+# /health answers regardless, so the conversation store is checked where it actually breaks.
+check "conversation store writable by agent uid" \
+      "docker exec labops-agent-server sh -c 'touch /home/openhands/.openhands/.writecheck && rm /home/openhands/.openhands/.writecheck'"
 check "no docker socket in containers"       "! docker ps -q | xargs -r docker inspect -f '{{json .Mounts}}' | grep -q docker.sock"
 check "telemetry disabled"                   "docker inspect labops-agent-server -f '{{json .Config.Env}}' | grep -q 'DO_NOT_TRACK=1'"
 

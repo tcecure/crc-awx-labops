@@ -43,6 +43,12 @@ sudo -n chown root:labops-gateway /etc/labops
 sudo -n chmod 0750 /etc/labops
 sudo -n chown -R labops-gateway:labops-gateway /opt/labops/app /var/log/labops
 
+# The agent server runs as uid 10001 under a read-only rootfs, so its conversation store
+# has to be a volume it can actually write: a root-owned volume makes every
+# POST /api/conversations fail with "Permission denied: /home/openhands/.openhands/profiles".
+sudo -n docker volume create compose_agent-home >/dev/null
+sudo -n chown 10001:10001 "$(sudo -n docker volume inspect -f '{{ .Mountpoint }}' compose_agent-home)"
+
 echo "== nftables: default-deny inbound, allow-listed egress"
 sudo -n tee /etc/nftables.conf >/dev/null <<'NFT'
 #!/usr/sbin/nft -f

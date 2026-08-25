@@ -16,6 +16,9 @@ services:
       - "127.0.0.1:8000:8000"   # loopback only — never 0.0.0.0
     volumes:
       - agent-state:/workspace
+      # conversation state lives here; a tmpfs would lose every investigation on restart,
+      # and the read-only rootfs makes creating a conversation fail outright without it
+      - agent-home:/home/openhands/.openhands
     tmpfs:
       # exec is required: the agent-server entrypoint maps shared objects out of /tmp,
       # and a noexec /tmp makes it fail with "failed to map segment from shared object".
@@ -51,6 +54,7 @@ services:
 
 volumes:
   agent-state:
+  agent-home:
 
 networks:
   labops-internal:
