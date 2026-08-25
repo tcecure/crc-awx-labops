@@ -484,8 +484,22 @@ Module 4 focuses on monitoring, reviewing, and documenting access control activi
 
 2. Run the following command to export the access review to **`review.csv`** (replace `Pod03` with your pod, e.g. `Pod07`):
    ```powershell
-   Get-ADUser -Filter {Enabled -eq $true} -SearchBase "OU=Pod03,OU=Students,DC=acs-p01,DC=local" -Properties MemberOf | Select-Object Name, SamAccountName, Enabled | Export-Csv "C:\CyberLab\Pod03\Lab4-2\review.csv" -NoTypeInformation
+   Get-ADUser -Filter {Enabled -eq $true} -SearchBase "OU=Pod03,OU=Students,DC=acs-p01,DC=local" | Select-Object Name, SamAccountName, Enabled | Export-Csv "C:\CyberLab\Pod03\Lab4-2\review.csv" -NoTypeInformation
    ```
+
+   > **If you copy this out of the PDF, check the spaces.** Copying from a PDF often
+   > drops them, and `Get-ADUser -Filter` becomes `Get-ADUser-Filter`, which PowerShell
+   > reports as *"The term 'Get-ADUser-Filter' is not recognized as the name of a
+   > cmdlet"*. There must be a space after `Get-ADUser`, after `-Filter {...}`, after
+   > `-SearchBase "..."` and after `Export-Csv`. It is also `SamAccountName` — one `m`,
+   > no `e` in the middle. If the line keeps failing, run it in three short steps
+   > instead, which is much harder to mistype:
+   >
+   > ```powershell
+   > $ou = "OU=Pod03,OU=Students,DC=acs-p01,DC=local"
+   > $users = Get-ADUser -Filter {Enabled -eq $true} -SearchBase $ou
+   > $users | Select-Object Name, SamAccountName, Enabled | Export-Csv "C:\CyberLab\Pod03\Lab4-2\review.csv" -NoTypeInformation
+   > ```
 
    > **The file must be named `review.csv`** and live in `C:\CyberLab\PodXX\Lab4-2\`. Verification looks for that exact name and requires it to be non-empty; any other file name will not pass.
 
@@ -594,6 +608,10 @@ Module 4 focuses on monitoring, reviewing, and documenting access control activi
 - If you accidentally modify the wrong account, tell your instructor — they can reset your pod
 - If you can't find a user account, make sure you are looking in the correct OU (Staff vs. Admins)
 - If a command in PowerShell gives an error, check that you replaced `PodXX` and `PXX` with your actual pod number
+- If PowerShell says a term **"is not recognized as the name of a cmdlet"** and the
+  name in the message looks joined together (for example `Get-ADUser-Filter`), the
+  spaces were lost when you pasted — retype the line with a space before every `-`
+  option, or type it in the shorter multi-line form shown in that lab
 - If ADUC won't open, use the Run dialog command from *How to Open Active Directory Users and Computers* (the `RunAsInvoker` line) rather than plain `dsa.msc`
 - If Windows refuses a password you typed, it is the domain password policy, not
   your account: use 12+ characters with upper case, lower case, a number and a
