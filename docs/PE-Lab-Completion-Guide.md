@@ -127,6 +127,16 @@ Either:
 
 If a value you type contains a comma, wrap it in double quotes: `"Disable badge, remove access list entry"`.
 
+Three rules that keep a CSV readable by the grader:
+
+- **One record per line.** Never press Enter inside a cell — the part after the line break
+  becomes a broken row and the rest of your answer is lost. In Notepad, turn on
+  *Format → Word Wrap* so a long sentence wraps on screen without adding a line break.
+- **Do not add columns.** Put everything in the columns that are already in the header row;
+  an extra value on the end shifts the row and it stops matching.
+- **Edit the existing row.** Change the seeded row in place rather than appending a second
+  row for the same badge or subject.
+
 ---
 
 ## Understanding Your Pod
@@ -189,10 +199,11 @@ ACS Consulting must review who holds physical access to the facility and to the 
    | `EMP-104` | `Unauthorized` | Must include **disable**, **remove** or **revoke** — e.g. `Disable badge B-PXX-104 and remove from server room access list` |
    | `CTR-209` | `Unauthorized` | Must include **remove**, **revoke** or **escort** — e.g. `Remove unescorted access; require escorted access until approval is documented` |
 
-   The `Finding` column must be exactly `Unauthorized` for both rows.
+   The `Finding` column must say the access was **unauthorized**; wording around it is fine
+   (`Unauthorized`, `Unauthorized access`, `Unauthorized - terminated`).
 
 #### Completion Criteria
-- [ ] Both `EMP-104` and `CTR-209` have `Finding` = `Unauthorized`
+- [ ] Both `EMP-104` and `CTR-209` are found **unauthorized**
 - [ ] `EMP-104`'s action calls for badge disablement / access removal
 - [ ] `CTR-209`'s action calls for access removal, revocation, or escorted access
 - [ ] All three evidence files are still present
@@ -430,7 +441,7 @@ Dana Brooks reported her badge lost at 10:00 on 2026-06-07. Later that day her b
 
    | BadgeId | What to set |
    |---|---|
-   | `B-PXX-115` | `Status` → `Disabled` (or `Revoked`) |
+   | `B-PXX-115` | `Status` → `Disabled` (or `Revoked`) — change this row, do not add a second `B-PXX-115` row |
    | `B-PXX-215` | `Status` → `Active`, `EmployeeId` → `EMP-115` (name stays Dana Brooks; add an issue date) |
 
 4. **Complete `PE-M3-L2_IncidentReport.csv`** (row `IR-PXX-115` already exists):
