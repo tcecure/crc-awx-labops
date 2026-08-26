@@ -1,0 +1,29 @@
+---
+# Shared DC mode: (re)deploy the pod ADUC launchers and the public desktop shortcut.
+# Safe to re-run at any time; it rewrites the launchers to their known-good form.
+- name: "Deploy pod ADUC launchers - Shared DC"
+  hosts: crc_shared_dcs[0]
+  gather_facts: false
+  vars_files:
+    - "{{ playbook_dir }}/../vars/student-assignments.yml"
+  vars:
+    # Target selection (same convention as the seed playbooks):
+    #   pods="7"       -> only Pod07
+    #   pods="7,9,12"  -> those pods
+    #   pod_id=7       -> only Pod07
+    #   (neither set)  -> range(1, pod_count+1)
+    pod_list: >-
+      {{ ((pods | default(pod_id) | default('') | string).split(',') | map('trim') | select('match', '^[0-9]+$') | map('int') | list)
+         if ((pods | default('') | string | trim) != '' or (pod_id | default('') | string | trim) != '')
+         else (range(1, (pod_count | default(20) | int) + 1) | list) }}
+  tasks:
+    - name: Validate selected pods
+      ansible.builtin.assert:
+        that:
+          - pod_list | length > 0
+          - pod_list | min >= 1
+          - pod_list | max <= (pod_count | default(20) | int)
+        fail_msg: "pods/pod_id must select pods between 1 and {{ pod_count | default(20) | int }}"
+
+    - name: Deploy pod ADUC launchers
+      ansible.builtin.include_tasks: tasks/deploy-pod-shortcuts.yml
