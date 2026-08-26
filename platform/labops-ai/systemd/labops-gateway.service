@@ -1,0 +1,32 @@
+[Unit]
+Description=DigitalRCC LabOps AI - frontend + AI gateway (the only publicly reachable service)
+After=network-online.target labops-agent.service
+Wants=labops-agent.service
+
+[Service]
+Type=simple
+User=labops-gateway
+Group=labops-gateway
+WorkingDirectory=/opt/labops/app/current
+EnvironmentFile=/etc/labops/labops.env
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=5
+# The gateway holds every credential, so it gets the tightest sandbox the app allows.
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+ReadWritePaths=/opt/labops/app/shared
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+LockPersonality=yes
+MemoryDenyWriteExecute=no
+# Secrets must never reach the journal in plaintext.
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
