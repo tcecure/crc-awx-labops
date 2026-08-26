@@ -19,6 +19,18 @@
           return $path
       }
 
+      # Seeded identifiers are compared without case or padding sensitivity: a student
+      # retyping the cell as "temp-p06-014 " documents the same badge.
+      function Same-Id {
+          param([object]$Value, [string]$Expected)
+          return ([string]$Value).Trim().ToLowerInvariant() -eq $Expected.ToLowerInvariant()
+      }
+
+      function Find-Row {
+          param([object[]]$Rows, [string]$Column, [string]$Expected)
+          return $Rows | Where-Object { Same-Id $_.$Column $Expected } | Select-Object -Last 1
+      }
+
       # Students annotate the seeded records in their own words ("Unauthorized access",
       # "Authorized - business need"), so verdicts are matched on the word rather than
       # compared to a fixed string. 'unauthorized' is tested first because it contains
@@ -44,8 +56,8 @@
       $reviewPath = Require-File $reasons 'PE-M1-L1_AccessReview.csv'
       if (Test-Path $reviewPath) {
           $rows = @(Import-Csv $reviewPath)
-          $terminated = $rows | Where-Object SubjectId -eq 'EMP-104' | Select-Object -First 1
-          $contractor = $rows | Where-Object SubjectId -eq 'CTR-209' | Select-Object -First 1
+          $terminated = Find-Row $rows 'SubjectId' 'EMP-104'
+          $contractor = Find-Row $rows 'SubjectId' 'CTR-209'
           if (-not $terminated -or -not (Is-FalseValue $terminated.Finding)) { $reasons.Add('Taylor Reed must be identified as unauthorized') }
           if (-not $terminated -or ([string]$terminated.RequiredAction).Trim().ToLowerInvariant() -notmatch 'disab|remov|revok') { $reasons.Add('Taylor Reed requires badge disablement and access removal') }
           if (-not $contractor -or -not (Is-FalseValue $contractor.Finding)) { $reasons.Add('Morgan Blake must be identified as unauthorized') }
@@ -62,12 +74,12 @@
       if (Test-Path $decisionPath) {
           $rows = @(Import-Csv $decisionPath)
           foreach ($eventId in @('E-1001','E-1003')) {
-              $row = $rows | Where-Object EventId -eq $eventId | Select-Object -First 1
+              $row = Find-Row $rows 'EventId' $eventId
               if (-not $row -or -not (Is-TrueValue $row.Authorized)) { $reasons.Add("$eventId must be marked authorized") }
               elseif ([string]::IsNullOrWhiteSpace($row.Reason)) { $reasons.Add("$eventId requires a reason") }
           }
           foreach ($eventId in @('E-1002','E-1004')) {
-              $row = $rows | Where-Object EventId -eq $eventId | Select-Object -First 1
+              $row = Find-Row $rows 'EventId' $eventId
               if (-not $row -or -not (Is-FalseValue $row.Authorized)) { $reasons.Add("$eventId must be marked unauthorized") }
               elseif ([string]::IsNullOrWhiteSpace($row.Reason)) { $reasons.Add("$eventId requires a reason") }
           }
@@ -82,7 +94,7 @@
       Require-File $reasons 'PE-M2-L1_EscortPolicy.txt' | Out-Null
       $escortPath = Require-File $reasons 'PE-M2-L1_EscortReview.csv'
       if (Test-Path $escortPath) {
-          $record = @(Import-Csv $escortPath) | Where-Object VisitorId -eq 'V-3002' | Select-Object -First 1
+          $record = Find-Row @(Import-Csv $escortPath) 'VisitorId' 'V-3002'
           if (-not $record -or ([string]$record.Finding).Trim().ToLowerInvariant() -notmatch 'unescorted|no escort|without( an)? escort') { $reasons.Add('V-3002 must be identified as unescorted') }
           if (-not $record -or ([string]$record.RequiredAction).Trim().ToLowerInvariant() -notmatch 'report|incident|remov|escort') { $reasons.Add('escort violation requires a documented corrective action') }
           if (-not $record -or ([string]$record.Evidence).Length -lt 15) { $reasons.Add('escort finding requires evidence from the seeded records') }
@@ -95,8 +107,8 @@
       $visitorPath = Require-File $reasons 'PE-M2-L2_VisitorLog.csv'
       if (Test-Path $visitorPath) {
           $record = @(Import-Csv $visitorPath) | Select-Object -First 1
-          if (-not $record -or $record.TemporaryBadgeId -ne "TEMP-$prefix-014") { $reasons.Add("temporary badge TEMP-$prefix-014 must be issued") }
-          if (-not $record -or $record.EscortId -ne 'EMP-102') { $reasons.Add('EMP-102 must be assigned as the escort') }
+          if (-not $record -or -not (Same-Id $record.TemporaryBadgeId "TEMP-$prefix-014")) { $reasons.Add("temporary badge TEMP-$prefix-014 must be issued") }
+          if (-not $record -or -not (Same-Id $record.EscortId 'EMP-102')) { $reasons.Add('EMP-102 must be assigned as the escort') }
           $signIn = [datetime]::MinValue
           $signOut = [datetime]::MinValue
           if (-not $record -or -not [datetime]::TryParse($record.SignIn, [ref]$signIn)) { $reasons.Add('visitor sign-in time is missing or invalid') }
@@ -114,11 +126,11 @@
       $discrepancyPath = Require-File $reasons 'PE-M3-L1_DiscrepancyReview.csv'
       if (Test-Path $discrepancyPath) {
           $rows = @(Import-Csv $discrepancyPath)
-          $badge = $rows | Where-Object DiscrepancyId -eq 'D-01' | Select-Object -First 1
-          $alarm = $rows | Where-Object DiscrepancyId -eq 'D-02' | Select-Object -First 1
-          if (-not $badge -or $badge.SourceEvent -ne 'BC-5003' -or ([string]$badge.Finding).Trim().ToLowerInvariant() -notmatch 'after|returned|18:42') { $reasons.Add('D-01 must identify badge use after visitor sign-out and return') }
+          $badge = Find-Row $rows 'DiscrepancyId' 'D-01'
+          $alarm = Find-Row $rows 'DiscrepancyId' 'D-02'
+          if (-not $badge -or -not (Same-Id $badge.SourceEvent 'BC-5003') -or ([string]$badge.Finding).Trim().ToLowerInvariant() -notmatch 'after|returned|18:42') { $reasons.Add('D-01 must identify badge use after visitor sign-out and return') }
           if (-not $badge -or ([string]$badge.RequiredAction).Trim().ToLowerInvariant() -notmatch 'disab|investigat|revok') { $reasons.Add('D-01 requires badge containment or investigation') }
-          if (-not $alarm -or $alarm.SourceEvent -ne 'ALM-9007' -or ([string]$alarm.Finding).Trim().ToLowerInvariant() -notmatch 'forced|no badge|unmatched') { $reasons.Add('D-02 must identify the forced-door alarm without a matching badge event') }
+          if (-not $alarm -or -not (Same-Id $alarm.SourceEvent 'ALM-9007') -or ([string]$alarm.Finding).Trim().ToLowerInvariant() -notmatch 'forced|no badge|unmatched') { $reasons.Add('D-02 must identify the forced-door alarm without a matching badge event') }
           if (-not $alarm -or ([string]$alarm.RequiredAction).Trim().ToLowerInvariant() -notmatch 'investigat|incident|review') { $reasons.Add('D-02 requires investigation or incident handling') }
       }
       $results['M3-L1'] = New-Result $reasons 'Badge, visitor, and alarm records are reconciled with both discrepancies documented'
@@ -133,18 +145,18 @@
           $inventory = @(Import-Csv $inventoryPath)
           # Students often append a corrected row instead of editing the seeded one, so
           # the most recent row for a badge is the authoritative one.
-          $lost = $inventory | Where-Object BadgeId -eq "B-$prefix-115" | Select-Object -Last 1
-          $replacement = $inventory | Where-Object BadgeId -eq "B-$prefix-215" | Select-Object -Last 1
+          $lost = Find-Row $inventory 'BadgeId' "B-$prefix-115"
+          $replacement = Find-Row $inventory 'BadgeId' "B-$prefix-215"
           if (-not $lost -or ([string]$lost.Status).Trim().ToLowerInvariant() -notmatch 'disab|revok') { $reasons.Add("B-$prefix-115 must be disabled or revoked") }
           if (-not $replacement -or ([string]$replacement.Status).Trim().ToLowerInvariant() -notmatch 'active|issued') { $reasons.Add("B-$prefix-215 must be active") }
-          if (-not $replacement -or ([string]$replacement.EmployeeId).Trim() -ne 'EMP-115') { $reasons.Add("B-$prefix-215 must be assigned to EMP-115") }
+          if (-not $replacement -or -not (Same-Id $replacement.EmployeeId 'EMP-115')) { $reasons.Add("B-$prefix-215 must be assigned to EMP-115") }
       }
       if (Test-Path $incidentPath) {
           $record = @(Import-Csv $incidentPath) | Select-Object -First 1
-          if (-not $record -or $record.LostBadgeId -ne "B-$prefix-115") { $reasons.Add('incident report has the wrong lost badge') }
-          if (-not $record -or $record.PostLossEventId -ne 'EVT-6112') { $reasons.Add('incident report must cite EVT-6112') }
+          if (-not $record -or -not (Same-Id $record.LostBadgeId "B-$prefix-115")) { $reasons.Add('incident report has the wrong lost badge') }
+          if (-not $record -or -not (Same-Id $record.PostLossEventId 'EVT-6112')) { $reasons.Add('incident report must cite EVT-6112') }
           if (-not $record -or ([string]$record.ContainmentAction).Trim().ToLowerInvariant() -notmatch 'disab|revok') { $reasons.Add('incident report must document badge disablement') }
-          if (-not $record -or $record.ReplacementBadgeId -ne "B-$prefix-215") { $reasons.Add('incident report has the wrong replacement badge') }
+          if (-not $record -or -not (Same-Id $record.ReplacementBadgeId "B-$prefix-215")) { $reasons.Add('incident report has the wrong replacement badge') }
           if (-not $record -or [string]::IsNullOrWhiteSpace($record.ReportedBy)) { $reasons.Add('incident report is missing ReportedBy') }
           if (-not $record -or ([string]$record.Summary).Length -lt 25) { $reasons.Add('incident summary is incomplete (as saved it is ' + ([string]$record.Summary).Length + ' characters - keep the whole summary on one line, a line break inside the cell truncates it)') }
       }

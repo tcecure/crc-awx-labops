@@ -93,7 +93,8 @@
       $devList = "C:\CyberLab\$podName\IA-Artifacts\Authorized_Device_List.csv"
       if (Test-Path $devList) {
         $content = Get-Content $devList -Raw
-        if ($content -notmatch "AA-BB-CC-11-22-33") { $reasons += "rogue MAC not added to device list" }
+        # The MAC counts however the student separated the octets (AA-BB-.., AA:BB:.., AABB..).
+        if ($content -notmatch "AA[-: ]?BB[-: ]?CC[-: ]?11[-: ]?22[-: ]?33") { $reasons += "rogue MAC not added to device list" }
         if ($content -notmatch "UNAUTHORIZED") { $reasons += "device not marked UNAUTHORIZED" }
       } else { $reasons += "Authorized_Device_List.csv not found" }
       $cfg = "C:\CyberLab\$podName\IA-Artifacts\Device_Config_Record.csv"
