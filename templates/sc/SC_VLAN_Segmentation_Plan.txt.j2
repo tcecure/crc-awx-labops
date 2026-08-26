@@ -11,29 +11,34 @@ subnet with no isolation. A Guest WiFi user can reach HR
 file shares and Finance databases.
 
 SEGMENTATION REQUIREMENTS:
+Each VLAN needs a subnet of its own. Your LAN already owns all of
+10.51.{{ pod_id | int }}.0/24, so pfSense rejects any VLAN address inside it -
+use the addresses below.
+
   VLAN 10 - HR Department
-    Subnet: {{ gw_ip | replace('.1', '.0') | replace('.0', '') }}.10.0/24
-    Gateway: {{ gw_ip | replace('.1', '.0') | replace('.0', '') }}.10.1
+    Subnet: 10.61.{{ pod_id | int }}.0/24
+    Gateway: 10.61.{{ pod_id | int }}.1
     Access: DC01 (DNS, AD), HR file shares only
 
   VLAN 20 - Finance Department
-    Subnet: {{ gw_ip | replace('.1', '.0') | replace('.0', '') }}.20.0/24
-    Gateway: {{ gw_ip | replace('.1', '.0') | replace('.0', '') }}.20.1
+    Subnet: 10.62.{{ pod_id | int }}.0/24
+    Gateway: 10.62.{{ pod_id | int }}.1
     Access: DC01 (DNS, AD), accounting app (HTTPS only)
 
   VLAN 30 - Engineering Department
-    Subnet: {{ gw_ip | replace('.1', '.0') | replace('.0', '') }}.30.0/24
-    Gateway: {{ gw_ip | replace('.1', '.0') | replace('.0', '') }}.30.1
+    Subnet: 10.63.{{ pod_id | int }}.0/24
+    Gateway: 10.63.{{ pod_id | int }}.1
     Access: DC01 (DNS, AD), internet, dev servers
 
   VLAN 40 - Guest WiFi
-    Subnet: {{ gw_ip | replace('.1', '.0') | replace('.0', '') }}.40.0/24
-    Gateway: {{ gw_ip | replace('.1', '.0') | replace('.0', '') }}.40.1
+    Subnet: 10.64.{{ pod_id | int }}.0/24
+    Gateway: 10.64.{{ pod_id | int }}.1
     Access: Internet ONLY (no internal resources)
 
 YOUR TASKS:
-1. Create VLANs on pfSense (Interfaces > VLANs)
-2. Assign interfaces for each VLAN
+1. Create VLANs on pfSense (Interfaces > VLANs), parent vtnet1
+2. Assign interfaces for each VLAN (Interfaces > Assignments; the Add
+   button only appears once a VLAN exists)
 3. Configure DHCP for each VLAN subnet
 4. Create firewall rules enforcing isolation:
    [ ] Guest cannot reach HR, Finance, or Engineering

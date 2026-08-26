@@ -66,7 +66,8 @@ You will connect to the lab through **Apache Guacamole** — a web-based remote 
 | Connection Name | What It Is |
 |---|---|
 | **PODXX-DC** | Domain Controller — **use this for all MP labs** |
-| **PODXX-WS01** | Workstation (used for other lab families) |
+
+This is the only connection you get: every MP lab is done on this desktop.
 
 1. Click on **PODXX-DC** (where XX is your pod number, e.g., **POD03-DC**)
 2. The remote desktop session opens directly in your browser — no extra login is needed
@@ -93,12 +94,17 @@ You will connect to the lab through **Apache Guacamole** — a web-based remote 
 
 ### What You Will See
 
+> **File names use your own pod prefix, not `PXX`.** `PXX` is a placeholder for your
+> pod prefix throughout this guide: Pod 07 sees `P07-FCI-USB-Contents.txt`, Pod 03 sees
+> `P03-FCI-USB-Contents.txt`. There is no file literally named `PXX-…`, so if a file in
+> the list below appears to be missing, look for the same name with your prefix.
+
 | File | What It Is |
 |---|---|
 | `MP-Lab-Instructions.txt` | Short summary of all three labs |
 | `PXX-FCI-USB.vhdx` | Simulated USB drive that contains contract data |
 | `PXX-Employee-Handbook.vhdx` | Simulated USB drive with general company documents |
-| `PXX-FCI-USB-Contents.txt`, `PXX-Employee-Handbook-Contents.txt` | Full contents listing of each drive, including hidden items — read these instead of mounting |
+| `PXX-FCI-USB-Contents.txt`, `PXX-Employee-Handbook-Contents.txt` | Full contents listing of each drive, including hidden items — read these instead of mounting (Pod 07: `P07-FCI-USB-Contents.txt`) |
 | `MediaInventory.xlsx` | Media inventory spreadsheet |
 | `MediaClassificationWorksheet.docx` | Worksheet you fill in for M1-L1 |
 | `MediaClassificationResponses.csv` | **Your graded answer file** for M1-L1 |
@@ -147,7 +153,7 @@ captured from the mounted media, and you classify and document from that.
 ### Read what is on a drive
 
 1. In File Explorer, open `C:\CyberLab\PodXX\MP-Artifacts\`
-2. Open the listing next to the drive image:
+2. Open the listing next to the drive image (with your pod prefix in place of `PXX`):
    - `PXX-FCI-USB-Contents.txt`
    - `PXX-Employee-Handbook-Contents.txt`
 3. Each listing shows the volume label and **every** file and folder on that

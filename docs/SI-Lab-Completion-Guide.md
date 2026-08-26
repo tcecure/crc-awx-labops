@@ -16,6 +16,7 @@ This guide provides step-by-step instructions for completing all 12 System & Inf
 8. [Module 4: GPO Enforcement and Rogue Developer (Labs L4.1 – L4.3)](#module-4-gpo-enforcement-and-rogue-developer)
 9. [Quick Reference: Where to Find Things](#quick-reference-where-to-find-things)
 10. [Tips and Common Mistakes](#tips-and-common-mistakes)
+11. [Lab Completion Checklist](#lab-completion-checklist)
 
 ---
 
@@ -64,12 +65,13 @@ You will connect to the lab through **Apache Guacamole** — a web-based remote 
 
 ### Step 3: Connect to the Domain Controller
 
-After logging in, you will see a list of available connections. Each student has two pre-configured connections:
+After logging in you will see one pre-configured connection for your pod:
 
 | Connection Name | What It Is |
 |---|---|
 | **PODXX-DC** | Domain Controller — **use this for all SI labs** |
-| **PODXX-WS01** | Workstation (used for other lab families) |
+
+This is the only connection you get: every SI lab is done on this desktop.
 
 1. Click on **PODXX-DC** (where XX is your pod number, e.g., **POD03-DC**)
 2. The remote desktop session will open directly in your browser — no extra login is needed (credentials are pre-configured)
@@ -980,15 +982,15 @@ Use this checklist to track your progress:
 
 | Lab | Task | Done? |
 |---|---|---|
-| L1.1 | Classify 5 system flaws and complete the identification worksheet | [ ] |
-| L1.2 | Evaluate 3 vulnerability sources and complete the classification worksheet | [ ] |
-| L1.3 | Calculate exposure windows for 8 findings and write analysis report | [ ] |
-| L2.1 | Analyze Nessus scan report and identify compliance violations | [ ] |
-| L2.2 | Review patch history and determine true patch status | [ ] |
-| L2.3 | Complete vulnerability report form and remediation ticket | [ ] |
-| L3.1 | Audit AV coverage across 6 endpoints and identify gaps | [ ] |
-| L3.2 | Verify scan schedules and log analysis across all systems | [ ] |
-| L3.3 | Check definition currency and identify systems requiring isolation | [ ] |
-| L4.1 | Review GPO settings and identify the Tamper Protection gap | [ ] |
-| L4.2 | Reconstruct incident timeline from Defender event log | [ ] |
-| L4.3 | Complete full rogue developer investigation with exclusion form | [ ] |
+| L1.1 | Classify 5 system flaws and complete the identification worksheet | ☐ |
+| L1.2 | Evaluate 3 vulnerability sources and complete the classification worksheet | ☐ |
+| L1.3 | Calculate exposure windows for 8 findings and write analysis report | ☐ |
+| L2.1 | Analyze Nessus scan report and identify compliance violations | ☐ |
+| L2.2 | Review patch history and determine true patch status | ☐ |
+| L2.3 | Complete vulnerability report form and remediation ticket | ☐ |
+| L3.1 | Audit AV coverage across 6 endpoints and identify gaps | ☐ |
+| L3.2 | Verify scan schedules and log analysis across all systems | ☐ |
+| L3.3 | Check definition currency and identify systems requiring isolation | ☐ |
+| L4.1 | Review GPO settings and identify the Tamper Protection gap | ☐ |
+| L4.2 | Reconstruct incident timeline from Defender event log | ☐ |
+| L4.3 | Complete full rogue developer investigation with exclusion form | ☐ |

@@ -36,7 +36,7 @@ supporting 20 concurrent student pods.
 | M1-L1 | User Identification | Shared Reception Account | `PXX-frontdesk` shared account enabled; individual accounts absent | Disable shared account; create `PXX-k.omalley` + `PXX-temp.agency01`; evidence file |
 | M1-L2 | User Identification | Zombie Account | `PXX-tom.davis` enabled in Sales OU with group membership | Disable; move to Terminated OU; strip groups |
 | M1-L3 | User Identification | Generic Accounts | `PXX-admin`, `PXX-user1`, `PXX-test` enabled; no inventory CSV | Disable/remove; create `Authorized_User_Inventory.csv` |
-| M2-L1 | Non-Person Entity ID | Scheduled Task as Human | "`PodXX ACS Nightly Backup`" runs as `PXX-s.jenkins`; `PXX-svc_backup` absent | Create `PXX-svc_backup`; change task principal |
+| M2-L1 | Non-Person Entity ID | Scheduled Task as Human | "`PodXX ACS Nightly Backup`" runs as `PXX-s.jenkins`; `PXX-svc_backup` absent | Create `PXX-svc_backup`; task principal change credited automatically while pods share the DC (`ia_m2l1_task_step_waived`) |
 | M2-L2 | Non-Person Entity ID | Rogue Device Artifact | Device list present; rogue MAC in hint file; no config record | Add rogue MAC as UNAUTHORIZED; create `Device_Config_Record.csv` |
 | M2-L3 | Non-Person Entity ID | Service Account Matrix | `PXX-svc_backup/web/print` with empty descriptions; no matrix | Populate descriptions; create `Service_Account_Matrix.csv` |
 | M3-L1 | User Auth Management | Password Policy Report | No report or evidence files | Export `PasswordPolicy_Report.html`; create evidence |

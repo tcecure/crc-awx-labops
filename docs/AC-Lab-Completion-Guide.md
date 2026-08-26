@@ -16,6 +16,7 @@ This guide provides step-by-step instructions for completing all 12 Access Contr
 8. [Module 4: Audit and Accountability (Labs L4.1 – L4.3)](#module-4-audit-and-accountability)
 9. [Quick Reference: Where to Find Things in ADUC](#quick-reference-where-to-find-things)
 10. [Tips and Common Mistakes](#tips-and-common-mistakes)
+11. [Lab Completion Checklist](#lab-completion-checklist)
 
 ---
 
@@ -33,11 +34,20 @@ In these labs you will use **Active Directory Users and Computers (ADUC)** — t
 
 ### CMMC Context
 
-These labs align with **CMMC Level 1 Access Control (AC)** requirements:
-- **AC.L1-3.1.1** — Limit system access to authorized users
-- **AC.L1-3.1.2** — Limit system access to the types of transactions and functions authorized users are permitted to execute
-- **AC.L1-3.1.20** — Verify and control connections to external systems
-- **AC.L1-3.1.22** — Control information posted or processed on publicly accessible systems
+The 12 labs in this guide practice two **CMMC Level 1 Access Control (AC)**
+requirements:
+
+| Requirement | How these labs address it |
+|---|---|
+| **AC.L1-3.1.1** — Limit system access to authorized users | Joiner/mover/leaver work: disabling terminated accounts, provisioning approved accounts, offboarding, contractor expiration, access-review evidence (L1.1, L2.1–L2.3, L4.1–L4.3) |
+| **AC.L1-3.1.2** — Limit access to the transactions and functions users are authorized to perform | Least-privilege work: correcting group membership, removing nested privilege, delegating a single permission instead of admin rights (L1.2, L1.3, L3.1–L3.3) |
+
+The other two Level 1 AC requirements — **AC.L1-3.1.20** (connections to external
+systems) and **AC.L1-3.1.22** (publicly accessible systems) — are **not**
+practiced in these Active Directory exercises. Boundary control is exercised in
+the System & Communications Protection (SC) firewall labs (SC.L1-3.13.1), and the
+remaining policy elements are covered in classroom material rather than a hands-on
+lab.
 
 ---
 
@@ -64,12 +74,14 @@ You will connect to the lab through **Apache Guacamole** — a web-based remote 
 
 ### Step 3: Connect to the Domain Controller
 
-After logging in, you will see a list of available connections. Each student has two pre-configured connections:
+After logging in you will see one connection for your pod:
 
 | Connection Name | What It Is |
 |---|---|
-| **PODXX-DC** | Domain Controller — **use this for all AC labs** |
-| **PODXX-WS01** | Workstation (used for other lab families) |
+| **PODXX-DC** | Domain Controller — your desktop for the AC labs and every other lab family |
+
+Your pod's pfSense firewall (used in the SC labs) is not a connection here: you
+reach it by browsing to `http://10.51.XX.1` from inside this desktop.
 
 1. Click on **PODXX-DC** (where XX is your pod number, e.g., **POD03-DC**)
 2. The remote desktop session will open directly in your browser — no extra login is needed (credentials are pre-configured)
@@ -83,13 +95,23 @@ You should now see the Windows Server desktop in your browser.
 
 ## How to Open Active Directory Users and Computers
 
-1. On the server desktop, look for the **Server Manager** window (it usually opens automatically)
-2. Click **Tools** in the top-right menu bar
-3. Select **Active Directory Users and Computers** from the dropdown menu
+1. On the server desktop, double-click the **Active Directory Users and Computers** shortcut
 
-**Alternative method:**
-1. Press **Windows key + R** to open the Run dialog
-2. Type `dsa.msc` and press Enter
+**If the shortcut is missing:** press **Windows key + R** and paste this line
+exactly, then press Enter:
+
+```
+cmd /c "set __COMPAT_LAYER=RunAsInvoker&& start "" mmc.exe dsa.msc"
+```
+
+> **Do not open ADUC any other way.** Plain `dsa.msc`, **Server Manager → Tools**
+> and a blank MMC console all make Windows try to start ADUC elevated and prompt
+> for administrator credentials. Student accounts are deliberately not
+> administrators of the shared domain controller, so that prompt always ends in
+> *"Logon failure: the user has not been granted the requested logon type at this
+> computer"* — nothing is broken. Click **No**, then use the desktop shortcut or
+> the command above; it runs ADUC with your own delegated pod permissions, which
+> are all these labs need.
 
 You should now see the ADUC window with a tree structure on the left side.
 
@@ -254,7 +276,11 @@ Module 2 focuses on the lifecycle of user accounts — when people join the orga
    - **Last name:** User1
    - **User logon name:** `PXX-new.user1` (replace PXX with your pod prefix, e.g., `P03-new.user1`)
 7. Click **Next**
-8. Enter a password (use the lab password your instructor provided)
+8. Enter a password. The domain now enforces a strong policy, so it must be **at
+   least 12 characters** and include an upper-case letter, a lower-case letter, a
+   number and a symbol (for example `LabUser!2026#ac`). A shorter or simpler
+   password is rejected with *"Windows cannot set the password ... it does not
+   meet the length, complexity, or history requirement of the domain."*
 9. Uncheck **"User must change password at next logon"** (for lab purposes)
 10. Click **Next**, then **Finish**
 11. Now add the user to the appropriate group:
@@ -458,8 +484,22 @@ Module 4 focuses on monitoring, reviewing, and documenting access control activi
 
 2. Run the following command to export the access review to **`review.csv`** (replace `Pod03` with your pod, e.g. `Pod07`):
    ```powershell
-   Get-ADUser -Filter {Enabled -eq $true} -SearchBase "OU=Pod03,OU=Students,DC=acs-p01,DC=local" -Properties MemberOf | Select-Object Name, SamAccountName, Enabled | Export-Csv "C:\CyberLab\Pod03\Lab4-2\review.csv" -NoTypeInformation
+   Get-ADUser -Filter {Enabled -eq $true} -SearchBase "OU=Pod03,OU=Students,DC=acs-p01,DC=local" | Select-Object Name, SamAccountName, Enabled | Export-Csv "C:\CyberLab\Pod03\Lab4-2\review.csv" -NoTypeInformation
    ```
+
+   > **If you copy this out of the PDF, check the spaces.** Copying from a PDF often
+   > drops them, and `Get-ADUser -Filter` becomes `Get-ADUser-Filter`, which PowerShell
+   > reports as *"The term 'Get-ADUser-Filter' is not recognized as the name of a
+   > cmdlet"*. There must be a space after `Get-ADUser`, after `-Filter {...}`, after
+   > `-SearchBase "..."` and after `Export-Csv`. It is also `SamAccountName` — one `m`,
+   > no `e` in the middle. If the line keeps failing, run it in three short steps
+   > instead, which is much harder to mistype:
+   >
+   > ```powershell
+   > $ou = "OU=Pod03,OU=Students,DC=acs-p01,DC=local"
+   > $users = Get-ADUser -Filter {Enabled -eq $true} -SearchBase $ou
+   > $users | Select-Object Name, SamAccountName, Enabled | Export-Csv "C:\CyberLab\Pod03\Lab4-2\review.csv" -NoTypeInformation
+   > ```
 
    > **The file must be named `review.csv`** and live in `C:\CyberLab\PodXX\Lab4-2\`. Verification looks for that exact name and requires it to be non-empty; any other file name will not pass.
 
@@ -568,7 +608,16 @@ Module 4 focuses on monitoring, reviewing, and documenting access control activi
 - If you accidentally modify the wrong account, tell your instructor — they can reset your pod
 - If you can't find a user account, make sure you are looking in the correct OU (Staff vs. Admins)
 - If a command in PowerShell gives an error, check that you replaced `PodXX` and `PXX` with your actual pod number
-- If ADUC won't open, try the Run dialog method: **Windows + R → dsa.msc → Enter**
+- If PowerShell says a term **"is not recognized as the name of a cmdlet"** and the
+  name in the message looks joined together (for example `Get-ADUser-Filter`), the
+  spaces were lost when you pasted — retype the line with a space before every `-`
+  option, or type it in the shorter multi-line form shown in that lab
+- If ADUC won't open, use the Run dialog command from *How to Open Active Directory Users and Computers* (the `RunAsInvoker` line) rather than plain `dsa.msc`
+- If Windows refuses a password you typed, it is the domain password policy, not
+  your account: use 12+ characters with upper case, lower case, a number and a
+  symbol, and do not reuse a recent password
+- If a **Windows Security** credential prompt appears (usually from Server
+  Manager), click **Cancel** — no lab in this guide needs an administrator tool
 
 ---
 
@@ -578,15 +627,15 @@ Use this checklist to track your progress:
 
 | Lab | Task | Done? |
 |---|---|---|
-| L1.1 | Disable the terminated employee (PXX-ex.employee) | [ ] |
-| L1.2 | Remove PXX-hr.user1 from Finance group | [ ] |
-| L1.3 | Remove PXX-it.helpdesk from IT-Admins group | [ ] |
-| L2.1 | Create the new user account (PXX-new.user1) | [ ] |
-| L2.2 | Remove PXX-consult.user1 from Consulting group | [ ] |
-| L2.3 | Disable, de-group, and move PXX-fin.user1 to Terminated OU | [ ] |
-| L3.1 | Move PXX-sales.user1 from Executive OU back to Staff | [ ] |
-| L3.2 | Remove PXX-SG-ACS-All-Staff from IT-Admins group | [ ] |
-| L3.3 | Delegate password reset for Staff OU to PXX-it.helpdesk | [ ] |
-| L4.1 | Set expiration date on PXX-contractor.user1 | [ ] |
-| L4.2 | Create access review evidence in Lab4-2 folder | [ ] |
-| L4.3 | Replace placeholder with real audit data in Lab4-3 folder | [ ] |
+| L1.1 | Disable the terminated employee (PXX-ex.employee) | ☐ |
+| L1.2 | Remove PXX-hr.user1 from Finance group | ☐ |
+| L1.3 | Remove PXX-it.helpdesk from IT-Admins group | ☐ |
+| L2.1 | Create the new user account (PXX-new.user1) | ☐ |
+| L2.2 | Remove PXX-consult.user1 from Consulting group | ☐ |
+| L2.3 | Disable, de-group, and move PXX-fin.user1 to Terminated OU | ☐ |
+| L3.1 | Move PXX-sales.user1 from Executive OU back to Staff | ☐ |
+| L3.2 | Remove PXX-SG-ACS-All-Staff from IT-Admins group | ☐ |
+| L3.3 | Delegate password reset for Staff OU to PXX-it.helpdesk | ☐ |
+| L4.1 | Set expiration date on PXX-contractor.user1 | ☐ |
+| L4.2 | Create access review evidence in Lab4-2 folder | ☐ |
+| L4.3 | Replace placeholder with real audit data in Lab4-3 folder | ☐ |

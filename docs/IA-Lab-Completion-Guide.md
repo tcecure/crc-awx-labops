@@ -27,7 +27,10 @@ This guide provides step-by-step instructions for completing all 12 Identificati
 
 - Your **Pod number** (your instructor will assign this, e.g., Pod01, Pod05, Pod12)
 - Your **Guacamole login credentials** (your instructor will provide your username and password)
-- The **lab password** your instructor gives you for creating new accounts
+- A password you choose for the accounts you create: **at least 12 characters**
+  with an upper-case letter, a lower-case letter, a number and a symbol (for
+  example `LabUser!2026#ia`). Your own sign-in password is shorter than this and
+  will be rejected
 - A computer with a web browser (Chrome, Firefox, or Edge) — no special software needed
 
 ### What You Will Be Doing
@@ -72,7 +75,8 @@ You will connect to the lab through **Apache Guacamole** — a web-based remote 
 | Connection Name | What It Is |
 |---|---|
 | **PODXX-DC** | Domain Controller — **use this for all IA labs** |
-| **PODXX-WS01** | Workstation (used for other lab families) |
+
+This is the only connection you get: every IA lab is done on this desktop.
 
 1. Click on **PODXX-DC** (where XX is your pod number, e.g., **POD03-DC**)
 2. The remote desktop session opens directly in your browser — no extra login is needed
@@ -91,18 +95,34 @@ You will connect to the lab through **Apache Guacamole** — a web-based remote 
 ## How to Open Your Tools
 
 **Active Directory Users and Computers (ADUC)**
-1. On the server desktop, find the **Server Manager** window (it usually opens automatically)
-2. Click **Tools** in the top-right menu bar
-3. Select **Active Directory Users and Computers**
+1. On the server desktop, double-click the **Active Directory Users and Computers** shortcut
 
-*Alternative:* press **Windows + R**, type `dsa.msc`, press Enter.
+*If the shortcut is missing:* press **Windows + R** and paste this line exactly, then press Enter:
+
+```
+cmd /c "set __COMPAT_LAYER=RunAsInvoker&& start "" mmc.exe dsa.msc"
+```
+
+> **Do not open ADUC any other way.** Plain `dsa.msc`, **Server Manager → Tools**
+> and a blank MMC console all make Windows try to start it elevated and show a
+> **User Account Control** prompt for administrator credentials. Student accounts
+> are deliberately not administrators of the shared domain controller, so that
+> prompt always fails with *"Logon failure: the user has not been granted the
+> requested logon type at this computer"* — nothing is broken. Click **No** and
+> use the shortcut (or the command above), which runs ADUC with your own
+> delegated pod permissions.
 
 **PowerShell**
-1. Right-click the **Start** button → **Windows PowerShell** (use **(Admin)** where a lab says so)
+1. Right-click the **Start** button → **Windows PowerShell**
 2. *Alternative:* **Windows + R** → `powershell` → Enter
 
+> Run PowerShell normally. Do **not** choose **Windows PowerShell (Admin)** or
+> **Run as administrator** — every command in this guide works with your own
+> delegated permissions, and elevating triggers the same UAC prompt described
+> above.
+
 **Task Scheduler** (needed for M2-L1)
-1. **Windows + R** → `taskschd.msc` → Enter, or Server Manager → **Tools → Task Scheduler**
+1. **Windows + R** → `taskschd.msc` → Enter
 
 **File Explorer**
 - **Windows + E**, or the folder icon on the taskbar
@@ -193,7 +213,10 @@ The front desk uses one shared account, `PXX-frontdesk`, that multiple reception
    - Right-click the **Staff** OU → **New → User**
    - **First name:** `Karen`, **Last name:** `OMalley`
    - **User logon name:** `PXX-k.omalley` — the prefix is required
-   - Click **Next**, enter the lab password, uncheck *"User must change password at next logon"*, click **Next → Finish**
+   - Click **Next**, enter a password that meets the domain policy (12+
+     characters with upper case, lower case, a number and a symbol, e.g.
+     `LabUser!2026#ia`), uncheck *"User must change password at next logon"*,
+     click **Next → Finish**
 
 3. **Create the temporary worker's account** the same way, with logon name `PXX-temp.agency01`
 
@@ -257,7 +280,9 @@ $p = "PXX"
 Disable-ADAccount -Identity "$p-tom.davis"
 Get-ADUser "$p-tom.davis" -Properties MemberOf | Select-Object -ExpandProperty MemberOf |
     ForEach-Object { Remove-ADGroupMember -Identity $_ -Members "$p-tom.davis" -Confirm:$false }
-$ou = (Get-ADOrganizationalUnit -Filter "Name -eq 'Terminated'" -SearchBase (Get-ADUser "$p-tom.davis").DistinguishedName.Split(',',2)[1]).DistinguishedName
+$parent = (Get-ADUser "$p-tom.davis").DistinguishedName.Split(',', 2)[1]
+$ou = (Get-ADOrganizationalUnit -Filter "Name -eq 'Terminated'" `
+    -SearchBase $parent).DistinguishedName
 Move-ADObject -Identity (Get-ADUser "$p-tom.davis").DistinguishedName -TargetPath $ou
 ```
 
@@ -325,7 +350,9 @@ Module 2 covers the identities that are not people — service accounts, automat
 
 ### Lab M2-L1 — Scheduled Task Running as a Human Account
 
-**Difficulty:** Intermediate | **Time:** 25 minutes | **Type:** Hands-on (ADUC + Task Scheduler)
+**Difficulty:** Intermediate | **Time:** 10 minutes | **Type:** Hands-on (ADUC) — task retarget step is instructor-credited this cohort
+
+> **Read first — this cohort:** Step 2 (repointing the scheduled task) cannot be done from a student account on the shared domain controller. Windows only lets a local administrator save a task credential, and students are intentionally not administrators there. Complete **Step 1** (create `PXX-svc_backup`), read Step 2 so you know how it is done, then move on to **M2-L2**. Step 2 is credited automatically and no longer affects your completion status. Pods get their own member servers in a later release, where you will perform this step yourself.
 
 #### Scenario
 The nightly backup task **`PodXX ACS Nightly Backup`** runs under a real employee's account, `PXX-s.jenkins`. Automated jobs should run as dedicated service accounts: when Steve leaves, the backup breaks, and his credentials are needlessly exposed.
@@ -339,10 +366,12 @@ The nightly backup task **`PodXX ACS Nightly Backup`** runs under a real employe
 1. **Create the service account:**
    - ADUC → **Students → PodXX → Users** → right-click → **New → User**
    - **Full name / logon name:** `PXX-svc_backup`
-   - Click **Next**, enter a strong password, check **"Password never expires"**, uncheck *"User must change password at next logon"* → **Next → Finish**
+   - Click **Next**, enter a password that meets the domain policy (12+
+     characters with upper case, lower case, a number and a symbol), check
+     **"Password never expires"**, uncheck *"User must change password at next logon"* → **Next → Finish**
    - Double-click the account and add a **Description:** `Service account for nightly backup automation`
 
-2. **Point the task at the service account:**
+2. **Point the task at the service account** *(reference only this cohort — expect "Access is denied"; do not troubleshoot it)*:
    - Open **Task Scheduler** (**Windows + R** → `taskschd.msc`)
    - Click **Task Scheduler Library** and find **`PodXX ACS Nightly Backup`**
    - Right-click → **Properties** → **General** tab
@@ -350,16 +379,19 @@ The nightly backup task **`PodXX ACS Nightly Backup`** runs under a real employe
    - Click **Change User or Group...**, type `PXX-svc_backup`, click **Check Names → OK**
    - Click **OK** and enter the service account password when prompted
 
-3. **Verify:** the task's **Run As** / *Author* column should now show the service account.
+3. **Look at the task, read-only.** You can open the task and view its settings;
+   you cannot save a change to the account it runs under. This command shows the
+   account it currently uses:
 
    ```powershell
    (Get-ScheduledTask -TaskName "PodXX ACS Nightly Backup").Principal.UserId
    ```
 
+   It still returns `PXX-s.jenkins`, and that is the expected result this cohort.
+
 #### Completion Criteria
 - [ ] `PXX-svc_backup` exists in Active Directory
-- [ ] The task no longer runs as `PXX-s.jenkins`
-- [ ] The task principal is the service account (its name must contain `svc`)
+- [ ] Task principal change — credited automatically this cohort (requires administrator on the shared DC)
 
 #### Why This Matters
 IA.L1-3.5.1 covers "processes acting on behalf of users". A dedicated service account gives the automated process its own identity and its own accountability.
