@@ -1,0 +1,36 @@
+---
+# seed-sc-m4l1-logs.yml
+# Refreshes the SC M4-L1 firewall-log investigation environment on pod
+# gateways without reseeding any firewall rules, so it is safe to run against
+# pods where students are mid-way through the SC family.
+#
+# Target selection (same convention as the seed playbooks):
+#   pods="7"       -> only Pod07
+#   pods="7,9,12"  -> those pods
+#   pod_id=7       -> only Pod07
+#   (neither set)  -> all pods 1..pod_count
+
+- name: Prepare SC M4-L1 firewall logs on PodXX-GW gateways
+  hosts: crc_pod_gateways
+  gather_facts: false
+  ignore_unreachable: true
+  vars:
+    pod_spec: "{{ (pods | default('') | string | trim) or (pod_id | default('') | string | trim) }}"
+    pod_list: >-
+      {{ (pod_spec.split(',') | map('trim') | select('match', '^[0-9]+$') | map('int') | list)
+         if (pod_spec | length) > 0
+         else (range(1, (pod_count | default(20) | int) + 1) | list) }}
+    my_pod: "{{ inventory_hostname | regex_replace('^pod0*([0-9]+)-gw$', '\\1') | int }}"
+  tasks:
+    - name: Prepare M4-L1 log environment and investigation dataset
+      ansible.builtin.script: ../roles/seed_sc_gw/files/seed-m4l1-logs.sh {{ my_pod }}
+      args:
+        executable: /bin/sh
+      register: m4l1_logs_result
+      changed_when: "'investigation entries' in m4l1_logs_result.stdout"
+      when: (my_pod | int) in (pod_list | map('int') | list)
+
+    - name: Display result
+      ansible.builtin.debug:
+        var: m4l1_logs_result.stdout_lines
+      when: m4l1_logs_result.stdout_lines is defined

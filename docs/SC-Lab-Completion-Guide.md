@@ -704,6 +704,12 @@ Your firewall logs contain evidence of suspicious activity. As the security anal
 
 1. **Log into pfSense** and go to **Status → System Logs → Firewall**
 
+   > The log holds several hundred entries. Use the **Advanced Log Filter**
+   > (click the filter icon) to search one thing at a time — for example
+   > `22` or `3389` in *Destination Port*, or `6667` to find IRC traffic.
+   > Entries on the WAN interface are inbound from outside your pod; entries
+   > on the LAN interface come from hosts inside it.
+
 2. **Investigate the following categories:**
 
    **Port Scans:**
