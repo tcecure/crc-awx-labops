@@ -25,3 +25,16 @@
 - name: Display seed result
   ansible.builtin.debug:
     var: seed_result.stdout_lines
+
+- name: Prepare M4-L1 firewall log environment and investigation dataset
+  ansible.builtin.script: files/seed-m4l1-logs.sh {{ pod_id }}
+  args:
+    executable: /bin/sh
+  register: m4l1_logs_result
+  changed_when: "'investigation entries' in m4l1_logs_result.stdout"
+  when: sc_lab_id | default('ALL') in ['ALL', 'M4-L1']
+
+- name: Display M4-L1 log seeding result
+  ansible.builtin.debug:
+    var: m4l1_logs_result.stdout_lines
+  when: m4l1_logs_result.stdout_lines is defined
