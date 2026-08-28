@@ -1,0 +1,21 @@
+---
+- name: Copy ADUC launcher deployment script to staging
+  ansible.windows.win_copy:
+    src: "{{ playbook_dir }}/../roles/deploy_pod_shortcuts/files/deploy-aduc-launchers.ps1"
+    dest: C:\Windows\Temp\deploy-aduc-launchers.ps1
+
+- name: "Deploy ADUC launchers for each pod"
+  ansible.windows.win_shell: >
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\Windows\Temp\deploy-aduc-launchers.ps1
+    -PodId {{ item }} -DomainFqdn "{{ lab_domain_fqdn | default('acs-p01.local') }}"
+  loop: "{{ pod_list }}"
+  loop_control:
+    label: "Pod{{ '%02d' | format(item) }}"
+  register: shortcut_results
+
+- name: Show ADUC launcher results
+  ansible.builtin.debug:
+    msg: "{{ item.stdout_lines | default([]) }}"
+  loop: "{{ shortcut_results.results }}"
+  loop_control:
+    label: "Pod{{ '%02d' | format(item.item) }}"

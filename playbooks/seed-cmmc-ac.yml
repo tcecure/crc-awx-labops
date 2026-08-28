@@ -66,3 +66,6 @@
 
     - name: Deploy student certificate request files
       ansible.builtin.include_tasks: tasks/deploy-certificate-request.yml
+
+    - name: Deploy pod ADUC launchers
+      ansible.builtin.include_tasks: tasks/deploy-pod-shortcuts.yml
