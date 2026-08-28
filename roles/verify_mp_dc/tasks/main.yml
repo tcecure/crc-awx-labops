@@ -20,6 +20,30 @@
           return $path
       }
 
+      # Students write these columns in their own words ("Purge (cryptographic erase)",
+      # "Reuse - internal", "FCI - contains contract data"), so the graders below match
+      # the decisive word instead of comparing against a fixed string.
+      function Normalize-Text {
+          param([object]$Value)
+          return ([string]$Value).Trim().ToLowerInvariant()
+      }
+
+      function Same-Id {
+          param([object]$Value, [string]$Expected)
+          return (Normalize-Text $Value) -eq $Expected.ToLowerInvariant()
+      }
+
+      function Is-NonFci {
+          param([object]$Value)
+          return (Normalize-Text $Value) -match 'non[- ]?fci|not fci|no fci|does not contain|public|general'
+      }
+
+      function Is-Fci {
+          param([object]$Value)
+          if (Is-NonFci $Value) { return $false }
+          return (Normalize-Text $Value) -match 'fci|federal contract'
+      }
+
       $results = @{}
 
       $reasons = [System.Collections.Generic.List[string]]::new()
@@ -32,15 +56,17 @@
       $responsePath = Require-File $reasons 'MediaClassificationResponses.csv'
       if (Test-Path $responsePath) {
           $rows = @(Import-Csv $responsePath)
-          $fci = $rows | Where-Object Media -eq "$prefix-FCI-USB.vhdx" | Select-Object -First 1
-          $general = $rows | Where-Object Media -eq "$prefix-Employee-Handbook.vhdx" | Select-Object -First 1
-          if (-not $fci -or ([string]$fci.Classification).Trim().ToLowerInvariant() -notin @('fci','contains fci')) {
-              $reasons.Add("$prefix-FCI-USB.vhdx must be classified as FCI")
+          # The Media cell is often retyped without the .vhdx extension or with different
+          # casing, so rows are located by the media name rather than the exact file name.
+          $fci = $rows | Where-Object { (Normalize-Text $_.Media) -match 'fci-usb' } | Select-Object -Last 1
+          $general = $rows | Where-Object { (Normalize-Text $_.Media) -match 'handbook' } | Select-Object -Last 1
+          if (-not $fci -or -not (Is-Fci $fci.Classification)) {
+              $reasons.Add("$prefix-FCI-USB.vhdx must be classified as FCI (recorded: '$($fci.Classification)')")
           } elseif ([string]::IsNullOrWhiteSpace($fci.Evidence) -or $fci.Evidence.Length -lt 10) {
               $reasons.Add('FCI media evidence is incomplete')
           }
-          if (-not $general -or ([string]$general.Classification).Trim().ToLowerInvariant() -notin @('non-fci','not fci','does not contain fci')) {
-              $reasons.Add("$prefix-Employee-Handbook.vhdx must be classified as Non-FCI")
+          if (-not $general -or -not (Is-NonFci $general.Classification)) {
+              $reasons.Add("$prefix-Employee-Handbook.vhdx must be classified as Non-FCI (recorded: '$($general.Classification)')")
           } elseif ([string]::IsNullOrWhiteSpace($general.Evidence) -or $general.Evidence.Length -lt 10) {
               $reasons.Add('Non-FCI media evidence is incomplete')
           }
@@ -57,10 +83,10 @@
       foreach ($recordPath in @($logPath, $certificatePath)) {
           if (Test-Path $recordPath) {
               $record = @(Import-Csv $recordPath) | Select-Object -First 1
-              if (-not $record -or $record.MediaId -ne "$prefix-FCI-USB") { $reasons.Add("$(Split-Path $recordPath -Leaf) has the wrong media ID") }
-              if (-not $record -or ([string]$record.Method).Trim().ToLowerInvariant() -notin @('clear','purge')) { $reasons.Add("$(Split-Path $recordPath -Leaf) must record an approved Clear or Purge method") }
-              if (-not $record -or ([string]$record.Result).Trim().ToLowerInvariant() -ne 'pass') { $reasons.Add("$(Split-Path $recordPath -Leaf) must record a PASS result") }
-              if (-not $record -or ([string]$record.Disposition).Trim().ToLowerInvariant() -ne 'reuse') { $reasons.Add("$(Split-Path $recordPath -Leaf) must record Reuse disposition") }
+              if (-not $record -or -not (Same-Id $record.MediaId "$prefix-FCI-USB")) { $reasons.Add("$(Split-Path $recordPath -Leaf) has the wrong media ID") }
+              if (-not $record -or (Normalize-Text $record.Method) -notmatch 'clear|purge|crypto') { $reasons.Add("$(Split-Path $recordPath -Leaf) must name the NIST 800-88 method used - Clear or Purge (recorded: '$($record.Method)')") }
+              if (-not $record -or (Normalize-Text $record.Result) -match 'fail' -or (Normalize-Text $record.Result) -notmatch 'pass|success|verified') { $reasons.Add("$(Split-Path $recordPath -Leaf) must record the verification outcome as Pass once you have confirmed the media is empty (recorded: '$($record.Result)')") }
+              if (-not $record -or (Normalize-Text $record.Disposition) -notmatch 'reus') { $reasons.Add("$(Split-Path $recordPath -Leaf) must record Reuse disposition (recorded: '$($record.Disposition)')") }
               if (-not $record -or [string]::IsNullOrWhiteSpace($record.SanitizedBy)) { $reasons.Add("$(Split-Path $recordPath -Leaf) is missing SanitizedBy") }
               $date = [datetime]::MinValue
               if (-not $record -or -not [datetime]::TryParse($record.Date, [ref]$date)) { $reasons.Add("$(Split-Path $recordPath -Leaf) has an invalid date") }
@@ -107,10 +133,10 @@
       $dispositionPath = Require-File $reasons 'MP-M1-L3_DispositionWorksheet.csv'
       if (Test-Path $dispositionPath) {
           $record = @(Import-Csv $dispositionPath) | Select-Object -First 1
-          if (-not $record -or $record.AssetId -ne "$prefix-LAP-017") { $reasons.Add('disposition worksheet has the wrong asset ID') }
-          if (-not $record -or ([string]$record.Decision).Trim().ToLowerInvariant() -ne 'destroy') { $reasons.Add('the correct disposition is Destroy') }
-          if (-not $record -or $record.DriveSerial -ne "SN-$prefix-88421") { $reasons.Add('drive serial does not match the asset and custody records') }
-          if (-not $record -or $record.CertificateId -ne "VDC-$prefix-2026-017") { $reasons.Add('vendor certificate ID does not match') }
+          if (-not $record -or -not (Same-Id $record.AssetId "$prefix-LAP-017")) { $reasons.Add('disposition worksheet has the wrong asset ID') }
+          if (-not $record -or (Normalize-Text $record.Decision) -notmatch 'destro') { $reasons.Add("the correct disposition is Destroy (recorded: '$($record.Decision)')") }
+          if (-not $record -or -not (Same-Id $record.DriveSerial "SN-$prefix-88421")) { $reasons.Add('drive serial does not match the asset and custody records') }
+          if (-not $record -or -not (Same-Id $record.CertificateId "VDC-$prefix-2026-017")) { $reasons.Add('vendor certificate ID does not match') }
           if (-not $record -or [string]::IsNullOrWhiteSpace($record.Rationale) -or $record.Rationale.Length -lt 20) { $reasons.Add('disposition rationale is incomplete') }
       }
       $results['M1-L3'] = New-Result $reasons 'Disposition worksheet correctly selects destruction and matches supporting records'

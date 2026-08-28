@@ -215,9 +215,12 @@
         \$config = parse_config(true);
         \$acct_ip = '{{ lan_network }}.100';
         \$bad_ports = 0; \$has_443 = false;
+        // Choosing HTTPS from the pfSense port dropdown stores the service name rather
+        // than the number, so both spellings count as the HTTPS rule.
+        \$https = array('443', 'https', 'HTTPS');
         foreach (\$config['filter']['rule'] as \$r) {
           if (isset(\$r['destination']['address']) && \$r['destination']['address'] == \$acct_ip) {
-            if (isset(\$r['destination']['port']) && \$r['destination']['port'] == '443' && \$r['type'] == 'pass') {
+            if (isset(\$r['destination']['port']) && in_array(\$r['destination']['port'], \$https, true) && \$r['type'] == 'pass') {
               \$has_443 = true;
             } elseif (\$r['type'] == 'pass') {
               \$bad_ports++;
