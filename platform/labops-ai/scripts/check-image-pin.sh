@@ -1,11 +1,24 @@
 #!/usr/bin/env bash
-# Refuses to start the agent server unless the local image matches the digest pinned in
-# compose/docker-compose.yml. Guards against a floating tag or a tampered local image.
+# Refuses to start an investigation unless the local agent-server image matches the pinned
+# digest. Guards against a floating tag or a tampered local image.
+#
+# Since Phase 2 the agent no longer runs as a long-lived compose service: the image is pinned
+# in the gateway environment (LABOPS_AGENT_IMAGE) and one container is created per
+# investigation, so the pin is read from there, with the committed template as a fallback.
 set -euo pipefail
 
-COMPOSE="$(dirname "$0")/../compose/docker-compose.yml"
-PINNED="$(grep -oE 'ghcr\.io/openhands/agent-server:[^ ]+@sha256:[0-9a-f]{64}' "$COMPOSE" | head -1)"
-[ -n "$PINNED" ] || { echo "no digest-pinned image found in $COMPOSE" >&2; exit 1; }
+HERE="$(dirname "$0")"
+PINNED="${LABOPS_AGENT_IMAGE:-}"
+if [ -z "$PINNED" ] && [ -r /etc/labops/gateway.env ]; then
+  PINNED="$(sed -n 's/^LABOPS_AGENT_IMAGE=//p' /etc/labops/gateway.env | head -1)"
+fi
+if [ -z "$PINNED" ]; then
+  PINNED="$(sed -n 's/^LABOPS_AGENT_IMAGE=//p' "$HERE/../env/gateway.env.example" | head -1)"
+fi
+case "$PINNED" in
+  *@sha256:*) : ;;
+  *) echo "agent image is not digest-pinned: '${PINNED:-<unset>}'" >&2; exit 1 ;;
+esac
 
 DIGEST="${PINNED##*@}"
 
