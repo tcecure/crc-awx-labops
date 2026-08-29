@@ -1,19 +1,26 @@
 # LabOps model egress proxy. The only member of labops-model with a route off the host.
 #
 # It exists so the provider API key never enters an investigation container: the agent points
-# its OpenAI base_url at http://172.31.241.2:8081/v1 and authenticates with a per-run token,
-# and this proxy substitutes the real key upstream. It is deliberately not a general proxy:
+# its OpenAI base_url at http://172.31.241.2:8081/r/<run_id>/v1 and authenticates with a
+# per-run token, and this proxy substitutes the real key upstream. It is not a general proxy:
 # CONNECT is impossible (no proxy_connect module), only /v1/ paths are routed, and the
 # upstream host is fixed at ${LABOPS_LLM_UPSTREAM}.
 resolver 127.0.0.11 valid=30s ipv6=off;
 
-log_format labops_model '$time_iso8601 run=$http_x_labops_run '
+log_format labops_model '$time_iso8601 run=$labops_run_logged '
                         'src=$remote_addr $request_method $uri -> $status '
                         'req=$request_length resp=$body_bytes_sent t=$request_time';
 
 map $http_x_labops_run $labops_run_ok {
     default        0;
     "~^[0-9a-f-]{36}$" 1;
+}
+
+# The run is in the path on the per-run route and in a header on the shared rollback route;
+# either way every proxied call is logged against a run id.
+map $uri $labops_run_logged {
+    default                                  $http_x_labops_run;
+    "~^/r/(?<labops_uri_run>[0-9a-f-]{36})/" $labops_uri_run;
 }
 
 server {
@@ -26,6 +33,29 @@ server {
     location = /healthz {
         access_log off;
         return 200 "ok\n";
+    }
+
+    # Per-run entry point: the gateway points each investigation's base_url at
+    # /r/<run_id>/v1, so every model call is attributable without the agent having to send a
+    # custom header (an OpenAI-compatible client cannot). Anything that is not a uuid path
+    # falls through to the 404 below.
+    location ~ "^/r/(?<labops_run>[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/v1/(?<labops_path>.*)$" {
+        if ($http_authorization != "Bearer ${LABOPS_MODEL_PROXY_TOKEN}") {
+            return 403 '{"error":{"message":"labops: proxy token rejected"}}';
+        }
+
+        proxy_pass https://${LABOPS_LLM_UPSTREAM}/v1/$labops_path$is_args$args;
+        proxy_ssl_server_name on;
+        proxy_ssl_verify on;
+        proxy_ssl_trusted_certificate /etc/ssl/certs/ca-certificates.crt;
+        proxy_ssl_protocols TLSv1.2 TLSv1.3;
+
+        proxy_set_header Host ${LABOPS_LLM_UPSTREAM};
+        proxy_set_header Authorization "Bearer ${LABOPS_LLM_API_KEY}";
+        proxy_set_header X-LabOps-Run $labops_run;
+        proxy_hide_header Set-Cookie;
+
+        access_log /dev/stdout labops_model;
     }
 
     location /v1/ {

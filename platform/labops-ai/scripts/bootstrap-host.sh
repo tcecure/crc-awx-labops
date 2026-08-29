@@ -205,6 +205,27 @@ sudo -n systemctl restart nftables
 sudo -n systemctl enable --now labops-egress-refresh.timer
 sudo -n systemctl start labops-egress-refresh.service
 
+echo "== investigation launcher privilege (one root-owned script, no socket)"
+# The gateway creates one container per investigation. Docker socket access would be root
+# on the host, so it gets a single sudoers rule for the launcher instead. The script must
+# be root-owned and not writable by the service user, or the rule would be a way to run
+# arbitrary code as root.
+HERE_PLATFORM="$(cd "$(dirname "$0")/.." && pwd)"
+LAUNCHER=/opt/labops/platform/labops-ai/scripts/run-investigation.sh
+sudo -n install -o root -g root -m 0755 -d "$(dirname "$LAUNCHER")"
+if [ "$(readlink -f "$HERE_PLATFORM/scripts/run-investigation.sh")" = "$(readlink -f "$LAUNCHER")" ]; then
+  # the release checkout already sits at the privileged path; only the mode has to be right
+  sudo -n chown root:root "$LAUNCHER"
+  sudo -n chmod 0755 "$LAUNCHER"
+else
+  sudo -n install -o root -g root -m 0755 "$HERE_PLATFORM/scripts/run-investigation.sh" "$LAUNCHER"
+fi
+sudo -n install -o root -g root -m 0440 \
+  "$HERE_PLATFORM/systemd/sudoers-labops-gateway" /etc/sudoers.d/labops-gateway
+sudo -n visudo -cf /etc/sudoers.d/labops-gateway
+sudo -n -u labops-gateway sudo -n "$LAUNCHER" list >/dev/null
+echo "launcher reachable as labops-gateway"
+
 echo "== unattended upgrades / time / guest agent"
 sudo -n systemctl enable --now unattended-upgrades chrony qemu-guest-agent fail2ban
 
