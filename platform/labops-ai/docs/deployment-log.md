@@ -204,6 +204,47 @@ commit with the production Supabase values the host env names and promoted:
 | `/admin/labops`, `/api/labops/health` anonymous | 307, 401 |
 | Public `/` and `/labops` | 302 → `/labops`, 200 |
 
+## Release 20260829235329 — per-investigation runtime, applied to production
+
+Applied to `drcc-labops-01` (the only environment; there is no staging), write switches all
+still `false`.
+
+Changes made on the host:
+
+| Change | Detail | Rollback |
+| --- | --- | --- |
+| `platform/labops-ai` tree refreshed under `/opt/labops/platform` | root-owned, launcher `0755` | previous tree in `/etc/labops/backups` era release; re-extract from the repo at the prior commit |
+| `/etc/sudoers.d/labops-gateway` | one rule for `run-investigation.sh`, `visudo -cf` clean | `rm /etc/sudoers.d/labops-gateway` (the gateway then cannot launch containers) |
+| `/etc/labops/gateway.env` | appended `LABOPS_RUNTIME_*`, `LABOPS_MODEL_PROXY_TOKEN`, `LABOPS_AGENT_IMAGE`, `LABOPS_AGENT_ENV_FILE`, `LABOPS_WORKSPACE_RETENTION_HOURS`; timestamped copy in `/etc/labops/backups` | restore that copy, restart the gateway |
+| `labops-gateway.service`, `labops-agent.service` | gateway now reads `gateway.env`; `NoNewPrivileges=no` so it can call `sudo -n` for the launcher | previous units are in the git history; `systemctl daemon-reload` after restoring |
+| App release `20260829235329` promoted via `/opt/labops/app/current` | per-run runtime, restart recovery, deadline sweep | repoint the symlink at `20260825235156`, restart |
+| 4 investigation containers left by an interrupted 2026-08-29 test | stopped through the launcher | none needed |
+
+Results:
+
+| Test | Result |
+| --- | --- |
+| `test-investigation-isolation.sh` (real pinned image, two runs) | PASS — non-root, read-only rootfs, own volume only, no host bind, no usable container tooling, limits applied, cross-run filesystem denial |
+| Cross-investigation network denial (new) | PASS — B cannot reach A's agent port, AWX, a student pod or the internet; only the model proxy answers |
+| `test-secret-isolation.sh` | PASS — no Supabase/AWX/Wiki/provider credential in the container, its env, `/proc`, or on disk |
+| `test-egress-isolation.sh` | PASS — only `…/v1/` through the proxy; proxy refuses other paths, CONNECT, and never echoes the key |
+| `verify-deployment.sh` | ALL CHECKS PASSED |
+| Gateway restart with an investigation container present | reaped it: `restart recovery ended 0 investigation(s) and reaped 1 workspace(s)` |
+| Local console after deploy | `/labops` 200 |
+| Public edge from off-host | `/` 302, `/labops` 200, `/api/labops/health` 401 |
+| Existing systems | `crc.ai` 307, tracker 302, `my.digitalrcc.com` 200 — unchanged |
+
+Two defects the deployment exposed, both fixed in code rather than on the host:
+
+1. The first release was built with the developer's `.env.local`, which still names the
+   legacy `DRCC-staging` project; `NEXT_PUBLIC_*` values are inlined at build time, so the
+   gateway held a staging URL with the production service key and every query failed with
+   *Invalid API key*. **Builds for this host must export the host's own public Supabase
+   values**, which is how release `20260829235329` was produced.
+2. Reaping a container whose run has no `ai_runs` row hit the `ai_tool_actions` foreign key
+   and abandoned recovery. Cleanup of an unknown container is no longer audited against a
+   run that does not exist.
+
 ## Not done yet
 
 - OpenAI key installation — owner-supplied, this host only.
