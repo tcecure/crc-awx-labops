@@ -44,10 +44,9 @@ if (!isset(\$config['syslog'])) \$config['syslog'] = array();
 \$config['syslog']['filterdescriptions'] = '1';
 \$config['syslog']['nentries'] = '500';
 
-// Ensure anti-lockout rule on LAN
-if (!isset(\$config['system']['webgui']['noantilockout'])) {
-    // Default: anti-lockout enabled (good for students)
-}
+// Anti-lockout keeps LAN management access (web UI and SSH) reachable even once
+// a student adds a LAN default deny, which the SC labs require.
+unset(\$config['system']['webgui']['noantilockout']);
 
 write_config('SC baseline configured by Devin');
 echo \"BASELINE_SAVED\n\";

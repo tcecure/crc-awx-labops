@@ -427,7 +427,9 @@ ACS Consulting's public web server is sitting on the internal LAN at 10.51.XX.50
 3. **Update firewall rules:**
 
    **DMZ rules:**
-   - Allow inbound HTTP/HTTPS from WAN to DMZ web server
+   - Allow inbound HTTP/HTTPS from WAN to the DMZ web server at `10.52.XX.50`
+     (the web server keeps its host number, `.50`, and moves from the LAN subnet
+     into the DMZ subnet)
    - **Block** all traffic from DMZ to LAN (critical — isolates the DMZ)
    - Allow DMZ to respond to established connections
 
@@ -436,7 +438,8 @@ ACS Consulting's public web server is sitting on the internal LAN at 10.51.XX.50
 
 4. **Update NAT rules:**
    - Go to **Firewall → NAT → Port Forward**
-   - Change the target from the LAN IP to the new DMZ IP
+   - Change the target from the LAN IP `10.51.XX.50` to the DMZ IP `10.52.XX.50`,
+     redirect target port `80`
    - Save → Apply
 
 5. **Verify:**
@@ -907,6 +910,7 @@ pass. If the tracker shows fewer than 5, it now names the failing check.
 | Forgetting to click "Apply Changes" | Always click the yellow "Apply Changes" bar at the top after modifying rules |
 | Creating rules on wrong interface | LAN rules = traffic FROM LAN devices. WAN rules = traffic FROM the internet |
 | Deleting the anti-lockout rule | Don't delete it — it keeps you from locking yourself out of the web UI |
+| Ticking "Disable webConfigurator anti-lockout rule" in System → Advanced | Leave it unticked. With it disabled, your own default deny also blocks management access, and lab validation can no longer reach your gateway |
 | Rules in wrong order | Default deny must always be LAST. Specific rules go first |
 | Not saving evidence | Screenshot every change before and after |
 
