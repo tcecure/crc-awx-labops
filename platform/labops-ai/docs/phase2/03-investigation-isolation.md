@@ -52,7 +52,7 @@ Properties, mapped to the brief:
 | no shared workspace | one volume per run; volume name derived from run id; cross-run test below |
 | CPU / memory / PID / disk / time limits | `--cpus 2 --memory 4g --pids-limit 512 --storage-opt size=2g`; gateway enforces `LABOPS_RUN_WALLCLOCK_MINUTES` and kills the container |
 | retention | on run end the gateway archives `findings`/`resolution` to Supabase and destroys the volume; nothing from the workspace is retained beyond `LABOPS_WORKSPACE_RETENTION_HOURS` (default 0 = immediate) |
-| one active investigation | `LABOPS_MAX_ACTIVE_RUNS=1` stays in force until isolation tests pass in staging **and** production |
+| one active investigation | `LABOPS_MAX_ACTIVE_RUNS=1` stays in force; it is raised only temporarily by the cross-run isolation test itself |
 | no multi-operator execution | unchanged: owner-only start/cancel |
 
 The long-lived `labops-agent-server` container is retired: it is the thing that held the
@@ -73,7 +73,8 @@ prerequisite for read-only Phase 2 work under Design B.
 
 ## Cross-investigation isolation test
 
-`scripts/test-investigation-isolation.sh` (run against staging or the live host, read-only):
+`scripts/test-investigation-isolation.sh` (run on the live host; it creates only its own
+throwaway containers and volumes and destroys them):
 
 1. Start run A; write `/workspace/secret-A.txt` with a random canary.
 2. Start run B (temporarily raising the concurrency cap for the test only, then restoring it).
