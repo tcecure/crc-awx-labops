@@ -1,63 +1,74 @@
-# DigitalRCC LabOps AI — private agent server on drcc-labops-01.
+# DigitalRCC LabOps AI — investigation runtime on drcc-labops-01.
 #
-# Digest-pinned to OpenHands SDK 1.42.1, the version OpenHands v1.15.0 pins.
-# Never use a floating tag here. Bound to loopback: the gateway on the same host is the
-# only client, and nothing else may reach this port.
+# Phase 2 (see docs/phase2/03-investigation-isolation.md): there is no longer a long-lived
+# shared agent server. The gateway creates one ephemeral agent container per investigation
+# (scripts/run-investigation.sh), attached to labops-model only. The single service here is
+# the model proxy: it is the only member of labops-model with a route off the host, and it is
+# the only place the provider API key exists.
+#
+# Digest-pinned images only. Never a floating tag.
 services:
-  agent-server:
-    image: ghcr.io/openhands/agent-server:1.42.1-python@sha256:141a3628925a18ad55f07a09c0a1e3db9852ab0043458dbe7c8003c92396d143
-    container_name: labops-agent-server
-    restart: on-failure:3
-    env_file: /etc/labops/labops.env
+  model-proxy:
+    image: nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10
+    container_name: labops-model-proxy
+    restart: unless-stopped
+    # holds LABOPS_LLM_API_KEY and LABOPS_MODEL_PROXY_TOKEN; never mounted into an
+    # investigation container and never part of agent.env
+    env_file: /etc/labops/model-proxy.env
     environment:
-      OH_TELEMETRY_EXPORTER: none
-      DO_NOT_TRACK: "1"
-    ports:
-      - "127.0.0.1:8000:8000"   # loopback only — never 0.0.0.0
+      LABOPS_LLM_UPSTREAM: api.openai.com
     volumes:
-      - agent-state:/workspace
-      # conversation state lives here; a tmpfs would lose every investigation on restart,
-      # and the read-only rootfs makes creating a conversation fail outright without it
-      - agent-home:/home/openhands/.openhands
-    tmpfs:
-      # exec is required: the agent-server entrypoint maps shared objects out of /tmp,
-      # and a noexec /tmp makes it fail with "failed to map segment from shared object".
-      - /tmp:size=1g,mode=1777,exec
-      # writable config/cache under the read-only rootfs, otherwise tool discovery
-      # errors on every start trying to mkdir /home/openhands/.config
-      - /home/openhands/.config:size=64m,mode=0700,uid=10001,gid=10001
-      - /home/openhands/.cache:size=256m,mode=0700,uid=10001,gid=10001
+      - ./model-proxy/nginx.conf.template:/etc/nginx/templates/default.conf.template:ro
     read_only: true
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+      - /var/cache/nginx:size=32m,mode=0755
+      - /var/run:size=8m,mode=0755
+      - /etc/nginx/conf.d:size=1m,mode=0755
     security_opt:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
     deploy:
       resources:
         limits:
-          cpus: "4"
-          memory: 8g
-          pids: 2048
+          cpus: "1"
+          memory: 256m
+          pids: 128
     logging:
       driver: json-file
       options:
         max-size: 20m
         max-file: "5"
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/health"]
+      test: ["CMD", "wget", "-q", "-O-", "http://127.0.0.1:8081/healthz"]
       interval: 30s
       timeout: 5s
       retries: 3
-      start_period: 60s
+      start_period: 15s
     networks:
-      - labops-internal
-
-volumes:
-  agent-state:
-  agent-home:
+      labops-model:
+        ipv4_address: 172.31.241.2
+      labops-egress:
 
 networks:
-  labops-internal:
+  # Investigation containers live here. internal: true means Docker adds no default route and
+  # no masquerade, so a workspace has no path off the host at all — the proxy address is the
+  # only socket it can open. nftables enforces the same thing a second time.
+  labops-model:
     driver: bridge
-    internal: false        # the agent server needs api.openai.com; host egress is
-                           # allow-listed by nftables, see docs/deployment-plan.md
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.31.241.0/24
+  # Outer leg of the proxy only. Fixed subnet so the nftables forward allow-list can match it.
+  labops-egress:
+    driver: bridge
+    internal: false
+    ipam:
+      config:
+        - subnet: 172.31.240.0/24

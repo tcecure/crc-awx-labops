@@ -43,24 +43,53 @@ sudo -n chown root:labops-gateway /etc/labops
 sudo -n chmod 0750 /etc/labops
 sudo -n chown -R labops-gateway:labops-gateway /opt/labops/app /var/log/labops
 
-# The agent server runs as uid 10001 under a read-only rootfs, so its conversation store
-# has to be a volume it can actually write: a root-owned volume makes every
-# POST /api/conversations fail with "Permission denied: /home/openhands/.openhands/profiles".
-sudo -n docker volume create compose_agent-home >/dev/null
-sudo -n chown 10001:10001 "$(sudo -n docker volume inspect -f '{{ .Mountpoint }}' compose_agent-home)"
+# Investigation containers run as uid 10001 under a read-only rootfs, so each per-run volume
+# has to be writable by that uid: a root-owned volume makes every POST /api/conversations
+# fail with "Permission denied: /home/openhands/.openhands/profiles".
+# scripts/run-investigation.sh does this per run; nothing shared is pre-created here.
 
 echo "== nftables: default-deny inbound, allow-listed egress"
+# Destination sets live in a separate file so adding an integration is a reviewed one-liner.
+# @model_egress is refreshed from DNS by labops-egress-refresh.timer and is empty-safe: a
+# failed refresh denies model traffic rather than opening the ruleset.
+sudo -n mkdir -p /etc/nftables.d
+# keep the pre-Phase-2 ruleset as the documented rollback path (docs/phase2/13-rollback-plan.md)
+if [ -f /etc/nftables.conf ] && ! [ -f /etc/nftables.conf.pre-phase2 ]; then
+  sudo -n cp /etc/nftables.conf /etc/nftables.conf.pre-phase2
+fi
+if ! [ -f /etc/nftables.d/labops-sets.conf ]; then
+  sudo -n tee /etc/nftables.d/labops-sets.conf >/dev/null <<'SETS'
+# LabOps allow-listed destinations. Edit under review only.
+define LAB_DNS      = { 192.168.1.1 }
+define LAB_SERVICES = { 192.168.1.103, 192.168.1.61, 192.168.1.42 }   # awx, tracker, wiki
+SETS
+fi
 sudo -n tee /etc/nftables.conf >/dev/null <<'NFT'
 #!/usr/sbin/nft -f
 # drcc-labops-01. Inbound: SSH + gateway port from the lab management network only.
-# The OpenHands agent server on 8000 is published to 127.0.0.1 only and is never
-# permitted from the wire, regardless of this ruleset.
+# Egress: default-deny in both the forward hook (containers) and the output hook (host),
+# per docs/phase2/04-network-egress.md. Investigation containers sit on labops-model
+# (172.31.241.0/24, docker internal: true) and have no forward rule at all; only the model
+# proxy's outer leg (172.31.240.0/24) may leave the host, and only to the provider.
 flush ruleset
+
+include "/etc/nftables.d/labops-sets.conf"
 
 table inet filter {
   set admin_net {
     type ipv4_addr; flags interval
     elements = { 192.168.1.0/24 }
+  }
+
+  set lab_dns      { type ipv4_addr; elements = $LAB_DNS }
+  set lab_services { type ipv4_addr; elements = $LAB_SERVICES }
+
+  # api.openai.com, refreshed by labops-egress-refresh.service
+  set model_egress { type ipv4_addr; flags interval; }
+
+  # supabase and the image/package registries the host itself needs
+  set host_egress_names {
+    type ipv4_addr; flags interval;
   }
 
   chain input {
@@ -70,20 +99,73 @@ table inet filter {
     ip protocol icmp icmp type { echo-request, echo-reply, destination-unreachable, time-exceeded } accept
     tcp dport 22   ip saddr @admin_net accept
     tcp dport 3100 ip saddr @admin_net accept
-    tcp dport 8000 drop comment "agent server is loopback-only"
+    tcp dport 8000 drop comment "agent servers are never reachable from the wire"
+    # investigation containers must not reach the gateway API on the bridge address either
+    ip saddr 172.31.240.0/23 drop comment "no container may talk to host services"
     counter log prefix "labops-in-drop " level info
   }
 
   chain forward {
-    # Docker manages its own forward rules in the ip filter table; nothing extra here.
-    type filter hook forward priority filter; policy accept;
+    type filter hook forward priority filter; policy drop;
+    ct state established,related accept
+    # model proxy outer leg only: DNS to the lab resolver and TLS to the provider
+    ip saddr 172.31.240.0/24 udp dport 53  ip daddr @lab_dns      accept
+    ip saddr 172.31.240.0/24 tcp dport 53  ip daddr @lab_dns      accept
+    ip saddr 172.31.240.0/24 tcp dport 443 ip daddr @model_egress accept
+    counter log prefix "labops-fwd-drop " level info
   }
 
   chain output {
-    type filter hook output priority filter; policy accept;
+    type filter hook output priority filter; policy drop;
+    oif lo accept
+    ct state established,related accept
+    ip protocol icmp accept
+    # the gateway drives investigation containers and the proxy over the docker bridges
+    ip daddr 172.31.240.0/23 accept comment "host -> labops containers"
+    udp dport 53 ip daddr @lab_dns accept
+    tcp dport 53 ip daddr @lab_dns accept
+    udp dport 123 accept comment "chrony"
+    # Supabase, ghcr.io and the deb repos are name-based and resolved into @host_egress_names
+    tcp dport 443 ip daddr @host_egress_names accept
+    tcp dport { 80, 4000, 30080 } ip daddr @lab_services accept comment "awx, tracker, wiki"
+    tcp dport 22 ip daddr @admin_net accept
+    tcp dport { 25, 465, 587 } ip daddr @host_egress_names accept comment "notification smtp"
+    counter log prefix "labops-out-drop " level info
   }
 }
 NFT
+
+# Resolve the name-based egress allow-list into the nftables sets. Run on boot and every
+# 15 minutes; a resolution failure leaves the previous elements in place and never opens up.
+sudo -n tee /usr/local/sbin/labops-egress-refresh >/dev/null <<'REFRESH'
+#!/usr/bin/env bash
+set -uo pipefail
+MODEL_HOSTS="api.openai.com"
+HOST_HOSTS="kkacbtkacadgsnbylkti.supabase.co ghcr.io pkg-containers.githubusercontent.com \
+  archive.ubuntu.com security.ubuntu.com download.docker.com email-smtp.us-east-1.amazonaws.com"
+resolve() { for h in $1; do getent ahostsv4 "$h" | awk '{print $1}'; done | sort -u; }
+model=$(resolve "$MODEL_HOSTS"); hosts=$(resolve "$HOST_HOSTS")
+[ -n "$model" ] && { nft flush set inet filter model_egress; for a in $model; do nft add element inet filter model_egress "{ $a }"; done; }
+[ -n "$hosts" ] && { nft flush set inet filter host_egress_names; for a in $hosts; do nft add element inet filter host_egress_names "{ $a }"; done; }
+REFRESH
+sudo -n chmod 0755 /usr/local/sbin/labops-egress-refresh
+sudo -n tee /etc/systemd/system/labops-egress-refresh.service >/dev/null <<'UNIT'
+[Unit]
+Description=Refresh LabOps allow-listed egress addresses
+After=nftables.service network-online.target
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/labops-egress-refresh
+UNIT
+sudo -n tee /etc/systemd/system/labops-egress-refresh.timer >/dev/null <<'UNIT'
+[Unit]
+Description=Refresh LabOps allow-listed egress addresses every 15 minutes
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=15m
+[Install]
+WantedBy=timers.target
+UNIT
 sudo -n nft -c -f /etc/nftables.conf
 sudo -n systemctl enable --now nftables
 # 'flush ruleset' drops Docker's own chains; Docker rebuilds them when restarted, and
@@ -95,6 +177,10 @@ ExecStartPost=-/bin/systemctl try-restart docker.service
 DROPIN
 sudo -n systemctl daemon-reload
 sudo -n systemctl restart nftables
+# The output chain is default-deny from here on, so resolve the allow-list before anything
+# else on the host tries to reach Supabase or a registry.
+sudo -n systemctl enable --now labops-egress-refresh.timer
+sudo -n systemctl start labops-egress-refresh.service
 
 echo "== unattended upgrades / time / guest agent"
 sudo -n systemctl enable --now unattended-upgrades chrony qemu-guest-agent fail2ban

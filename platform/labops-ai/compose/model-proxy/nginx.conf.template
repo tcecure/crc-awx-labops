@@ -1,0 +1,61 @@
+# LabOps model egress proxy. The only member of labops-model with a route off the host.
+#
+# It exists so the provider API key never enters an investigation container: the agent points
+# its OpenAI base_url at http://172.31.241.2:8081/v1 and authenticates with a per-run token,
+# and this proxy substitutes the real key upstream. It is deliberately not a general proxy:
+# CONNECT is impossible (no proxy_connect module), only /v1/ paths are routed, and the
+# upstream host is fixed at ${LABOPS_LLM_UPSTREAM}.
+resolver 127.0.0.11 valid=30s ipv6=off;
+
+log_format labops_model '$time_iso8601 run=$http_x_labops_run '
+                        'src=$remote_addr $request_method $uri -> $status '
+                        'req=$request_length resp=$body_bytes_sent t=$request_time';
+
+map $http_x_labops_run $labops_run_ok {
+    default        0;
+    "~^[0-9a-f-]{36}$" 1;
+}
+
+server {
+    listen 8081;
+    server_name _;
+
+    client_max_body_size 4m;
+    proxy_read_timeout 300s;
+
+    location = /healthz {
+        access_log off;
+        return 200 "ok\n";
+    }
+
+    location /v1/ {
+        # per-run bearer token issued by the gateway; rejected if absent or wrong
+        if ($http_authorization != "Bearer ${LABOPS_MODEL_PROXY_TOKEN}") {
+            return 403 '{"error":{"message":"labops: proxy token rejected"}}';
+        }
+        # every call must be attributable to a run, so budget accounting cannot be bypassed
+        if ($labops_run_ok = 0) {
+            return 400 '{"error":{"message":"labops: missing X-LabOps-Run"}}';
+        }
+
+        proxy_pass https://${LABOPS_LLM_UPSTREAM}$request_uri;
+        proxy_ssl_server_name on;
+        proxy_ssl_verify on;
+        proxy_ssl_trusted_certificate /etc/ssl/certs/ca-certificates.crt;
+        proxy_ssl_protocols TLSv1.2 TLSv1.3;
+
+        proxy_set_header Host ${LABOPS_LLM_UPSTREAM};
+        # the client's Authorization never reaches the provider; the real key is added here
+        proxy_set_header Authorization "Bearer ${LABOPS_LLM_API_KEY}";
+        proxy_set_header X-LabOps-Run $http_x_labops_run;
+        proxy_hide_header Set-Cookie;
+
+        # one line per model call, so the gateway can reconcile proxy usage against
+        # ai_model_usage and detect calls a terminal command made on its own
+        access_log /dev/stdout labops_model;
+    }
+
+    location / {
+        return 404 '{"error":{"message":"labops: only /v1/ is proxied"}}';
+    }
+}
