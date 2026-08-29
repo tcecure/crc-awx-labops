@@ -60,7 +60,7 @@ fi
 if ! [ -f /etc/nftables.d/labops-sets.conf ]; then
   sudo -n tee /etc/nftables.d/labops-sets.conf >/dev/null <<'SETS'
 # LabOps allow-listed destinations. Edit under review only.
-define LAB_DNS      = { 192.168.1.1 }
+define LAB_DNS      = { 192.168.1.1, 1.1.1.1, 8.8.8.8 }   # lab resolver + systemd-resolved upstreams
 define LAB_SERVICES = { 192.168.1.103, 192.168.1.61, 192.168.1.42 }   # awx, tracker, wiki
 SETS
 fi
@@ -108,6 +108,9 @@ table inet filter {
   chain forward {
     type filter hook forward priority filter; policy drop;
     ct state established,related accept
+    # investigation containers reach the model proxy and nothing else. Same-bridge container
+    # traffic traverses this hook, so without this rule labops-model is dead, not isolated.
+    ip saddr 172.31.241.0/24 ip daddr 172.31.241.2 tcp dport 8081 accept
     # model proxy outer leg only: DNS to the lab resolver and TLS to the provider
     ip saddr 172.31.240.0/24 udp dport 53  ip daddr @lab_dns      accept
     ip saddr 172.31.240.0/24 tcp dport 53  ip daddr @lab_dns      accept
@@ -135,18 +138,38 @@ table inet filter {
 }
 NFT
 
-# Resolve the name-based egress allow-list into the nftables sets. Run on boot and every
-# 15 minutes; a resolution failure leaves the previous elements in place and never opens up.
+# Resolve the name-based egress allow-list into the nftables sets. A resolution failure leaves
+# the previous elements in place and never opens up.
+#
+# The sets accumulate rather than being rewritten: api.openai.com and Supabase sit behind
+# CDNs that answer with a rotating pool, so a flush-and-replace refresh drops the very
+# connection that resolved a new address a second earlier. Elements are cleared once a day
+# (stamp file) so a retired address does not stay allowed forever.
 sudo -n tee /usr/local/sbin/labops-egress-refresh >/dev/null <<'REFRESH'
 #!/usr/bin/env bash
 set -uo pipefail
 MODEL_HOSTS="api.openai.com"
 HOST_HOSTS="kkacbtkacadgsnbylkti.supabase.co ghcr.io pkg-containers.githubusercontent.com \
   archive.ubuntu.com security.ubuntu.com download.docker.com email-smtp.us-east-1.amazonaws.com"
-resolve() { for h in $1; do getent ahostsv4 "$h" | awk '{print $1}'; done | sort -u; }
+STAMP=/run/labops-egress-refresh.pruned
+# Query each name several times: the CDNs in front of these hosts answer with a rotating
+# subset of their address pool, and the container resolvers see answers the host has not.
+resolve() { for i in 1 2 3 4 5; do for h in $1; do getent ahostsv4 "$h" | awk '{print $1}'; done; done | sort -u; }
+add() { for a in $2; do nft add element inet filter "$1" "{ $a }" 2>/dev/null; done; }
 model=$(resolve "$MODEL_HOSTS"); hosts=$(resolve "$HOST_HOSTS")
-[ -n "$model" ] && { nft flush set inet filter model_egress; for a in $model; do nft add element inet filter model_egress "{ $a }"; done; }
-[ -n "$hosts" ] && { nft flush set inet filter host_egress_names; for a in $hosts; do nft add element inet filter host_egress_names "{ $a }"; done; }
+prune=0
+if [ -n "$model" ] && [ -n "$hosts" ]; then
+  if ! [ -f "$STAMP" ] || [ $(( $(date +%s) - $(stat -c %Y "$STAMP") )) -gt 86400 ]; then
+    prune=1
+  fi
+fi
+if [ "$prune" = 1 ]; then
+  nft flush set inet filter model_egress
+  nft flush set inet filter host_egress_names
+  touch "$STAMP"
+fi
+[ -n "$model" ] && add model_egress "$model"
+[ -n "$hosts" ] && add host_egress_names "$hosts"
 REFRESH
 sudo -n chmod 0755 /usr/local/sbin/labops-egress-refresh
 sudo -n tee /etc/systemd/system/labops-egress-refresh.service >/dev/null <<'UNIT'
@@ -159,10 +182,10 @@ ExecStart=/usr/local/sbin/labops-egress-refresh
 UNIT
 sudo -n tee /etc/systemd/system/labops-egress-refresh.timer >/dev/null <<'UNIT'
 [Unit]
-Description=Refresh LabOps allow-listed egress addresses every 15 minutes
+Description=Refresh LabOps allow-listed egress addresses every 2 minutes
 [Timer]
 OnBootSec=30s
-OnUnitActiveSec=15m
+OnUnitActiveSec=2m
 [Install]
 WantedBy=timers.target
 UNIT

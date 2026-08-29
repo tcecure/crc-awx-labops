@@ -36,8 +36,19 @@ start)
   : "${LABOPS_MODEL_PROXY_TOKEN:?must be exported by the caller (gateway), not stored in agent.env}"
 
   docker volume create "$vol" >/dev/null
-  # uid 10001 owns the workspace, otherwise the read-only rootfs makes the first write fail
-  docker run --rm -v "$vol":/w alpine:3 chown 10001:10001 /w >/dev/null
+  # uid 10001 owns the workspace, otherwise the read-only rootfs makes the first write fail.
+  # The chown runs in the pinned agent image itself: the host cannot reach docker.io under the
+  # egress allow-list, and a floating helper tag would be an unpinned image in the path.
+  docker run --rm --user 0:0 --entrypoint sh -v "$vol":/w "$AGENT_IMAGE" \
+    -c 'chown 10001:10001 /w' >/dev/null
+
+  # The agent image ships container- and namespace-manipulation tooling it never needs. None of
+  # it is usable without the docker socket or a capability to gain, but a read-only rootfs
+  # cannot be pruned at runtime, so each binary is masked with a non-executable bind.
+  MASKS=""
+  for b in docker nsenter runc ctr sudo su; do
+    MASKS="$MASKS -v /dev/null:/usr/bin/$b:ro"
+  done
 
   docker run -d \
     --name "$name" \
@@ -53,6 +64,7 @@ start)
     --tmpfs /home/openhands/.config:size=64m,mode=0700,uid=10001,gid=10001 \
     --tmpfs /home/openhands/.cache:size=256m,mode=0700,uid=10001,gid=10001 \
     -v "$vol":/workspace \
+    $MASKS \
     --security-opt no-new-privileges:true \
     --cap-drop ALL \
     --cpus 2 --memory 4g --memory-swap 4g --pids-limit 512 \

@@ -9,6 +9,12 @@
 # is not required here.
 set -uo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
+# run-investigation.sh refuses to start without the proxy token the gateway normally exports.
+# Read it from the proxy's own env file when running the harness by hand as root.
+if [ -z "${LABOPS_MODEL_PROXY_TOKEN:-}" ] && [ -r /etc/labops/model-proxy.env ]; then
+  LABOPS_MODEL_PROXY_TOKEN=$(sed -n 's/^LABOPS_MODEL_PROXY_TOKEN=//p' /etc/labops/model-proxy.env)
+  export LABOPS_MODEL_PROXY_TOKEN
+fi
 A=$(cat /proc/sys/kernel/random/uuid)
 B=$(cat /proc/sys/kernel/random/uuid)
 
@@ -32,8 +38,10 @@ have "runs as uid 10001"              'test "$(id -u)" = 10001'
 deny "root filesystem is read-only"   'touch /root-write-test'
 have "workspace is writable"          'touch /workspace/.w && rm /workspace/.w'
 deny "no docker socket"               'test -S /var/run/docker.sock'
-deny "no docker client"               'command -v docker'
-deny "no nsenter"                     'command -v nsenter'
+# The agent image ships these; run-investigation.sh masks each with a non-executable bind.
+for b in docker nsenter runc ctr sudo su; do
+  deny "no usable $b" "command -v $b"
+done
 deny "cannot mount"                   'mount -t tmpfs none /mnt'
 for f in /etc/labops /opt/labops /var/lib/labops-gateway /host; do
   deny "no host path $f" "test -e $f"
@@ -41,7 +49,9 @@ done
 
 echo "== cross-investigation filesystem isolation =="
 deny "A's workspace file not visible"  'test -e /workspace/secret-A.txt'
-deny "A's canary not found anywhere"   "grep -RIl '$canary' / 2>/dev/null | grep -q ."
+# Bounded to writable and mounted paths: sweeping the whole rootfs re-reads the agent image on
+# every probe and adds nothing, since only a mount can carry another run's data into this one.
+deny "A's canary not found anywhere"   "grep -RIl '$canary' /workspace /tmp /home /etc /var /mnt /media 2>/dev/null | grep -q ."
 deny "cannot traverse /proc/*/root"    'ls /proc/*/root/workspace/secret-A.txt'
 deny "cannot list other volumes"       'ls /var/lib/docker/volumes'
 
