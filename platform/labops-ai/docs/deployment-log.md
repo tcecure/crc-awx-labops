@@ -280,8 +280,27 @@ two defects, both now closed:
    not-configured mode. That is a `next dev` on-demand compilation artefact: under a
    production build every gateway route answers `503` JSON, verified above.
 
+## Provider key installed — model proxy only
+
+The owner supplied the OpenAI key and it was written to `/etc/labops/model-proxy.env`
+(`root:root 0640`), the only file on the host that holds it. The previous file was kept as
+`model-proxy.env.bak-<epoch>`; the key was piped over stdin to a root-only script, so it never
+appeared in a shell history, a log line or a repository.
+
+| Check | Result |
+| --- | --- |
+| `LABOPS_LLM_API_KEY` in `gateway.env` | still the `via-model-proxy` sentinel |
+| provider key in `agent.env` | absent |
+| `labops-model-proxy` container env | holds the key; investigation containers are not part of the compose stack and receive neither the key nor the proxy env file |
+| proxy without a run id (`/v1/models`) | `400 labops: missing X-LabOps-Run` — a call cannot bypass run accounting |
+| proxy with a run-scoped path (`/r/<uuid>/v1/models`) | `200` from `api.openai.com`, so the key is valid and reaches the provider through the proxy only |
+| `LABOPS_LLM_MODEL` (`openai/gpt-5.5`) | present in the account's model list |
+
+Rollback: `sudo cp /etc/labops/model-proxy.env.bak-<epoch> /etc/labops/model-proxy.env &&
+sudo systemctl restart labops-agent.service` restores the placeholder; revoking the key at the
+provider is the owner's control.
+
 ## Not done yet
 
-- OpenAI key installation — owner-supplied, this host only.
 - AWX read-only token installation — owner-supplied.
 - PBS backup job for VMID 100.
