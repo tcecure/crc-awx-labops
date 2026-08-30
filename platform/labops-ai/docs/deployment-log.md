@@ -245,6 +245,41 @@ Two defects the deployment exposed, both fixed in code rather than on the host:
    and abandoned recovery. Cleanup of an unknown container is no longer audited against a
    run that does not exist.
 
+## Release 20260830191742 — runtime failure text sanitised, applied to production
+
+App-only promotion; no host configuration, network rule or write switch changed (all five
+switches still `false`), and no production row touched other than removing the two approved
+throwaway test accounts.
+
+| Change | Detail | Rollback |
+| --- | --- | --- |
+| App release `20260830191742` promoted via `/opt/labops/app/current` | runtime failures reported to staff without the launcher path, its stderr or the raw spawn error; the detail goes to the service journal only | `ln -sfn /opt/labops/app/releases/20260829235329 /opt/labops/app/current && systemctl restart labops-gateway` |
+| `labops-test-staff@tcecure.com`, `labops-test-student@tcecure.com` | created for authenticated testing under owner approval, then deleted with their `profiles`/`user_roles` rows | re-create with the same procedure if further authenticated testing is approved |
+
+Results:
+
+| Test | Result |
+| --- | --- |
+| Artifact check before promotion | production ref in 19 files, legacy staging ref in 0, `could not be invoked: ` in 0 |
+| `verify-deployment.sh` after promotion | ALL CHECKS PASSED |
+| Local console | `/` 200, `/labops` 200, `/api/labops/health` 401 anonymous |
+| Public edge from off-host | `/` 302, `/labops` 200, `/api/labops/health` 401 |
+| Existing systems | `crc.ai` 307, tracker 302, `my.digitalrcc.com` 200 — unchanged |
+| Gateway journal after restart | started clean, `NRestarts=0`, launcher `list` call succeeded (restart recovery ran, nothing to reap) |
+| Not-configured route matrix under `next build && next start` | all 10 gateway routes `503 application/json {"code":"not_configured"}` |
+| Test accounts after the run | both absent from `auth.users`, `profiles` and `user_roles` |
+
+Local canary testing (a `next dev` harness with fake credentials, no production data) reported
+two defects, both now closed:
+
+1. A start against a host with no launcher returned the raw spawn error, including the
+   launcher path, and that text was persisted as `ai_runs.failure_reason` and rendered in the
+   investigation list, the detail banner and tool-action summaries. Staff now see a fixed
+   message and the host detail is written only to `journalctl -u labops-gateway`.
+2. `.../cancel`, `.../findings-note` and `.../activity` answered `404 text/html` in
+   not-configured mode. That is a `next dev` on-demand compilation artefact: under a
+   production build every gateway route answers `503` JSON, verified above.
+
 ## Not done yet
 
 - OpenAI key installation — owner-supplied, this host only.
