@@ -351,6 +351,28 @@ Cost of the promotion: an investigation open at restart is always ended by recov
 first pilot run was terminated by this deploy and the approval path has to be exercised on a
 fresh run.
 
+## Release 20260831114521 — the held step survives a page reload
+
+UI testing of the previous release against a local stack found one real defect in the safety
+gate itself: on a fresh load of a run in `awaiting_approval` the Allow/Refuse panel said
+"The proposed step has no description", because the panel derived the description only from
+live relay frames and the relay deliberately resumes past events it has already persisted.
+An operator could therefore approve an action blind. App-only promotion; no host
+configuration, network rule, image or write switch changed (all five switches still `false`).
+
+| Change | Detail | Rollback |
+| --- | --- | --- |
+| App release `20260831114521` promoted via `/opt/labops/app/current` | the run page reads the held action out of the persisted `ai_run_events` timeline and hands it to the decision panel, so the description is present after a reload or a relay reconnect; a run with no agent conversation now answers `409` rather than `404` | `ln -sfn /opt/labops/app/releases/20260831111015 /opt/labops/app/current && sudo systemctl restart labops-gateway` |
+
+| Test | Result |
+| --- | --- |
+| `npm run typecheck`, `npm run lint`, `npm test` | pass, 192 tests (2 new: relay cursor, held-step summary) |
+| Artifact check before promotion | production Supabase ref in 19 server files, legacy staging ref in 0 |
+| `verify-deployment.sh` after promotion | ALL CHECKS PASSED |
+| Local console | `/labops` 200, `/api/labops/health` 401 anonymous, `/api/labops/investigations/<id>/step` 401 anonymous |
+| Edge | `/labops` 200, health 401, `/step` 401 anonymous; `crc.ai` 307 and the portal 200, unchanged |
+| Containers after restart | no investigation container or volume remains |
+
 ## Not done yet
 
 - AWX read-only token installation — owner-supplied.
