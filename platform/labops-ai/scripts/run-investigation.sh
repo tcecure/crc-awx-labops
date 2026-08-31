@@ -118,6 +118,7 @@ start)
     --tmpfs /tmp:size=512m,mode=1777,exec \
     --tmpfs /home/openhands/.config:size=64m,mode=0700,uid=10001,gid=10001 \
     --tmpfs /home/openhands/.cache:size=256m,mode=0700,uid=10001,gid=10001 \
+    --tmpfs /home/openhands/.openhands:size=64m,mode=0700,uid=10001,gid=10001 \
     --mount "type=volume,source=$vol,target=/workspace,volume-nocopy=true" \
     $MASKS \
     --security-opt no-new-privileges:true \

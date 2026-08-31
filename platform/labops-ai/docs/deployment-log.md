@@ -300,6 +300,30 @@ Rollback: `sudo cp /etc/labops/model-proxy.env.bak-<epoch> /etc/labops/model-pro
 sudo systemctl restart labops-agent.service` restores the placeholder; revoking the key at the
 provider is the owner's control.
 
+## First pilot attempt: `Agent server returned 500`, and the fix
+
+The owner started the pilot investigation on the designated test ticket
+(`support_requests` `199eaa35-…`, run `9fd501bb-…`). Sanitized intake was persisted, the
+container launched, and `POST /api/conversations` then failed. The run was recorded as
+`provider_error` with `Agent server returned 500` and no conversation id.
+
+The agent container's own log gave the cause: while starting a conversation the SDK creates
+its LLM profile store under `/home/openhands/.openhands`, which the read-only rootfs refused
+(`OSError: [Errno 30] Read-only file system`). Nothing to do with the provider key — a call
+from inside an investigation container through the run-scoped proxy returns a real completion
+from `gpt-5.5` (`/v1/models` `200`, `/v1/chat/completions` `200`).
+
+`run-investigation.sh` now mounts a `64m` tmpfs at `/home/openhands/.openhands`
+(`0700`, owned by `10001`), alongside the existing `.config` and `.cache` mounts, so the
+state stays inside the run and dies with it. `POST /api/conversations` returns `201` on a
+freshly launched container, and `test-investigation-isolation.sh` — which now asserts that
+directory is writable — passes every check, including cross-investigation network denial and
+workspace destruction.
+
+Rollback: `sudo cp /opt/labops/platform/labops-ai/scripts/run-investigation.sh.bak-<stamp>
+/opt/labops/platform/labops-ai/scripts/run-investigation.sh`. No service restart is needed —
+the gateway invokes the script per run.
+
 ## Not done yet
 
 - AWX read-only token installation — owner-supplied.

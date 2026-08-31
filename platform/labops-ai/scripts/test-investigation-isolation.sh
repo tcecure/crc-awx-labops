@@ -37,6 +37,9 @@ echo "== runtime contract (container B) =="
 have "runs as uid 10001"              'test "$(id -u)" = 10001'
 deny "root filesystem is read-only"   'touch /root-write-test'
 have "workspace is writable"          'touch /workspace/.w && rm /workspace/.w'
+# The sdk creates its llm profile store here while starting a conversation; without a tmpfs
+# the read-only rootfs turns every POST /api/conversations into a 500.
+have "agent state dir is writable"    'touch /home/openhands/.openhands/.w && rm /home/openhands/.openhands/.w'
 deny "no docker socket"               'test -S /var/run/docker.sock'
 # The agent image ships these; run-investigation.sh masks each with a non-executable bind.
 for b in docker nsenter runc ctr sudo su; do
