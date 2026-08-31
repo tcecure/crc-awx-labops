@@ -471,9 +471,15 @@ run since promotion. A findings write is still unexercised (`support_notes` is `
 ### Test data removal
 
 After the evidence above was recorded, the labelled test record
-`199eaa35-2372-40d3-ab1b-9da5930aa029`, its two conversation messages and the five pilot
-runs' `ai_*` rows were deleted from production. No real support request, student record or
-lab was touched at any point in the pilot.
+`199eaa35-2372-40d3-ab1b-9da5930aa029` and its two conversation messages were deleted from
+production, along with the seven pilot `ai_runs` rows. All five `ai_*` tables are back to 0
+rows and the only remaining `support_requests` row is the real one.
+
+`service_role` holds no `DELETE` on `ai_run_events`, `ai_model_usage` or `ai_tool_actions`
+— the audit trail is append-only through the API, so a direct delete answers
+`42501 permission denied`. Their rows go only with their run, by the `run_id` foreign key's
+`ON DELETE CASCADE`, which is how the pilot rows were removed. Removing audit rows for a run
+that still exists therefore requires a deliberate SQL-level grant, not an API call.
 
 ## Not done yet
 
