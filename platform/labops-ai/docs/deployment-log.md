@@ -373,6 +373,46 @@ configuration, network rule, image or write switch changed (all five switches st
 | Edge | `/labops` 200, health 401, `/step` 401 anonymous; `crc.ai` 307 and the portal 200, unchanged |
 | Containers after restart | no investigation container or volume remains |
 
+## Pilot runs 2026-08-31 — two owner-approved read-only investigations
+
+Both runs were started by the pilot operator on the labelled test record
+(`199eaa35-2372-40d3-ab1b-9da5930aa029`) and both reached `succeeded`.
+
+| Evidence | Run `2380f499` | Run `3dbd4f9a` |
+| --- | --- | --- |
+| Sanitized intake | assigned secret and student email replaced in the stored prompt | same |
+| Internal staff note | absent from the brief and from `ai_messages` | same |
+| Owner approvals in `ai_tool_actions` | 2 × `agent.action.allow` | 2 × `agent.action.allow` |
+| Model activity in `ai_model_usage` | 3 rows, 15.3k prompt / 998 completion tokens, $0.085 | 3 rows, 24.2k prompt / 1 479 completion tokens, $0.106 |
+| Workspace destruction | `runtime.workspace.destroy` succeeded | same |
+| Findings / resolution | empty — the agent had no read integration to investigate with | same |
+
+Two reporting defects the runs exposed, fixed in release `20260831134458`:
+
+- the agent's own replies were never persisted. The pinned agent server puts message text
+  under `MessageEvent.llm_message`, which the event normalizer did not read, so every
+  `MessageEvent` — including the agent's conclusion — stored as an empty summary and the
+  operator saw only tool steps.
+- the audit record understated sanitization: `internalMessagesExcluded` was always `0`
+  because the store filters `is_internal` in SQL and the brief counted only what it was
+  given, and message-level redactions were dropped from `provenance.redactions` even though
+  the redaction itself had happened.
+
+| Change | Detail | Rollback |
+| --- | --- | --- |
+| App release `20260831134458` promoted via `/opt/labops/app/current` | agent replies persist; brief provenance reports the internal notes the store withheld and the redactions applied inside conversation messages | `ln -sfn /opt/labops/app/releases/20260831114521 /opt/labops/app/current && sudo systemctl restart labops-gateway` |
+
+| Test | Result |
+| --- | --- |
+| `npm run typecheck`, `npm run lint`, `npm test`, `npm run build` | pass, 195 tests (3 new: `llm_message`, error/refusal text, provenance counts) |
+| Artifact check before promotion | production Supabase ref present, legacy staging ref in 0 files |
+| `verify-deployment.sh` after promotion | ALL CHECKS PASSED |
+| Local console | `/labops` 200, `/api/labops/health` 401 anonymous |
+| Edge | `/labops` 200 |
+
+Still unexercised on production, and not claimed as validated: cancellation, the token and
+wall-clock limits, and a findings write (`support_notes` remains `false`).
+
 ## Not done yet
 
 - AWX read-only token installation — owner-supplied.
