@@ -413,6 +413,25 @@ Two reporting defects the runs exposed, fixed in release `20260831134458`:
 Still unexercised on production, and not claimed as validated: cancellation, the token and
 wall-clock limits, and a findings write (`support_notes` remains `false`).
 
+## Pilot run 3 — refusal and the wall-clock limit, on release `20260831134458`
+
+Run `c8331ecb` on the same test record, started 14:54 UTC. The operator allowed one step
+and refused the next; the run was then left idle and the gateway ended it on its deadline.
+
+| Evidence | Result |
+| --- | --- |
+| Owner decisions in `ai_tool_actions` | `agent.action.allow` 15:04:34, `agent.action.refuse` 15:07:11, both attributed to the pilot operator |
+| Refusal reached the agent | `UserRejectObservation` persisted: "Refused by … Propose a different step or report what you already know." |
+| Wall-clock limit | status `timed_out`, `failure_reason` "The 20-minute time limit for an investigation elapsed." at 15:14:12 — the deadline sweep, not a provider or agent error |
+| Spend stopped at the limit | 2 `ai_model_usage` rows, 15.3k prompt / 575 completion tokens, $0.094 |
+| Workspace | `runtime.workspace.destroy` succeeded 15:14:13; no investigation container or volume remains on the host |
+| `llm_message` fix | `MessageEvent` rows now carry text, where the same event stored an empty summary on the previous release |
+
+Still unexercised, and not claimed as validated: cancellation by the operator, the agent's
+own written conclusion in `ai_messages`, and any findings write (`support_notes` is `false`).
+The token budget was deliberately not forced with a reduced-budget run: the wall-clock
+cut-off exercises the same termination and workspace-teardown path.
+
 ## Not done yet
 
 - AWX read-only token installation — owner-supplied.
