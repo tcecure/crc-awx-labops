@@ -432,6 +432,49 @@ own written conclusion in `ai_messages`, and any findings write (`support_notes`
 The token budget was deliberately not forced with a reduced-budget run: the wall-clock
 cut-off exercises the same termination and workspace-teardown path.
 
+## Pilot run 4 — cancellation, and run 5 — the agent's written conclusion
+
+Both on the same labelled test record, release `20260831134458`.
+
+| Evidence | Run `a26bc2a3` (cancellation) | Run `2d03b3d7` (completion) |
+| --- | --- | --- |
+| Final status | `cancelled`, `failure_reason` "Cancelled by eddie.barlow@tcecure.com." | `succeeded`, no failure reason |
+| Owner decisions in `ai_tool_actions` | `agent.conversation.cancel` succeeded 16:09:27 | 2 × `agent.action.allow` |
+| Spend | no `ai_model_usage` row — cancelled before the first completion | 3 rows, 23.4k prompt / 1 166 completion tokens, $0.092 |
+| Workspace | `runtime.workspace.destroy` succeeded 16:09:28 | `runtime.workspace.destroy` succeeded |
+| Containers/volumes after the run | none for the investigation | none for the investigation |
+| Agent's written conclusion | n/a | persisted in `ai_run_events`: a triage summary that identifies the record as the pilot test record and states what it could and could not verify |
+
+Run 5 confirms the `llm_message` fix on production: the agent's prose is in the timeline the
+operator reads, where the earlier runs stored empty summaries. It also showed the prose was
+only in the timeline — `ai_messages` held the brief and nothing else, so the conversation
+lost the answer once the timeline was replaced. Fixed in release `20260831162833`: an agent
+`MessageEvent` is appended to `ai_messages` as the assistant turn while it is relayed, and a
+user-sourced `MessageEvent` (the server's echo of the brief) is not.
+
+| Change | Detail | Rollback |
+| --- | --- | --- |
+| App release `20260831162833` promoted via `/opt/labops/app/current` | the agent's replies are stored in the run conversation, not only the event timeline | `ln -sfn /opt/labops/app/releases/20260831134458 /opt/labops/app/current && sudo systemctl restart labops-gateway` |
+
+| Test | Result |
+| --- | --- |
+| `npm run typecheck`, `npm run lint`, `npm test`, `npm run build` | pass, 196 tests (1 new: agent prose stored, brief echo not) |
+| Artifact check before promotion | production Supabase ref in 41 files, legacy staging ref in 0 |
+| `verify-deployment.sh` after promotion | ALL CHECKS PASSED |
+| Local console | `/labops` 200, `/api/labops/health` 401 anonymous |
+| Write switches | `global`, `support_notes`, `github`, `wikijs`, `awx` all `false` |
+
+Not claimed as validated: the assistant-turn persistence in release `20260831162833` is
+covered by unit tests only — starting an investigation is owner-only, so it has had no live
+run since promotion. A findings write is still unexercised (`support_notes` is `false`).
+
+### Test data removal
+
+After the evidence above was recorded, the labelled test record
+`199eaa35-2372-40d3-ab1b-9da5930aa029`, its two conversation messages and the five pilot
+runs' `ai_*` rows were deleted from production. No real support request, student record or
+lab was touched at any point in the pilot.
+
 ## Not done yet
 
 - AWX read-only token installation — owner-supplied.
