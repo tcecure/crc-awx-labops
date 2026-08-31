@@ -324,6 +324,33 @@ Rollback: `sudo cp /opt/labops/platform/labops-ai/scripts/run-investigation.sh.b
 /opt/labops/platform/labops-ai/scripts/run-investigation.sh`. No service restart is needed —
 the gateway invokes the script per run.
 
+## Release 20260831111015 — the operator can answer the agent's confirmation gate
+
+The first pilot run reached `Awaiting Approval` — the agent server holds every proposed
+action under `AlwaysConfirm` — and the console had no way to answer it, so the run could not
+progress at all. App-only promotion; no host configuration, network rule, image or write
+switch changed (all five switches still `false`).
+
+| Change | Detail | Rollback |
+| --- | --- | --- |
+| App release `20260831111015` promoted via `/opt/labops/app/current` | owner-only `POST /api/labops/investigations/{id}/step` (`{ accept, reason? }`) plus the Allow/Refuse control on the run page; usage read from `stats.usage_to_metrics`, where the pinned agent server actually reports it; the activity relay resumes from a persisted cursor instead of replaying the timeline | `ln -sfn /opt/labops/app/releases/20260830191742 /opt/labops/app/current && systemctl restart labops-gateway` |
+
+Verified against the live agent server before wiring the app to it:
+`POST /api/conversations/<id>/events/respond_to_confirmation` with `{"accept":true}` returned
+`200 {"success":true}`, the held `find` command ran, and the agent proposed its next step
+(spend moved `$0.04848` → `$0.064838`), so the gate resumes rather than ending the run.
+
+| Test | Result |
+| --- | --- |
+| Artifact check before promotion | production Supabase ref in 19 server files, legacy staging ref in 0 |
+| `verify-deployment.sh` after promotion | ALL CHECKS PASSED |
+| Local console | `/labops` 200, `/api/labops/health` 401 anonymous, `/api/labops/investigations/<id>/step` 401 anonymous |
+| Restart recovery | ended the in-flight run `b557c4e3` as designed and destroyed its workspace — no investigation container or volume remains |
+
+Cost of the promotion: an investigation open at restart is always ended by recovery, so the
+first pilot run was terminated by this deploy and the approval path has to be exercised on a
+fresh run.
+
 ## Not done yet
 
 - AWX read-only token installation — owner-supplied.
