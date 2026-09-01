@@ -600,6 +600,14 @@ A previous administrator left messy, insecure firewall rules. You must audit eve
    Save as: C:\CyberLab\PodXX\SC-Artifacts\M3-L1_CleanRules.png
    ```
 
+**How the automated check scores this lab:** it objects to a pass rule of **any to
+any** with no protocol, and to **two identical rules on the same interface tab**
+(same action, protocol, source and destination). Duplicates are judged per
+interface, so the separate default-deny rule each interface needs after M2-L2 and
+M2-L3 is not counted as a copy of another tab's deny. A failure reads
+`FAIL:Issues(N)` followed by the rule it objected to — `N` is how many rules it
+objected to, not a task number.
+
 ---
 
 ### Lab M3-L2: Rule Ordering Challenge
@@ -691,6 +699,13 @@ The accounting application at 10.51.XX.100 only needs HTTPS (TCP 443). But the f
 
 #### Why This Matters
 Least privilege means giving only the minimum access needed. An application that only needs port 443 should not have ports 21, 22, 23, 80, 3306, and 8080 open. Each open port is an attack surface.
+
+**How the automated check scores this lab:** it looks for exactly one pass rule whose
+destination is the **host** `10.51.XX.100` on port 443 (`443`, `HTTPS` and `443-443`
+all count, and `.100/32` is accepted), on any interface tab. `FAIL:ExtraPorts(N)`
+lists the unnecessary ports still open; `FAIL:NoHTTPSRuleTo10.51.XX.100` means the
+keeper rule is gone — usually all seven rules were deleted, or the survivor points at
+an interface or network address instead of the host, or its protocol is UDP.
 
 ---
 
