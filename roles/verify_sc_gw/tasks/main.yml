@@ -152,16 +152,27 @@
         php -r "
         require_once('config.inc');
         \$config = parse_config(true);
-        \$issues = 0;
+        // pfSense keeps one ordered ruleset per interface and every interface
+        // legitimately ends in its own catch-all deny, so a duplicate is judged
+        // within an interface and includes protocol and port — otherwise the LAN
+        // and VLAN default denies grade as copies of each other and the lab
+        // becomes impossible to pass.
+        \$issues = array();
         \$seen = array();
+        \$n = 0;
         foreach (\$config['filter']['rule'] as \$r) {
+          \$n++;
+          \$iface = isset(\$r['interface']) ? \$r['interface'] : '?';
+          \$label = 'rule '.\$n.' on '.\$iface.(isset(\$r['descr']) && \$r['descr'] != '' ? \" ('\".\$r['descr'].\"')\" : '');
           if (\$r['type'] == 'pass' && isset(\$r['source']['any']) && isset(\$r['destination']['any'])
-              && !isset(\$r['protocol'])) \$issues++;
-          \$sig = \$r['type'].'|'.json_encode(\$r['source']).'|'.json_encode(\$r['destination']);
-          if (isset(\$seen[\$sig])) \$issues++;
-          \$seen[\$sig] = true;
+              && !isset(\$r['protocol'])) \$issues[] = \$label.': allows any to any';
+          \$sig = \$iface.'|'.\$r['type'].'|'.(isset(\$r['protocol']) ? \$r['protocol'] : 'any')
+                 .'|'.json_encode(\$r['source']).'|'.json_encode(\$r['destination']);
+          if (isset(\$seen[\$sig])) { \$issues[] = \$label.': duplicate of rule '.\$seen[\$sig]; }
+          else { \$seen[\$sig] = \$n; }
         }
-        echo (\$issues == 0) ? 'PASS:RulesClean' : 'FAIL:Issues('.\$issues.')';
+        echo (count(\$issues) == 0) ? 'PASS:RulesClean'
+          : 'FAIL:Issues('.count(\$issues).'): '.implode('; ', \$issues);
         "
       register: m3l1_check
       changed_when: false
@@ -214,20 +225,25 @@
         require_once('config.inc');
         \$config = parse_config(true);
         \$acct_ip = '{{ lan_network }}.100';
-        \$bad_ports = 0; \$has_443 = false;
+        \$bad_ports = array(); \$has_443 = false;
         // Choosing HTTPS from the pfSense port dropdown stores the service name rather
-        // than the number, so both spellings count as the HTTPS rule.
-        \$https = array('443', 'https', 'HTTPS');
+        // than the number, so both spellings count as the HTTPS rule. A single host may
+        // also be written with an explicit /32.
+        \$https = array('443', 'https', 'HTTPS', '443-443');
         foreach (\$config['filter']['rule'] as \$r) {
-          if (isset(\$r['destination']['address']) && \$r['destination']['address'] == \$acct_ip) {
-            if (isset(\$r['destination']['port']) && in_array(\$r['destination']['port'], \$https, true) && \$r['type'] == 'pass') {
-              \$has_443 = true;
-            } elseif (\$r['type'] == 'pass') {
-              \$bad_ports++;
-            }
+          \$dst = isset(\$r['destination']['address']) ? preg_replace('#/32\$#', '', \$r['destination']['address']) : '';
+          if (\$dst == \$acct_ip && \$r['type'] == 'pass') {
+            \$port = isset(\$r['destination']['port']) ? \$r['destination']['port'] : 'any';
+            if (in_array(\$port, \$https, true)) { \$has_443 = true; }
+            else { \$bad_ports[] = \$port; }
           }
         }
-        echo (\$has_443 && \$bad_ports == 0) ? 'PASS:OnlyHTTPS' : 'FAIL:ExtraPorts('.\$bad_ports.')';
+        // Deleting every rule to the accounting host also fails the lab, so the two
+        // failures are reported apart instead of both reading 'ExtraPorts'.
+        if (\$has_443 && count(\$bad_ports) == 0) { echo 'PASS:OnlyHTTPS'; }
+        elseif (!\$has_443 && count(\$bad_ports) == 0) { echo 'FAIL:NoHTTPSRuleTo'.\$acct_ip; }
+        elseif (!\$has_443) { echo 'FAIL:NoHTTPSRuleTo'.\$acct_ip.'; also open: '.implode(',', \$bad_ports); }
+        else { echo 'FAIL:ExtraPorts('.count(\$bad_ports).'): '.implode(',', \$bad_ports); }
         "
       register: m3l3_check
       changed_when: false
