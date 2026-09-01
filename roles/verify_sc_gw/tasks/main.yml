@@ -289,18 +289,34 @@
         // Check 4: Logging enabled on the block rules (Task 4). pfSense
         // records this per rule; \$config['syslog'] holds log *display* and
         // remote-server settings, not whether rules log.
-        \$blocks = 0; \$blocks_logged = 0;
+        // A student cannot act on 'failing: logging' without knowing which rule
+        // is missing the tick, so the unlogged ones are named.
+        \$blocks = 0; \$blocks_logged = 0; \$unlogged = array(); \$n = 0;
         foreach (\$config['filter']['rule'] as \$r) {
-          if (\$r['type'] == 'block') { \$blocks++; if (isset(\$r['log'])) \$blocks_logged++; }
+          \$n++;
+          if (\$r['type'] == 'block') {
+            \$blocks++;
+            if (isset(\$r['log'])) { \$blocks_logged++; }
+            else {
+              \$unlogged[] = 'rule '.\$n.' on '.(isset(\$r['interface']) ? \$r['interface'] : '?')
+                            .(isset(\$r['descr']) && \$r['descr'] != '' ? \" ('\".\$r['descr'].\"')\" : '');
+            }
+          }
         }
         \$checks['logging'] = (\$blocks > 0 && \$blocks == \$blocks_logged);
+        \$detail = '';
+        if (\$blocks == 0) { \$detail = 'no block rules exist yet'; }
+        elseif (count(\$unlogged) > 0) {
+          \$detail = 'logging off on '.implode('; ', \$unlogged);
+        }
 
         // Check 5: Has VLANs or segmentation
         \$checks['segmentation'] = isset(\$config['vlans']['vlan']) && count(\$config['vlans']['vlan']) >= 2;
 
         \$passed = array_sum(\$checks);
         \$total = count(\$checks);
-        echo json_encode(array('passed' => \$passed, 'total' => \$total, 'checks' => \$checks));
+        echo json_encode(array('passed' => \$passed, 'total' => \$total, 'checks' => \$checks,
+                               'detail' => \$detail));
         "
       register: m4l3_check
       changed_when: false
@@ -351,7 +367,10 @@
               ~ (('; failing: ' ~ (((m4l3_check.stdout | default('{}') | from_json).checks | default({}))
                   | dict2items | rejectattr('value') | map(attribute='key') | list | join(', ')))
                  if (((m4l3_check.stdout | default('{}') | from_json).checks | default({}))
-                     | dict2items | rejectattr('value') | list | length) > 0 else ''))
+                     | dict2items | rejectattr('value') | list | length) > 0 else '')
+              ~ ((' (' ~ ((m4l3_check.stdout | default('{}') | from_json).detail | default('')) ~ ')')
+                 if ((m4l3_check.stdout | default('{}') | from_json).detail | default('')) != ''
+                 else ''))
              if (m4l3_check.stdout is defined) else 'not checked' }}
 
 - name: Show SC gateway lab results

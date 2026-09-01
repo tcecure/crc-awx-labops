@@ -850,6 +850,14 @@ This lab is the practical assessment for the entire SC module. You will use ever
    - Enable logging on **every** block rule (edit the rule and tick **Log
      packets that are handled by this rule**) — the automated check requires all
      block rules to log
+   - This includes block rules on the **OPT/VLAN tabs**, not just LAN and WAN, and a
+     block rule you created in an earlier lab counts. Turning on logging under
+     **Status → System Logs → Settings** does *not* satisfy the check — pfSense stores
+     logging per rule
+   - **How the automated check reports this lab:** `capstone: passed 4/5 checks; failing:
+     logging (logging off on rule 10 on opt1 ('Block DMZ to LAN lateral movement'))` — the
+     failing item is named, and for logging every block rule still missing the tick is
+     listed by number, interface tab and description
    - Enable logging on critical allow rules
    - Verify logs appear in **Status → System Logs**
 
