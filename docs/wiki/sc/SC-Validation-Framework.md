@@ -64,9 +64,15 @@ The `verify_sc_gw` role checks pfSense configuration state via SSH/PHP. The `ver
   1. `deny_by_default` — no Allow Any
   2. `wan_secured` — no open WAN pass rules
   3. `no_telnet` — no port 23 on WAN
-  4. `logging` — syslog configured
+  4. `logging` — **every** block rule has *Log packets that are handled by this rule* ticked
+     (this is per rule in `filter/rule/log`; the `syslog` section only controls log display and
+     remote servers, so changing it does not satisfy the check)
   5. `segmentation` — 2+ VLANs
 - **Expected:** `passed: 5, total: 5`
+- **Failure text:** `capstone: passed 4/5 checks; failing: logging (logging off on rule 10 on opt1
+  ('Block DMZ to LAN lateral movement'))` — the failing check is named, and for `logging` the
+  offending block rules are listed by number, interface and description so the student does not
+  have to audit every tab. `no block rules exist yet` means Task 1's default deny is missing.
 
 ## Running Verification
 
