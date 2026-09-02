@@ -65,7 +65,7 @@
       ansible.windows.win_reboot:
         reboot_timeout: 1800
         post_reboot_delay: 30
-      when: set_edition is changed
+      when: "'Eval' in license_before.stdout"
 
     - name: Install the product key on an already full edition
       ansible.windows.win_shell: |
