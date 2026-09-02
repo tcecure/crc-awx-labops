@@ -68,6 +68,33 @@ subnet and `nltest /dsgetdc:acs-p01.local` returns `ERROR_NO_SUCH_DOMAIN`.
 4. Repoint the pod's Guacamole connection from `10.50.1.10` to `10.50.XX.20` and
    rename it `PODXX-SRV`.
 
+## Patching and licensing
+
+Pod networks have no outbound TCP/443, so Windows Update and Microsoft activation
+both need the temporary maintenance NIC:
+
+```bash
+scripts/pod-servers/maintenance-nic.sh attach 1 2 4 5   # run on the Proxmox host
+scripts/pod-servers/maintenance-nic.sh detach 1 2 4 5   # immediately afterwards
+```
+
+`msmigration/patch_license_fleet.py`-style batching is the safe pattern: attach the
+NIC for one batch, run **Patch Pod Member Server**, then **License Pod Member
+Server**, then detach before moving on. A server must never be left with `net1`.
+
+`playbooks/license-pod-server.yml` (job template **License Pod Member Server**)
+takes the 20 purchased Datacenter keys from the **CRC Pod Server Datacenter Keys**
+custom credential as one ordered comma-separated secret, and picks the key matching
+the host's own pod number. The key is passed to Windows only through a process
+environment variable, every task scrubs it out of its own output, and the DISM logs
+that record the command line are deleted, so the key never reaches job output, a
+guest file or the evidence tree.
+
+An evaluation install cannot take a key with `slmgr /ipk` (`0xC004F069`): the SKU is
+converted first with `DISM /Set-Edition:ServerDatacenter`, which requires a reboot,
+and only then does `slmgr /ato` succeed. The playbook fails the host unless it ends
+at `edition=ServerDatacenter status=1`.
+
 ## Domain-join account
 
 `playbooks/setup-domain-join-account.yml` creates the account the join uses. It is
