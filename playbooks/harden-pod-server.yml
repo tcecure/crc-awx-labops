@@ -11,6 +11,11 @@
   hosts: crc_pod_servers
   gather_facts: false
   serial: 5
+  vars:
+    # Repeated here rather than read from group_vars because AWX runs this
+    # against its own inventory, which never loads the repository's group_vars.
+    pod_server_bootstrap_account: crcsvc
+    pod_server_mgmt_account: svc-podmgmt
   tasks:
     - name: Confirm we are not connected as the account we are about to disable
       ansible.windows.win_shell: |
