@@ -1,16 +1,21 @@
 ---
-# Activate the pod member servers with the purchased Datacenter keys.
+# Turn the evaluation pod member servers into licensed Datacenter installs.
 #
 # One key per pod, supplied as the ordered secret `pod_product_keys` from the
 # "CRC Windows Activation Keys" custom credential, so the keys stay encrypted in
-# AWX and never appear in job arguments, playbook output, or a guest file. The
-# key is passed to slmgr through an environment variable and the tasks are
-# no_log, so no key reaches the job event stream.
+# AWX and never appear in job arguments or playbook output. The key reaches the
+# guest through an environment variable and every task that touches it scrubs it
+# out of its own output.
+#
+# An evaluation edition cannot take a retail key with slmgr: the SKU has to be
+# converted first (`DISM /Set-Edition`, which needs a reboot), and only then does
+# activation succeed. Servers that are already full Datacenter take the key
+# directly. Both paths end in the same assertion: LicenseStatus must be 1.
 #
 # Activation needs outbound TCP/443 to Microsoft. Pod networks are default-deny,
 # so run scripts/pod-servers/maintenance-nic.sh attach <pods> first and detach it
 # immediately afterwards, exactly like patching.
-- name: Activate pod member server Windows licensing
+- name: License pod member server Windows installs
   hosts: crc_pod_servers
   gather_facts: false
   vars:
@@ -27,52 +32,82 @@
           20 comma-separated keys in pod order via pod_product_keys.
         success_msg: "Key present for Pod{{ '%02d' | format(pod_num | int) }}"
 
-    - name: Record the licensing state before activation
+    - name: Read the current edition and licensing state
       ansible.windows.win_shell: |
+        $edition = (DISM /online /Get-CurrentEdition |
+          Select-String 'Current Edition\s*:\s*(\S+)').Matches[0].Groups[1].Value
         $s = Get-CimInstance SoftwareLicensingProduct -Filter `
           "ApplicationID='55c92734-d682-4d71-983e-d6ec3f16059f' AND PartialProductKey IS NOT NULL"
-        "before edition={0} status={1} channel={2}" -f `
-          (Get-CimInstance Win32_OperatingSystem).Caption, $s.LicenseStatus, $s.ProductKeyChannel
+        "edition={0} status={1} channel={2}" -f $edition, $s.LicenseStatus, $s.ProductKeyChannel
       register: license_before
       changed_when: false
 
-    - name: Install the product key
+    - name: Show the state before licensing
+      ansible.builtin.debug:
+        msg: "Pod{{ '%02d' | format(pod_num | int) }} before: {{ license_before.stdout | trim }}"
+
+    - name: Convert the evaluation edition to full Datacenter
+      ansible.windows.win_shell: |
+        $out = (DISM /online /Set-Edition:ServerDatacenter `
+          /ProductKey:$env:CRC_PRODUCT_KEY /AcceptEula /NoRestart 2>&1 | Out-String)
+        $out.Replace($env:CRC_PRODUCT_KEY, '<key>').Trim()
+        if ($out -notmatch 'completed successfully') { exit 1 }
+      environment:
+        CRC_PRODUCT_KEY: "{{ pod_key }}"
+      register: set_edition
+      changed_when: true
+      when: "'Eval' in license_before.stdout"
+
+    - name: Reboot to finish the edition conversion
+      ansible.windows.win_reboot:
+        reboot_timeout: 1800
+        post_reboot_delay: 30
+      when: set_edition is changed
+
+    - name: Remove the DISM logs that record the conversion command line
+      ansible.windows.win_shell: |
+        Get-ChildItem 'C:\Windows\Logs\DISM' -Filter *.log -ErrorAction SilentlyContinue |
+          Remove-Item -Force -ErrorAction SilentlyContinue
+        'dism logs cleared'
+      changed_when: true
+      when: set_edition is changed
+
+    - name: Install the product key on an already full edition
       ansible.windows.win_shell: |
         $out = (& cscript.exe //nologo C:\Windows\System32\slmgr.vbs /ipk `
           $env:CRC_PRODUCT_KEY 2>&1 | Out-String)
-        # Never let the key itself reach the job output, even on an error path.
         $out.Replace($env:CRC_PRODUCT_KEY, '<key>').Trim()
         if ($out -notmatch 'successfully') { exit 1 }
       environment:
         CRC_PRODUCT_KEY: "{{ pod_key }}"
       register: ipk
       changed_when: "'successfully' in (ipk.stdout | default(''))"
+      when: "'Eval' not in license_before.stdout"
 
     - name: Activate against Microsoft
       ansible.windows.win_shell: |
-        $ErrorActionPreference = 'Stop'
-        $out = & cscript.exe //nologo C:\Windows\System32\slmgr.vbs /ato 2>&1
-        ($out | Where-Object { $_ -match 'successfully|Error|error code' }) -join '; '
+        $out = (& cscript.exe //nologo C:\Windows\System32\slmgr.vbs /ato 2>&1 | Out-String)
+        ($out -split "`r?`n" | Where-Object { $_ -match 'successfully|rror' }) -join '; '
       register: ato
       changed_when: "'successfully' in (ato.stdout | default(''))"
       failed_when: false
 
-    - name: Record the licensing state after activation
+    - name: Read the licensing state after activation
       ansible.windows.win_shell: |
+        $edition = (DISM /online /Get-CurrentEdition |
+          Select-String 'Current Edition\s*:\s*(\S+)').Matches[0].Groups[1].Value
         $s = Get-CimInstance SoftwareLicensingProduct -Filter `
           "ApplicationID='55c92734-d682-4d71-983e-d6ec3f16059f' AND PartialProductKey IS NOT NULL"
-        "edition={0} status={1} channel={2} grace_min={3} desc={4}" -f `
-          (Get-CimInstance Win32_OperatingSystem).Caption, $s.LicenseStatus, `
-          $s.ProductKeyChannel, $s.GracePeriodRemaining, $s.LicenseStatusReason
+        "edition={0} status={1} channel={2} grace_min={3}" -f `
+          $edition, $s.LicenseStatus, $s.ProductKeyChannel, $s.GracePeriodRemaining
       register: license_after
       changed_when: false
 
     - name: Show the licensing outcome
       ansible.builtin.debug:
         msg:
-          - "{{ license_before.stdout | default('') | trim }}"
           - "activation: {{ ato.stdout | default('') | trim }}"
-          - "{{ license_after.stdout | default('') | trim }}"
+          - "Pod{{ '%02d' | format(pod_num | int) }} after: {{ license_after.stdout | trim }}"
 
     - name: Fail the host when it is still not licensed
       ansible.builtin.assert:
@@ -80,5 +115,5 @@
           - "'status=1' in (license_after.stdout | default(''))"
         fail_msg: >-
           Pod{{ '%02d' | format(pod_num | int) }} is still not licensed
-          ({{ license_after.stdout | default('') | trim }}).
+          ({{ license_after.stdout | trim }}).
         success_msg: "Pod{{ '%02d' | format(pod_num | int) }} is licensed."
