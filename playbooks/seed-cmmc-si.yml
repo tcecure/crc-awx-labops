@@ -1,7 +1,12 @@
 ---
-# Shared DC mode: seed all pods on the shared DCs using OU-based isolation
-- name: "Seed Labs: CMMC Level 1 System & Information Integrity (SI) - Shared DC"
-  hosts: crc_shared_dcs[0]
+# Runs on the shared DCs by default; set crc_target_mode=member_server to
+# run on each pod session host instead (crc_pod_servers).
+# seed all pods on the shared DCs using OU-based isolation
+- name: "Seed Labs: CMMC Level 1 System & Information Integrity (SI)"
+  hosts: >-
+    {{ 'crc_pod_servers'
+       if (crc_target_mode | default('shared_dc')) == 'member_server'
+       else 'crc_shared_dcs[0]' }}
   gather_facts: false
   vars:
     seed_user_password: "{{ seed_user_password | default(lookup('env', 'SEED_USER_PASSWORD')) }}"
@@ -11,9 +16,13 @@
     #   pod_id=7       -> only Pod07 (alias, used by the portal per-pod action)
     #   (neither set)  -> range(1, pod_count+1)  [original behavior]
     pod_list: >-
-      {{ ((pods | default(pod_id) | default('') | string).split(',') | map('trim') | select('match', '^[0-9]+$') | map('int') | list)
-         if ((pods | default('') | string | trim) != '' or (pod_id | default('') | string | trim) != '')
-         else (range(1, (pod_count | default(20) | int) + 1) | list) }}
+      {{ [pod_id | int]
+         if (crc_target_mode | default('shared_dc')) == 'member_server'
+         else (
+              ((pods | default(pod_id) | default('') | string).split(',') | map('trim') | select('match', '^[0-9]+$') | map('int') | list)
+              if ((pods | default('') | string | trim) != '' or (pod_id | default('') | string | trim) != '')
+              else (range(1, (pod_count | default(20) | int) + 1) | list)
+         ) }}
   tasks:
     - name: Copy seed-si-baseline.ps1
       ansible.windows.win_copy:

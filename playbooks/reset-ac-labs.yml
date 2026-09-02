@@ -1,4 +1,8 @@
 ---
+# AC and IA are the only families that read Active Directory, so their
+# checks stay on the domain controller even after students move to their
+# own member servers. Student evidence travels instead: see
+# sync-pod-evidence.yml. Set crc_target_mode=member_server to enable it.
 # Shared DC mode: reset all AC lab artifacts for all pods
 # This is the "surgical" reset — removes lab-created users, undoes group
 # membership changes, restores OU placement, and cleans evidence folders.
@@ -36,3 +40,8 @@
       loop: "{{ pod_list }}"
       loop_control:
         label: "Pod{{ '%02d' | format(item) }}"
+
+- name: Push the pod folder back to the session hosts
+  ansible.builtin.import_playbook: sync-pod-evidence.yml
+  vars:
+    sync_direction: push

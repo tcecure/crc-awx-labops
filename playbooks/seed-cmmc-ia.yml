@@ -1,4 +1,8 @@
 ---
+# AC and IA are the only families that read Active Directory, so their
+# checks stay on the domain controller even after students move to their
+# own member servers. Student evidence travels instead: see
+# sync-pod-evidence.yml. Set crc_target_mode=member_server to enable it.
 # Shared DC mode: seed all pods on the shared DCs using OU-based isolation
 - name: "Seed Labs: CMMC Level 1 Identification & Authentication (IA) - Shared DC"
   hosts: crc_shared_dcs[0]
@@ -61,3 +65,8 @@
       loop: "{{ pod_list }}"
       loop_control:
         label: "Pod{{ '%02d' | format(item) }}"
+
+- name: Push the pod folder back to the session hosts
+  ansible.builtin.import_playbook: sync-pod-evidence.yml
+  vars:
+    sync_direction: push

@@ -1,4 +1,6 @@
 ---
+# Runs on the shared DCs by default; set crc_target_mode=member_server to
+# run on each pod session host instead (crc_pod_servers).
 # reset-sc-labs.yml
 # Resets SC labs to baseline on PodXX-GW + DC01
 
@@ -19,7 +21,10 @@
         var: reset_result.stdout_lines
 
 - name: Reset SC Artifacts on DC01
-  hosts: crc_shared_dcs
+  hosts: >-
+    {{ 'crc_pod_servers'
+       if (crc_target_mode | default('shared_dc')) == 'member_server'
+       else 'crc_shared_dcs[0]' }}
   gather_facts: false
   tasks:
     - name: Reset SC artifacts for each pod

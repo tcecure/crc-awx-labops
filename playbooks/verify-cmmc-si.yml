@@ -1,10 +1,20 @@
 ---
-# Shared DC mode: verify all pods on the shared DCs using OU-based isolation
-- name: "Verify Labs: CMMC Level 1 System & Information Integrity (SI) - Shared DC"
-  hosts: crc_shared_dcs[0]
+# Runs on the shared DCs by default; set crc_target_mode=member_server to
+# run on each pod session host instead (crc_pod_servers).
+# verify all pods on the shared DCs using OU-based isolation
+- name: "Verify Labs: CMMC Level 1 System & Information Integrity (SI)"
+  hosts: >-
+    {{ 'crc_pod_servers'
+       if (crc_target_mode | default('shared_dc')) == 'member_server'
+       else 'crc_shared_dcs[0]' }}
   gather_facts: false
   vars:
-    pod_list: "{{ range(1, (pod_count | default(20) | int) + 1) | list }}"
+    pod_list: >-
+      {{ [pod_id | int]
+         if (crc_target_mode | default('shared_dc')) == 'member_server'
+         else (
+         range(1, (pod_count | default(20) | int) + 1) | list
+         ) }}
   tasks:
     - name: "Verify Pod{{ '%02d' | format(item) }}"
       ansible.builtin.include_role:
@@ -18,17 +28,17 @@
   hosts: localhost
   gather_facts: false
   connection: local
-
   tasks:
     - name: Build per-pod results
       ansible.builtin.set_fact:
         pod_results: >-
           {%- set pods = {} -%}
           {%- set dc_host = groups['crc_shared_dcs'][0] -%}
+          {%- set member = (crc_target_mode | default('shared_dc')) == 'member_server' -%}
           {%- for i in range(1, (pod_count | default(20) | int) + 1) -%}
             {%- set pad = '%02d' | format(i) -%}
             {%- set key = 'pod' ~ pad ~ '_si_results' -%}
-            {%- set pod_data = hostvars[dc_host][key] | default({}) -%}
+            {%- set pod_data = hostvars[(('pod' ~ pad ~ '-srv') if member else dc_host)][key] | default({}) -%}
             {%- set _ = pods.update({'pod' ~ pad: pod_data}) -%}
           {%- endfor -%}
           {{ pods }}

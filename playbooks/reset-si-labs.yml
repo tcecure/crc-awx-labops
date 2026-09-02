@@ -1,13 +1,24 @@
 ---
-# Shared DC mode: reset all SI lab artifacts for all pods
+# Runs on the shared DCs by default; set crc_target_mode=member_server to
+# run on each pod session host instead (crc_pod_servers).
+# reset all SI lab artifacts for all pods
 # Removes SI evidence files and lab markers.
 # Does NOT touch AC or IA artifacts.
 # Does NOT remove PXX-d.chen (shared with IA family).
 - name: "Reset Labs: Remove SI Lab Artifacts (Shared DC)"
-  hosts: crc_shared_dcs[0]
+  hosts: >-
+    {{ 'crc_pod_servers'
+       if (crc_target_mode | default('shared_dc')) == 'member_server'
+       else 'crc_shared_dcs[0]' }}
   gather_facts: false
   vars:
-    pod_list: "{{ range(1, (pod_count | default(20) | int) + 1) | list }}"
+    pod_list: >-
+      {{ [pod_id | int]
+         if (crc_target_mode | default('shared_dc')) == 'member_server'
+         else (
+         range(1, (pod_count | default(20) | int) + 1) | list
+         ) }}
+
   tasks:
     - name: Copy reset-si-labs.ps1
       ansible.windows.win_copy:

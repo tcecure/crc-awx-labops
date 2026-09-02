@@ -79,10 +79,44 @@ Both playbooks read `domain_join_user` / `domain_join_password` from the **CRC
 Domain Join** custom credential; never pass them as extra vars, which would record
 them on the job.
 
+## Where seed, verify and reset run
+
+Every seed/verify/reset playbook takes `crc_target_mode`:
+
+| value | meaning |
+|---|---|
+| `shared_dc` (default) | the legacy path: everything runs on `crc_shared_dcs[0]`, one job grades all 20 pods. Kept for rollback. |
+| `member_server` | host-local work runs on the student's own `crc_pod_servers` host, one pod per host, using that host's `pod_id`. |
+
+**SI, MP, PE and the document half of SC** only ever touch files and host state, so
+in `member_server` mode they run entirely on the session host. The SC gateway play
+(pfSense), certificate generation and tracker publishing are unchanged.
+
+**AC and IA are different: they read Active Directory.** Their checks stay on the
+domain controller even in `member_server` mode, deliberately. Querying AD from a
+member server over WinRM is a second hop, which would mean putting domain
+credentials (via `become`/CredSSP) onto a box where the student is a local
+administrator — a credential the student could then lift and replay against every
+other pod. So the credentials stay off the session host and the *evidence* travels
+instead:
+
+* `playbooks/sync-pod-evidence.yml` with `sync_direction=pull` zips
+  `C:\CyberLab\PodXX` on the session host, brings it through the controller and
+  expands it on the DC. `verify-cmmc-ac.yml` and `verify-cmmc-ia.yml` import it
+  before grading, so the DC grades what the student actually did on their server.
+* The same playbook with `sync_direction=push` runs at the end of the AC/IA seed
+  and reset playbooks, so seeded artifacts and post-reset state land on the
+  session host the student logs into.
+* Both directions are a no-op while `crc_target_mode` is `shared_dc`.
+
+One IA check (`M2-L1`, the scheduled task) and the MP media-mount step inspect live
+host state and remain waived (`ia_m2l1_task_step_waived`,
+`mp_media_mount_waived`) until the pilots prove them on a session host.
+
 ## Cut-over notes
 
 * Do not cut a pod over mid-family — the graded evidence under `C:\CyberLab\PodXX`
   lives on whichever host the student worked on, so migrate it or switch at a
   family boundary.
-* Seed/verify playbooks still target `crc_shared_dcs[0]` for AD work. Host-level
-  evidence paths must move to the pod server as part of the cut-over.
+* Run one family end to end (seed → student action → verify → tracker → reset) in
+  `member_server` mode before switching the scheduled verify jobs over.
