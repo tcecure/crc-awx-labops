@@ -45,6 +45,32 @@
       no_log: true
       changed_when: true
 
+    # The pilot server carried local accounts left over from hand-built lab work,
+    # including a local "student1". A local account with the same name as a domain
+    # student is a way to sit on the box outside AD, so anything that is not a
+    # Windows built-in or the bootstrap account is removed. Domain accounts are
+    # untouched - this only looks at the SAM database.
+    - name: Remove local accounts the build does not own
+      ansible.windows.win_shell: |
+        $ErrorActionPreference = 'Continue'
+        $keep = @('Administrator', 'Guest', 'DefaultAccount', 'WDAGUtilityAccount',
+                  '{{ pod_server_bootstrap_account }}')
+        $removed = @()
+        foreach ($u in Get-LocalUser) {
+          if ($keep -notcontains $u.Name) {
+            Remove-LocalUser -Name $u.Name -ErrorAction SilentlyContinue
+            $removed += $u.Name
+          }
+        }
+        "removed_local_accounts={0}" -f ($removed -join ';')
+      register: stray_accounts
+      changed_when: stray_accounts.stdout | trim != 'removed_local_accounts='
+
+    - name: Keep the built-in Administrator disabled
+      ansible.windows.win_user:
+        name: Administrator
+        account_disabled: true
+
     # Only needed while a *local* account authenticated over WinRM. The management
     # account is a domain account, so the policy that hands local accounts a full
     # admin token remotely can go.
