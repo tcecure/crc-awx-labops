@@ -50,6 +50,9 @@
       ansible.windows.win_shell: |
         $out = (DISM /online /Set-Edition:ServerDatacenter `
           /ProductKey:$env:CRC_PRODUCT_KEY /AcceptEula /NoRestart 2>&1 | Out-String)
+        # The DISM log records the command line, so it goes with the key.
+        Get-ChildItem 'C:\Windows\Logs\DISM' -Filter *.log -ErrorAction SilentlyContinue |
+          Remove-Item -Force -ErrorAction SilentlyContinue
         $out.Replace($env:CRC_PRODUCT_KEY, '<key>').Trim()
         if ($out -notmatch 'completed successfully') { exit 1 }
       environment:
@@ -62,14 +65,6 @@
       ansible.windows.win_reboot:
         reboot_timeout: 1800
         post_reboot_delay: 30
-      when: set_edition is changed
-
-    - name: Remove the DISM logs that record the conversion command line
-      ansible.windows.win_shell: |
-        Get-ChildItem 'C:\Windows\Logs\DISM' -Filter *.log -ErrorAction SilentlyContinue |
-          Remove-Item -Force -ErrorAction SilentlyContinue
-        'dism logs cleared'
-      changed_when: true
       when: set_edition is changed
 
     - name: Install the product key on an already full edition
