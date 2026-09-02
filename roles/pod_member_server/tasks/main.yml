@@ -186,6 +186,7 @@
       "$env:APPDATA\Microsoft\Windows\PowerShell\PSReadLine\ConsoleHost_history.txt",
       'C:\Windows\Temp\crc-bootstrap.dat',
       'C:\Windows\Temp\crc-firstboot.ps1',
+      'C:\Windows\Temp\crc-firstboot.log',
       'C:\Windows\Panther\unattend.xml',
       'C:\Windows\Panther\unattend-original.xml',
       'C:\Windows\System32\Sysprep\unattend.xml'
