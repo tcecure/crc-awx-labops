@@ -140,6 +140,49 @@ One IA check (`M2-L1`, the scheduled task) and the MP media-mount step inspect l
 host state and remain waived (`ia_m2l1_task_step_waived`,
 `mp_media_mount_waived`) until the pilots prove them on a session host.
 
+## Running a verify job for one pod
+
+The verify playbooks have a second play (`hosts: localhost`) that consolidates the
+per-pod results and publishes them to the tracker. An AWX `limit` applies to the
+whole job, so limiting to a single session host silently drops that play and the
+job succeeds without grading anything. Limit to **both**:
+
+```text
+pod03-srv,localhost
+```
+
+Pods with no results publish nothing, so a single-pod run cannot overwrite another
+pod's tracker record.
+
+## Troubleshooting
+
+**RDP dies at NLA after the edition conversion.** Symptom: Guacamole reports
+`Security mode: NLA` then `RDP server closed/refused connection`, the host logs
+`Listener RDP-Tcp received a connection` (event 261) but there is no 4625/4776
+locally and no 4768/4771/4776 for the account on the DC — i.e. it failed inside
+TLS/CredSSP, before any credential was validated. Time skew, SPN registration and
+the firewall scope are *not* the cause if those events are absent. Rebuild the
+listener certificate:
+
+```powershell
+Get-ChildItem Cert:\LocalMachine\'Remote Desktop' | Remove-Item -Force
+Remove-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' `
+  -Name SSLCertificateSHA1Hash -ErrorAction SilentlyContinue
+Restart-Service TermService -Force
+```
+
+**Scheduled tasks with a stored credential.** A local account that is not in
+Administrators (or another holder of `SeBatchLogonRight`) registers the task fine
+but the run fails with `LastTaskResult: 267011` and no output. Grant *Log on as a
+batch job* to the account, or run the task as a member of Administrators.
+
+**`whoami /groups` shows Administrators as "deny only".** That is UAC token
+filtering, not a missing membership — check capability from an elevated prompt.
+
+**Hyper-V cmdlets are absent** on the session hosts, so the MP media steps use
+`diskpart` (`create vdisk`, `attach vdisk`, `detach vdisk`) rather than
+`New-VHD`/`Mount-VHD`.
+
 ## Cut-over notes
 
 * Do not cut a pod over mid-family — the graded evidence under `C:\CyberLab\PodXX`
@@ -147,3 +190,7 @@ host state and remain waived (`ia_m2l1_task_step_waived`,
   family boundary.
 * Run one family end to end (seed → student action → verify → tracker → reset) in
   `member_server` mode before switching the scheduled verify jobs over.
+* Neither the new `PODXX-SRV` connections nor the legacy `PODXX-DC` rollback
+  connections store a password: both prompt inside the RDP session. A stored
+  password there survives an identity reset and silently breaks the tile with
+  `Log in failed` and no prompt, which is how the legacy tiles were found broken.
