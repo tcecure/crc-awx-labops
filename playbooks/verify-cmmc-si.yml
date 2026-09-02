@@ -9,8 +9,12 @@
        else 'crc_shared_dcs[0]' }}
   gather_facts: false
   vars:
+    # In member_server mode the pod comes from the host itself, so a task that
+    # rebinds pod_id for a loop cannot make this expression self-referential.
+    pod_host_num: "{{ inventory_hostname | regex_replace('^[Pp][Oo][Dd]0*([0-9]+)-[Ss][Rr][Vv]$', '\\1') }}"
+    pod_from_host: "{{ pod_host_num if pod_host_num is match('^[0-9]+$') else (pod_id | default(0)) }}"
     pod_list: >-
-      {{ [pod_id | int]
+      {{ [pod_from_host | int]
          if (crc_target_mode | default('shared_dc')) == 'member_server'
          else (
          range(1, (pod_count | default(20) | int) + 1) | list
