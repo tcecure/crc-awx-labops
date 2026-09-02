@@ -16,10 +16,14 @@
     # against its own inventory, which never loads the repository's group_vars.
     pod_server_bootstrap_account: crcsvc
     pod_server_mgmt_account: svc-podmgmt
-    # Guacamole and AWX both reach the server through its pod gateway, which
-    # source-NATs them, so the gateway address is the only legitimate source of
-    # an inbound management connection.
-    pod_server_mgmt_sources: "10.50.{{ pod_id }}.1"
+    # The only two doors into a session host are RDP for the student and WinRM
+    # for automation. Both are scoped to the pod gateway that fronts the server,
+    # plus the Guacamole broker and AWX themselves in case a pod gateway is ever
+    # configured to route rather than source-NAT. Nothing else needs either door.
+    pod_server_mgmt_sources:
+      - "10.50.{{ pod_id }}.1"
+      - "192.168.1.51"
+      - "192.168.1.103"
   tasks:
     - name: Confirm we are not connected as the account we are about to disable
       ansible.windows.win_shell: |
@@ -150,7 +154,7 @@
     - name: Scope the management rules to the pod gateway
       ansible.windows.win_shell: |
         $ErrorActionPreference = 'Stop'
-        $allowed = @('{{ pod_server_mgmt_sources }}')
+        $allowed = @({{ pod_server_mgmt_sources | map('regex_replace', '^(.*)$', "'\\1'") | join(', ') }})
         $here = (Get-NetTCPConnection -LocalPort 5985 -State Established `
           -ErrorAction SilentlyContinue | Select-Object -First 1).RemoteAddress
         if ($here -and $allowed -notcontains $here) { $allowed += $here }
