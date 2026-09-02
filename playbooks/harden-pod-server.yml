@@ -1,0 +1,85 @@
+---
+# Retires the bootstrap credentials on a pod member server and reports the state
+# an auditor cares about. Run this *after* provision-pod-server.yml, connecting
+# with the restricted domain management account ("CRC Pod Server Domain Mgmt"
+# machine credential) - not with the local bootstrap account, because this play
+# disables that account.
+#
+#   Job template: Harden Pod Member Server
+#   Limit:        pod03-srv
+- name: "Pod servers: retire the bootstrap credentials"
+  hosts: crc_pod_servers
+  gather_facts: false
+  serial: 5
+  tasks:
+    - name: Confirm we are not connected as the account we are about to disable
+      ansible.windows.win_shell: |
+        $ErrorActionPreference = 'Stop'
+        $me = (whoami)
+        if ($me -match '\\{{ pod_server_bootstrap_account }}$') {
+          throw "connected as {{ pod_server_bootstrap_account }}; re-run with the domain management credential"
+        }
+        $me
+      register: whoami_out
+      changed_when: false
+
+    # Every clone was bootstrapped with the same local password, which is exactly
+    # the shared local administrator secret the migration is not allowed to keep.
+    # A random rotation makes the old value useless even before the account is
+    # disabled, and nothing records the new one - the account is not used again.
+    - name: Rotate the bootstrap account to a random value and disable it
+      ansible.windows.win_shell: |
+        $ErrorActionPreference = 'Stop'
+        $u = Get-LocalUser -Name '{{ pod_server_bootstrap_account }}' -ErrorAction SilentlyContinue
+        if (-not $u) { "bootstrap_account=absent"; exit 0 }
+        $bytes = New-Object 'System.Byte[]' 48
+        [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+        $random = [Convert]::ToBase64String($bytes)
+        Set-LocalUser -Name '{{ pod_server_bootstrap_account }}' `
+          -Password (ConvertTo-SecureString $random -AsPlainText -Force)
+        Disable-LocalUser -Name '{{ pod_server_bootstrap_account }}'
+        $random = $null
+        [System.GC]::Collect()
+        "bootstrap_account=rotated_and_disabled"
+      register: bootstrap_state
+      no_log: true
+      changed_when: true
+
+    # Only needed while a *local* account authenticated over WinRM. The management
+    # account is a domain account, so the policy that hands local accounts a full
+    # admin token remotely can go.
+    - name: Remove the remote local-admin token policy
+      ansible.windows.win_regedit:
+        path: HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System
+        name: LocalAccountTokenFilterPolicy
+        state: absent
+
+    - name: Report the security state of the session host
+      ansible.windows.win_shell: |
+        $ErrorActionPreference = 'Continue'
+        "host={0}" -f $env:COMPUTERNAME
+        "connected_as={0}" -f (whoami)
+        $b = Get-LocalUser -Name '{{ pod_server_bootstrap_account }}' -ErrorAction SilentlyContinue
+        "bootstrap_enabled={0}" -f ($(if ($b) { $b.Enabled } else { 'absent' }))
+        "builtin_admin_enabled={0}" -f (Get-LocalUser -Name 'Administrator' -ErrorAction SilentlyContinue).Enabled
+        "local_admins={0}" -f ((Get-LocalGroupMember Administrators -ErrorAction SilentlyContinue).Name -join ';')
+        "rdp_users={0}" -f ((Get-LocalGroupMember 'Remote Desktop Users' -ErrorAction SilentlyContinue).Name -join ';')
+        $rdp = 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp'
+        $pol = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'
+        "nla={0}" -f (Get-ItemProperty $rdp -Name UserAuthentication `
+          -ErrorAction SilentlyContinue).UserAuthentication
+        "token_filter_policy={0}" -f (Get-ItemProperty $pol `
+          -Name LocalAccountTokenFilterPolicy -ErrorAction SilentlyContinue).LocalAccountTokenFilterPolicy
+        $d = Get-MpComputerStatus -ErrorAction SilentlyContinue
+        "defender_realtime={0} defender_av={1}" -f $d.RealTimeProtectionEnabled, $d.AntivirusEnabled
+        "cached_credentials={0}" -f ((& cmdkey.exe /list 2>&1 | Select-String 'Target:' | Measure-Object).Count)
+        "stored_secrets_on_disk={0}" -f ((Get-ChildItem 'C:\Windows\Temp' -Filter 'crc-*' -ErrorAction SilentlyContinue | Measure-Object).Count)
+        $tasks = Get-ScheduledTask -ErrorAction SilentlyContinue |
+          Where-Object { $_.Principal.UserId -and $_.Principal.LogonType -eq 'Password' -and $_.TaskPath -notlike '\Microsoft\*' }
+        "password_tasks={0}" -f (($tasks | ForEach-Object { "$($_.TaskPath)$($_.TaskName)=$($_.Principal.UserId)" }) -join ';')
+      register: security_state
+      changed_when: false
+
+    - name: Show the security state
+      ansible.builtin.debug:
+        msg: "{{ security_state.stdout_lines }}"
