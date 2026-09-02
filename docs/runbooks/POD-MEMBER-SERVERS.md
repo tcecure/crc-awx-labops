@@ -154,6 +154,17 @@ pod03-srv,localhost
 Pods with no results publish nothing, so a single-pod run cannot overwrite another
 pod's tracker record.
 
+To rehearse a family on a session host without touching the pod's tracker record —
+for example seeding a finished pod to prove the member-server path — launch the
+verify template with:
+
+```yaml
+crc_publish_tracker: false
+```
+
+The grading output still appears in the job and in the AWX artifacts; only the POST
+to the portal is skipped.
+
 ## Troubleshooting
 
 **RDP dies at NLA after the edition conversion.** Symptom: Guacamole reports
