@@ -76,6 +76,34 @@
         name: Administrator
         account_disabled: true
 
+    # A student server is a low-trust box: a domain administrator who logs on
+    # to it leaves credential material behind, so the target model gives it no
+    # domain-admin rights at all. The clones inherited "Domain Admins" in local
+    # Administrators from the hand-built template. It is only removed once the
+    # restricted management account is confirmed to be a member, so the box
+    # never ends up with no administrative path but the Proxmox console.
+    - name: Remove privileged domain groups from local Administrators
+      ansible.windows.win_shell: |
+        $ErrorActionPreference = 'Stop'
+        $members = @(Get-LocalGroupMember -Group Administrators | Select-Object -ExpandProperty Name)
+        $mgmt = '{{ pod_server_mgmt_account }}'
+        $leaves = @($members | ForEach-Object { ($_ -split '\\')[-1] })
+        if ($leaves -notcontains $mgmt) {
+          throw "the management account is not a local administrator; refusing to remove the privileged groups"
+        }
+        $strip = @('Domain Admins', 'Enterprise Admins', 'Schema Admins', 'Domain Users')
+        $removed = @()
+        foreach ($m in $members) {
+          $leaf = ($m -split '\\')[-1]
+          if ($strip -contains $leaf) {
+            Remove-LocalGroupMember -Group Administrators -Member $m
+            $removed += $m
+          }
+        }
+        "removed_privileged_admins={0}" -f ($removed -join ';')
+      register: privileged_admins
+      changed_when: privileged_admins.stdout | trim != 'removed_privileged_admins='
+
     # Only needed while a *local* account authenticated over WinRM. The management
     # account is a domain account, so the policy that hands local accounts a full
     # admin token remotely can go.
@@ -84,6 +112,32 @@
         path: HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System
         name: LocalAccountTokenFilterPolicy
         state: absent
+
+    # The first-boot script is handed the bootstrap password, and its transcript
+    # and unattend files record identifiers a later cohort should not be able to
+    # read off the disk. Provisioning deletes them, but the pilot server was
+    # built before that existed, so they are cleaned up here too.
+    - name: Remove build-time artifacts left on disk
+      ansible.windows.win_shell: |
+        $ErrorActionPreference = 'Continue'
+        $paths = @(
+          'C:\Windows\Temp\crc-bootstrap.dat',
+          'C:\Windows\Temp\crc-firstboot.ps1',
+          'C:\Windows\Temp\crc-firstboot.log',
+          'C:\Windows\Panther\unattend.xml',
+          'C:\Windows\Panther\unattend-original.xml',
+          'C:\Windows\System32\Sysprep\unattend.xml'
+        )
+        $removed = @()
+        foreach ($p in $paths) {
+          if (Test-Path -LiteralPath $p) {
+            Remove-Item -LiteralPath $p -Force -ErrorAction SilentlyContinue
+            $removed += $p
+          }
+        }
+        "removed_build_artifacts={0}" -f ($removed -join ';')
+      register: build_artifacts
+      changed_when: build_artifacts.stdout | trim != 'removed_build_artifacts='
 
     - name: Report the security state of the session host
       ansible.windows.win_shell: |
