@@ -14,7 +14,7 @@
   vars:
     drop_root: 'C:\CyberLab\_drop'
     drop_share: "CyberLabDrop$"
-    pod_count: "{{ pod_count | default(20) | int }}"
+    drop_pod_count: "{{ pod_count | default(20) | int }}"
   tasks:
     - name: Create the drop root
       ansible.windows.win_file:
@@ -50,7 +50,7 @@
         }
         Set-Acl -LiteralPath $path -AclObject $acl
         "{0}: {1}" -f $pod, $account
-      loop: "{{ range(1, (pod_count | int) + 1) | list }}"
+      loop: "{{ range(1, (drop_pod_count | int) + 1) | list }}"
       register: drop_folders
       changed_when: true
 
