@@ -154,7 +154,7 @@
     - name: Scope the management rules to the pod gateway
       ansible.windows.win_shell: |
         $ErrorActionPreference = 'Stop'
-        $allowed = @({{ pod_server_mgmt_sources | map('regex_replace', '^(.*)$', "'\\1'") | join(', ') }})
+        $allowed = @('{{ pod_server_mgmt_sources | join("', '") }}')
         $here = (Get-NetTCPConnection -LocalPort 5985 -State Established `
           -ErrorAction SilentlyContinue | Select-Object -First 1).RemoteAddress
         if ($here -and $allowed -notcontains $here) { $allowed += $here }
