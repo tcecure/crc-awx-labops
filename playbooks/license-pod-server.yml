@@ -38,19 +38,15 @@
 
     - name: Install the product key
       ansible.windows.win_shell: |
-        $ErrorActionPreference = 'Stop'
-        $out = & cscript.exe //nologo C:\Windows\System32\slmgr.vbs /ipk $env:CRC_PRODUCT_KEY 2>&1
-        if ($LASTEXITCODE -ne 0) { throw "ipk failed" }
-        if ($out -match 'successfully') { 'ipk=ok' } else { 'ipk=unknown' }
+        $out = (& cscript.exe //nologo C:\Windows\System32\slmgr.vbs /ipk `
+          $env:CRC_PRODUCT_KEY 2>&1 | Out-String)
+        # Never let the key itself reach the job output, even on an error path.
+        $out.Replace($env:CRC_PRODUCT_KEY, '<key>').Trim()
+        if ($out -notmatch 'successfully') { exit 1 }
       environment:
         CRC_PRODUCT_KEY: "{{ pod_key }}"
       register: ipk
-      changed_when: "'ipk=ok' in ipk.stdout"
-      no_log: true
-
-    - name: Report the key installation result only
-      ansible.builtin.debug:
-        msg: "Pod{{ '%02d' | format(pod_num | int) }}: {{ ipk.stdout | default('') | trim }}"
+      changed_when: "'successfully' in (ipk.stdout | default(''))"
 
     - name: Activate against Microsoft
       ansible.windows.win_shell: |
