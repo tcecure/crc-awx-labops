@@ -3,18 +3,27 @@
 # servers.
 #
 # Those two families are the only ones that read Active Directory, so their
-# checks have to keep running on a domain controller: a member server would have
-# to hold domain credentials to query AD across the WinRM hop, and the student is
-# a local administrator on that server. Instead the *files* travel. Student
-# evidence is pulled from the session host to the DC before verification, and
-# seeded material is pushed back to the session host after seeding or a reset.
+# checks have to keep running on a domain controller. The *files* travel
+# instead, through a drop share on the shared DC
+# (`setup-pod-evidence-drop.yml`).
 #
-#   sync_direction: pull   session host -> shared DC (before verify)
-#   sync_direction: push   shared DC   -> session host (after seed/reset)
+# Every copy is initiated from the session host and runs as SYSTEM, so the
+# network identity is the pod server's own computer account (`PODXX-SRV$`) and
+# no user credential is ever presented on a box where the student is a local
+# administrator. The drop folder for a pod is writable only by that pod's
+# computer account, so a student who abuses the machine account of their own
+# server can still only reach their own evidence.
+#
+#   sync_direction: pull   session host -> drop share  (before AC/IA verify)
+#   sync_direction: push   drop share   -> session host (after AC/IA seed/reset)
+#
+# The DC end of the trip stays inside the AC/IA playbooks themselves, which
+# already run on the DC with the DC credential, so this play never needs
+# credentials for two different security boundaries at once.
 #
 # The play is a no-op unless crc_target_mode is member_server, so the legacy
 # shared-DC path keeps working untouched.
-- name: Synchronize pod evidence between the session host and the shared DC
+- name: Synchronize pod evidence between the session host and the drop share
   hosts: crc_pod_servers
   gather_facts: false
   vars:
@@ -34,97 +43,31 @@
       {{ (member_mode | bool)
          and ((pod_scope | length) == 0 or (pod_num | int) in pod_scope) }}
     evidence_root: 'C:\CyberLab'
-    staging_dir: /tmp/crc-pod-evidence
+    drop_host: "{{ pod_evidence_drop_host | default('dc01') }}"
+    drop_share: "{{ pod_evidence_drop_share | default('CyberLabDrop$') }}"
   tasks:
-    - name: Archive the pod evidence on the session host
+    - name: Copy the pod evidence between the session host and the drop share
       ansible.windows.win_shell: |
         $ErrorActionPreference = 'Stop'
-        $src = '{{ evidence_root }}\{{ pod_name }}'
-        $zip = '{{ evidence_root }}\_sync\{{ pod_name }}.zip'
-        New-Item -ItemType Directory -Force -Path (Split-Path $zip) | Out-Null
-        if (-not (Test-Path -LiteralPath $src)) { "nothing_to_sync"; exit 0 }
-        if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip -Force }
-        Compress-Archive -Path $src -DestinationPath $zip -CompressionLevel Fastest
-        "archived={0}" -f (Get-Item -LiteralPath $zip).Length
-      register: pull_archive
-      changed_when: "'archived=' in pull_archive.stdout"
-      when: in_scope | bool and direction == 'pull'
-
-    - name: Copy the archive to the controller
-      ansible.builtin.fetch:
-        src: '{{ evidence_root }}\_sync\{{ pod_name }}.zip'
-        dest: '{{ staging_dir }}/{{ pod_name }}.zip'
-        flat: true
-      when:
-        - in_scope | bool
-        - direction == 'pull'
-        - "'archived=' in (pull_archive.stdout | default(''))"
-
-    - name: Archive the seeded pod folder on the shared DC
-      ansible.windows.win_shell: |
-        $ErrorActionPreference = 'Stop'
-        $src = '{{ evidence_root }}\{{ pod_name }}'
-        $zip = '{{ evidence_root }}\_sync\{{ pod_name }}.zip'
-        New-Item -ItemType Directory -Force -Path (Split-Path $zip) | Out-Null
-        if (-not (Test-Path -LiteralPath $src)) { "nothing_to_sync"; exit 0 }
-        if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip -Force }
-        Compress-Archive -Path $src -DestinationPath $zip -CompressionLevel Fastest
-        "archived={0}" -f (Get-Item -LiteralPath $zip).Length
-      delegate_to: "{{ groups['crc_shared_dcs'][0] }}"
-      register: push_archive
-      changed_when: "'archived=' in push_archive.stdout"
-      when: in_scope | bool and direction == 'push'
-
-    - name: Copy the seeded archive to the controller
-      ansible.builtin.fetch:
-        src: '{{ evidence_root }}\_sync\{{ pod_name }}.zip'
-        dest: '{{ staging_dir }}/{{ pod_name }}.zip'
-        flat: true
-      delegate_to: "{{ groups['crc_shared_dcs'][0] }}"
-      when:
-        - in_scope | bool
-        - direction == 'push'
-        - "'archived=' in (push_archive.stdout | default(''))"
-
-    - name: Place the archive on the receiving host
-      ansible.windows.win_copy:
-        src: '{{ staging_dir }}/{{ pod_name }}.zip'
-        dest: '{{ evidence_root }}\_sync\{{ pod_name }}.in.zip'
-      delegate_to: >-
-        {{ groups['crc_shared_dcs'][0] if direction == 'pull' else inventory_hostname }}
-      when:
-        - in_scope | bool
-        - "'archived=' in ((pull_archive.stdout | default('')) ~ (push_archive.stdout | default('')))"
-
-    - name: Expand the archive over the receiving copy
-      ansible.windows.win_shell: |
-        $ErrorActionPreference = 'Stop'
-        $zip = '{{ evidence_root }}\_sync\{{ pod_name }}.in.zip'
-        Expand-Archive -LiteralPath $zip -DestinationPath '{{ evidence_root }}' -Force
-        Remove-Item -LiteralPath $zip -Force
-        "expanded={0}" -f (Get-ChildItem -Recurse -File '{{ evidence_root }}\{{ pod_name }}' |
-          Measure-Object).Count
-      delegate_to: >-
-        {{ groups['crc_shared_dcs'][0] if direction == 'pull' else inventory_hostname }}
-      register: expanded
-      changed_when: true
-      when:
-        - in_scope | bool
-        - "'archived=' in ((pull_archive.stdout | default('')) ~ (push_archive.stdout | default('')))"
-
-    - name: Drop the working archives
-      ansible.windows.win_shell: |
-        Remove-Item -LiteralPath '{{ evidence_root }}\_sync\{{ pod_name }}.zip' `
-          -Force -ErrorAction SilentlyContinue
-        "cleaned"
-      delegate_to: "{{ item }}"
-      loop:
-        - "{{ inventory_hostname }}"
-        - "{{ groups['crc_shared_dcs'][0] }}"
-      changed_when: false
+        $local = '{{ evidence_root }}\{{ pod_name }}'
+        $drop = '\\{{ hostvars[drop_host].ansible_host | default(drop_host) }}\{{ drop_share }}\{{ pod_name }}'
+        if ('{{ direction }}' -eq 'pull') { $src = $local; $dst = $drop }
+        else { $src = $drop; $dst = $local }
+        if (-not (Test-Path -LiteralPath $src)) { 'nothing_to_sync'; exit 0 }
+        New-Item -ItemType Directory -Force -Path $dst | Out-Null
+        # /MIR so a reset on one end is reflected on the other; robocopy uses
+        # 1-7 for success.
+        $null = robocopy $src $dst /MIR /R:2 /W:2 /NFL /NDL /NJH /NJS /NP
+        if ($LASTEXITCODE -gt 7) { throw "robocopy exit $LASTEXITCODE" }
+        'synced={0}' -f (Get-ChildItem -Recurse -File -LiteralPath $dst | Measure-Object).Count
+      become: true
+      become_method: ansible.builtin.runas
+      become_user: SYSTEM
+      register: synced
+      changed_when: "'synced=' in synced.stdout"
       when: in_scope | bool
 
     - name: Report what moved
       ansible.builtin.debug:
-        msg: "{{ pod_name }} {{ direction }}: {{ expanded.stdout | default('nothing to sync') | trim }}"
+        msg: "{{ pod_name }} {{ direction }}: {{ synced.stdout | default('skipped') | trim }}"
       when: in_scope | bool
