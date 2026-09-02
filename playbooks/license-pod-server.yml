@@ -1,0 +1,88 @@
+---
+# Activate the pod member servers with the purchased Datacenter keys.
+#
+# One key per pod, supplied as the ordered secret `pod_product_keys` from the
+# "CRC Windows Activation Keys" custom credential, so the keys stay encrypted in
+# AWX and never appear in job arguments, playbook output, or a guest file. The
+# key is passed to slmgr through an environment variable and the tasks are
+# no_log, so no key reaches the job event stream.
+#
+# Activation needs outbound TCP/443 to Microsoft. Pod networks are default-deny,
+# so run scripts/pod-servers/maintenance-nic.sh attach <pods> first and detach it
+# immediately afterwards, exactly like patching.
+- name: Activate pod member server Windows licensing
+  hosts: crc_pod_servers
+  gather_facts: false
+  vars:
+    pod_num: "{{ inventory_hostname | regex_replace('^[Pp][Oo][Dd]0*([0-9]+)-[Ss][Rr][Vv]$', '\\1') }}"
+    key_list: "{{ (pod_product_keys | default('')).split(',') | map('trim') | select | list }}"
+    pod_key: "{{ key_list[(pod_num | int) - 1] | default('') }}"
+  tasks:
+    - name: Fail when no key was supplied for this pod
+      ansible.builtin.assert:
+        that:
+          - pod_key | length > 0
+        fail_msg: >-
+          No activation key for Pod{{ '%02d' | format(pod_num | int) }}: supply
+          20 comma-separated keys in pod order via pod_product_keys.
+        success_msg: "Key present for Pod{{ '%02d' | format(pod_num | int) }}"
+
+    - name: Record the licensing state before activation
+      ansible.windows.win_shell: |
+        $s = Get-CimInstance SoftwareLicensingProduct -Filter `
+          "ApplicationID='55c92734-d682-4d71-983e-d6ec3f16059f' AND PartialProductKey IS NOT NULL"
+        "before edition={0} status={1} channel={2}" -f `
+          (Get-CimInstance Win32_OperatingSystem).Caption, $s.LicenseStatus, $s.ProductKeyChannel
+      register: license_before
+      changed_when: false
+
+    - name: Install the product key
+      ansible.windows.win_shell: |
+        $ErrorActionPreference = 'Stop'
+        $out = & cscript.exe //nologo C:\Windows\System32\slmgr.vbs /ipk $env:CRC_PRODUCT_KEY 2>&1
+        if ($LASTEXITCODE -ne 0) { throw "ipk failed" }
+        if ($out -match 'successfully') { 'ipk=ok' } else { 'ipk=unknown' }
+      environment:
+        CRC_PRODUCT_KEY: "{{ pod_key }}"
+      register: ipk
+      changed_when: "'ipk=ok' in ipk.stdout"
+      no_log: true
+
+    - name: Report the key installation result only
+      ansible.builtin.debug:
+        msg: "Pod{{ '%02d' | format(pod_num | int) }}: {{ ipk.stdout | default('') | trim }}"
+
+    - name: Activate against Microsoft
+      ansible.windows.win_shell: |
+        $ErrorActionPreference = 'Stop'
+        $out = & cscript.exe //nologo C:\Windows\System32\slmgr.vbs /ato 2>&1
+        ($out | Where-Object { $_ -match 'successfully|Error|error code' }) -join '; '
+      register: ato
+      changed_when: "'successfully' in (ato.stdout | default(''))"
+      failed_when: false
+
+    - name: Record the licensing state after activation
+      ansible.windows.win_shell: |
+        $s = Get-CimInstance SoftwareLicensingProduct -Filter `
+          "ApplicationID='55c92734-d682-4d71-983e-d6ec3f16059f' AND PartialProductKey IS NOT NULL"
+        "edition={0} status={1} channel={2} grace_min={3} desc={4}" -f `
+          (Get-CimInstance Win32_OperatingSystem).Caption, $s.LicenseStatus, `
+          $s.ProductKeyChannel, $s.GracePeriodRemaining, $s.LicenseStatusReason
+      register: license_after
+      changed_when: false
+
+    - name: Show the licensing outcome
+      ansible.builtin.debug:
+        msg:
+          - "{{ license_before.stdout | default('') | trim }}"
+          - "activation: {{ ato.stdout | default('') | trim }}"
+          - "{{ license_after.stdout | default('') | trim }}"
+
+    - name: Fail the host when it is still not licensed
+      ansible.builtin.assert:
+        that:
+          - "'status=1' in (license_after.stdout | default(''))"
+        fail_msg: >-
+          Pod{{ '%02d' | format(pod_num | int) }} is still not licensed
+          ({{ license_after.stdout | default('') | trim }}).
+        success_msg: "Pod{{ '%02d' | format(pod_num | int) }} is licensed."

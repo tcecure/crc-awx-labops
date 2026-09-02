@@ -20,7 +20,19 @@
   vars:
     member_mode: "{{ (crc_target_mode | default('shared_dc')) == 'member_server' }}"
     direction: "{{ sync_direction | default('pull') }}"
-    pod_name: "Pod{{ '%02d' | format(pod_id | int) }}"
+    # The pod number comes from the host itself, so a run limited to a group of
+    # session hosts syncs each host's own folder instead of repeating one pod.
+    pod_num: "{{ inventory_hostname | regex_replace('^[Pp][Oo][Dd]0*([0-9]+)-[Ss][Rr][Vv]$', '\\1') }}"
+    pod_name: "Pod{{ '%02d' | format(pod_num | int) }}"
+    # pods=/pod_id= narrow the sync the same way the seed and verify plays do.
+    pod_scope: >-
+      {{ ((pods | default(pod_id) | default('') | string).split(',') | map('trim')
+          | select('match', '^[0-9]+$') | map('int') | list)
+         if ((pods | default('') | string | trim) != '' or (pod_id | default('') | string | trim) != '')
+         else [] }}
+    in_scope: >-
+      {{ (member_mode | bool)
+         and ((pod_scope | length) == 0 or (pod_num | int) in pod_scope) }}
     evidence_root: 'C:\CyberLab'
     staging_dir: /tmp/crc-pod-evidence
   tasks:
@@ -36,7 +48,7 @@
         "archived={0}" -f (Get-Item -LiteralPath $zip).Length
       register: pull_archive
       changed_when: "'archived=' in pull_archive.stdout"
-      when: member_mode | bool and direction == 'pull'
+      when: in_scope | bool and direction == 'pull'
 
     - name: Copy the archive to the controller
       ansible.builtin.fetch:
@@ -44,7 +56,7 @@
         dest: '{{ staging_dir }}/{{ pod_name }}.zip'
         flat: true
       when:
-        - member_mode | bool
+        - in_scope | bool
         - direction == 'pull'
         - "'archived=' in (pull_archive.stdout | default(''))"
 
@@ -61,7 +73,7 @@
       delegate_to: "{{ groups['crc_shared_dcs'][0] }}"
       register: push_archive
       changed_when: "'archived=' in push_archive.stdout"
-      when: member_mode | bool and direction == 'push'
+      when: in_scope | bool and direction == 'push'
 
     - name: Copy the seeded archive to the controller
       ansible.builtin.fetch:
@@ -70,7 +82,7 @@
         flat: true
       delegate_to: "{{ groups['crc_shared_dcs'][0] }}"
       when:
-        - member_mode | bool
+        - in_scope | bool
         - direction == 'push'
         - "'archived=' in (push_archive.stdout | default(''))"
 
@@ -81,7 +93,7 @@
       delegate_to: >-
         {{ groups['crc_shared_dcs'][0] if direction == 'pull' else inventory_hostname }}
       when:
-        - member_mode | bool
+        - in_scope | bool
         - "'archived=' in ((pull_archive.stdout | default('')) ~ (push_archive.stdout | default('')))"
 
     - name: Expand the archive over the receiving copy
@@ -97,7 +109,7 @@
       register: expanded
       changed_when: true
       when:
-        - member_mode | bool
+        - in_scope | bool
         - "'archived=' in ((pull_archive.stdout | default('')) ~ (push_archive.stdout | default('')))"
 
     - name: Drop the working archives
@@ -110,9 +122,9 @@
         - "{{ inventory_hostname }}"
         - "{{ groups['crc_shared_dcs'][0] }}"
       changed_when: false
-      when: member_mode | bool
+      when: in_scope | bool
 
     - name: Report what moved
       ansible.builtin.debug:
         msg: "{{ pod_name }} {{ direction }}: {{ expanded.stdout | default('nothing to sync') | trim }}"
-      when: member_mode | bool
+      when: in_scope | bool
