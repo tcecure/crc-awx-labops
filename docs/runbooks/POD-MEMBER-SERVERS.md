@@ -165,6 +165,11 @@ crc_publish_tracker: false
 The grading output still appears in the job and in the AWX artifacts; only the POST
 to the portal is skipped.
 
+`pod_id` scopes the AD-side seed and reset plays to one pod, because an extra var
+outranks the per-pod loop variable. For the same reason never pass it to a verify
+run: the loop keeps grading all 20 pods but files every result under that one pod,
+so the artifact says `pod03` while the findings are another pod's objects.
+
 ## Troubleshooting
 
 **RDP dies at NLA after the edition conversion.** Symptom: Guacamole reports
