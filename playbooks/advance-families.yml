@@ -5,8 +5,14 @@
 # for that pod only. After all six families and 57 labs are complete, launch one
 # idempotent final-certificate request if the student submitted a display name.
 #
-# Seed markers live wherever the family is seeded: AC/IA on the shared DC,
-# SI/MP/PE on each pod session host once crc_target_mode is member_server.
+# Seed markers are read on the shared DC only, with the DC credential. In
+# member-server mode the SI/MP/PE markers are written on the session hosts, and
+# they reach the DC the same way student evidence does: the session hosts copy
+# C:\CyberLab\PodXX into the drop share as their own computer account
+# (playbooks/sync-pod-evidence.yml, template "Sync Pod Evidence (Session
+# Host)"), so that has to run before this play. Reading the session hosts here
+# instead would need their credential as well, and one job cannot hold two
+# machine credentials.
 #
 # Requires (injected by an AWX "AWX API Token" custom credential):
 #   AWX_HOST   e.g. http://192.168.1.103:30080
@@ -31,34 +37,13 @@
           - 'CertificateProfile.json'
       register: found_family_state
 
-- name: Collect family state from the pod session hosts
-  hosts: crc_pod_servers
-  gather_facts: false
-  tasks:
-    - name: Find seed markers, issued markers, and certificate profiles
-      ansible.windows.win_find:
-        paths: 'C:\CyberLab'
-        recurse: true
-        patterns:
-          - '*.seeded'
-          - '*.issued'
-          - 'CertificateProfile.json'
-      register: found_family_state
-      when: (crc_target_mode | default('member_server')) == 'member_server'
-      failed_when: false
-
 - name: Decide and launch per-pod family advancement
   hosts: localhost
   connection: local
   gather_facts: false
   vars:
-    state_hosts: >-
-      {{ groups['crc_shared_dcs'][:1]
-         + (groups['crc_pod_servers'] | default([])
-            if (crc_target_mode | default('member_server')) == 'member_server'
-            else []) }}
     state_paths: >-
-      {{ state_hosts
+      {{ groups['crc_shared_dcs'][:1]
          | map('extract', hostvars, ['found_family_state', 'files'])
          | select('defined') | select('iterable')
          | flatten | map(attribute='path') | list }}
@@ -81,8 +66,9 @@
         FAMILY_STATE_FILE: /tmp/family_state_paths.json
       register: advance_out
       changed_when: >-
-        ('launched 0 seed job(s)' not in (advance_out.stdout | default(''))) or
-        ('launched 0 certificate job(s)' not in (advance_out.stdout | default('')))
+        ('launched 0 seed job(s)' not in (advance_out.stdout | default('')))
+        or ('launched 0 certificate job(s)'
+            not in (advance_out.stdout | default('')))
 
     - name: Show auto-advance output
       ansible.builtin.debug:
