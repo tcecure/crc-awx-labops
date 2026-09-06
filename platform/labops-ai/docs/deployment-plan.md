@@ -63,8 +63,9 @@ Proxmox VM firewall enabled as a second layer with the same inbound rules.
 7. `scripts/verify-deployment.sh` (section 6) — must be fully green before any DNS work.
 8. Edge nginx vhost + certificate, then the Namecheap record — separate approval (`checkpoint-dns-tls.md` in the app repo).
 
-Staging first: the same stack runs on the VM against the staging Supabase project and is
-exercised over an SSH tunnel, so the app is validated before the hostname exists.
+Superseded 2026-08-29: there is no staging Supabase project, so the stack is validated on the VM
+against production over an SSH tunnel before the hostname exists, with production treated
+read-only. See `docs/labops-ai/production-first-workflow.md` in the app repo.
 
 ## 5. Resource limits
 
