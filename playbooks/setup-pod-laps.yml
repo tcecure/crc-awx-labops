@@ -1,0 +1,89 @@
+---
+# Gives every pod member server its own rotating local recovery password using
+# Windows LAPS, so the fleet has a break-glass path that is not a shared secret.
+#
+# The password is stored on the computer object in AD and is readable only by
+# accounts with the right to read it (Domain Admins by default) - never by the
+# student, and never written to a file on the session host.
+#
+# Two parts:
+#   1. On the DC: extend the schema (additive, one time) and let the pod server
+#      computer objects write their own managed password.
+#   2. On each pod server: point the LAPS client at AD and process the policy.
+#
+#   Job template: Setup Pod Server LAPS
+- name: "Pod servers: prepare Active Directory for Windows LAPS"
+  hosts: crc_shared_dcs[0]
+  gather_facts: false
+  vars:
+    pod_servers_ou_name: PodServers
+  tasks:
+    - name: Check whether the LAPS module is present on the DC
+      ansible.windows.win_shell: |
+        if (Get-Module -ListAvailable -Name LAPS) { 'present' } else { 'absent' }
+      register: laps_module
+      changed_when: false
+
+    - name: Extend the schema and delegate self-management on the pod server OU
+      ansible.windows.win_shell: |
+        $ErrorActionPreference = 'Stop'
+        Import-Module LAPS
+        # Additive and idempotent: re-running reports the attributes already exist.
+        Update-LapsADSchema -Confirm:$false | Out-String
+        Set-LapsADComputerSelfPermission -Identity 'OU={{ pod_servers_ou_name }},{{ shared_domain_dn }}' | Out-String
+        'laps_ad_ready'
+      register: laps_ad
+      when: laps_module.stdout | trim == 'present'
+      changed_when: true
+
+    - name: Report the Active Directory side
+      ansible.builtin.debug:
+        msg: >-
+          {{ (laps_ad.stdout_lines | default(['skipped: no LAPS module on the DC,
+          fall back to documented per-server recovery passwords'])) }}
+
+- name: "Pod servers: enrol the session hosts in Windows LAPS"
+  hosts: crc_pod_servers
+  gather_facts: false
+  serial: 5
+  tasks:
+    - name: Check whether the LAPS client is present
+      ansible.windows.win_shell: |
+        if (Get-Module -ListAvailable -Name LAPS) { 'present' } else { 'absent' }
+      register: laps_client
+      changed_when: false
+
+    - name: Point the LAPS client at Active Directory
+      ansible.windows.win_regedit:
+        path: HKLM:\Software\Microsoft\Windows\CurrentVersion\LAPS\Config
+        name: "{{ item.name }}"
+        data: "{{ item.data }}"
+        type: dword
+      loop:
+        # 2 = back the password up to Active Directory.
+        - { name: BackupDirectory, data: 2 }
+        - { name: PasswordAgeDays, data: 30 }
+        - { name: PasswordLength, data: 24 }
+        - { name: PasswordComplexity, data: 4 }
+        # 1 = reset the password after it is handed out for a recovery session.
+        - { name: PostAuthenticationResetDelay, data: 8 }
+      when: laps_client.stdout | trim == 'present'
+
+    - name: Process the policy and report the managed account
+      ansible.windows.win_shell: |
+        $ErrorActionPreference = 'Continue'
+        Import-Module LAPS
+        Invoke-LapsPolicyProcessing | Out-String
+        $s = Get-LapsDiagnostics -ErrorAction SilentlyContinue
+        "laps_configured={0}" -f ($null -ne $s)
+        (Get-LapsADPassword -Identity $env:COMPUTERNAME -ErrorAction SilentlyContinue |
+          Select-Object Account, PasswordUpdateTime, ExpirationTimestamp | Format-List | Out-String)
+      register: laps_state
+      when: laps_client.stdout | trim == 'present'
+      changed_when: false
+
+    - name: Show the LAPS state
+      ansible.builtin.debug:
+        msg: >-
+          {{ laps_state.stdout_lines | default(['skipped: no LAPS client on this
+          server']) }}

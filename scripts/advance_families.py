@@ -8,6 +8,7 @@ make the single CMMC Level 1 certificate student-named and idempotent.
 Environment:
   CRC_AWX_HOST         AWX URL without /api/v2
   CRC_AWX_TOKEN        AWX OAuth2 bearer token
+  CRC_TARGET_MODE      "member_server" (default) or "shared_dc" for the legacy path
   ADVANCE_DRY_RUN      "1" to report without launching anything
   ADVANCE_ENABLED      "0" to disable seed launches
   CERTIFICATES_ENABLED "1" to enable certificate launches (default "0")
@@ -23,9 +24,27 @@ import urllib.parse
 import urllib.request
 
 FAMILY_ORDER = ["AC", "IA", "SI", "SC", "MP", "PE"]
+
+# The scheduled templates are the single source of pod state for the tracker, the
+# portal and this script, in both the shared-DC and member-server models; only
+# the hosts they run against change.
 VERIFY_TEMPLATES = {"AC": 13, "IA": 16, "SI": 19, "SC": 22, "MP": 28, "PE": 31}
 SEED_TEMPLATES = {"AC": 12, "IA": 15, "SI": 18, "SC": 21, "MP": 27, "PE": 30}
 CERTIFICATE_TEMPLATE_NAME = "Generate Completion Certificate"
+
+# Families seeded on the pod session host itself. Their playbook derives the pod
+# from the host, so seeding one pod means limiting the job to that pod's server
+# rather than passing a pod number.
+HOST_SCOPED_SEEDS = {"SI", "MP", "PE"}
+
+TARGET_MODE = os.environ.get("CRC_TARGET_MODE") or "member_server"
+if TARGET_MODE not in ("member_server", "shared_dc"):
+    TARGET_MODE = "member_server"
+HELD_BACK_PODS = {
+    int(pod)
+    for pod in re.split(r"[,\s]+", os.environ.get("CRC_HELD_BACK_PODS", ""))
+    if pod.strip().isdigit()
+}
 
 LABS = {
     "AC": ["L1.1", "L1.2", "L1.3", "L2.1", "L2.2", "L2.3",
@@ -154,11 +173,17 @@ def decide_certificates(completed, issued, profiles, verification_jobs):
 
 def launch_seed(host, token, family, pod_num):
     template_id = SEED_TEMPLATES[family]
+    payload = {"extra_vars": json.dumps({"pods": str(pod_num)})}
+    if TARGET_MODE == "member_server" and family in HOST_SCOPED_SEEDS:
+        payload["limit"] = "pod%02d-srv" % int(pod_num)
     url = "%s/api/v2/job_templates/%d/launch/" % (host, template_id)
-    status, body = _req(
-        url, token, method="POST", body={"extra_vars": json.dumps({"pods": str(pod_num)})}
-    )
+    status, body = _req(url, token, method="POST", body=payload)
     return status, body.get("id") or body.get("job")
+
+
+def pod_number(pod_key):
+    digits = re.sub(r"\D", "", pod_key)
+    return int(digits) if digits else 0
 
 
 def find_job_template(host, token, name):
@@ -207,10 +232,17 @@ def main():
 
     completed = family_completion(artifacts_by_family)
     seeded, issued, profiles = parse_family_state(state_paths)
-    advancement_actions = decide_advancement(completed, seeded)
+    advancement_actions = [
+        action for action in decide_advancement(completed, seeded)
+        if pod_number(action[0]) not in HELD_BACK_PODS
+    ]
     certificate_actions, pending_names = decide_certificates(
         completed, issued, profiles, verification_jobs
     )
+    certificate_actions = [
+        action for action in certificate_actions
+        if pod_number(action[0]) not in HELD_BACK_PODS
+    ]
 
     print("=== Auto-Advance and Certificates summary ===")
     print("completed families:   %s" % {k: sorted(v) for k, v in sorted(completed.items())})
@@ -222,13 +254,15 @@ def main():
         len(certificate_actions), [(pod, scope) for pod, scope, _ in certificate_actions]
     ))
     print("certificates pending student name (%d): %s" % (len(pending_names), pending_names))
-    print("dry_run=%s advance_enabled=%s certificates_enabled=%s" % (
-        dry_run, advance_enabled, certificates_enabled
+    print("dry_run=%s advance_enabled=%s certificates_enabled=%s target_mode=%s" % (
+        dry_run, advance_enabled, certificates_enabled, TARGET_MODE
     ))
+    if HELD_BACK_PODS:
+        print("held back pods (no seeding, no certificates): %s" % sorted(HELD_BACK_PODS))
 
     launched_seeds = []
     for pod_key, family in advancement_actions:
-        pod_num = int(pod_key.replace("pod", ""))
+        pod_num = pod_number(pod_key)
         if dry_run or not advance_enabled:
             print("  WOULD advance %s -> seed %s (pod %d)" % (pod_key, family, pod_num))
             continue
@@ -247,7 +281,7 @@ def main():
             return 3
 
     for pod_key, scope, job_ids in certificate_actions:
-        pod_num = int(pod_key.replace("pod", ""))
+        pod_num = pod_number(pod_key)
         if dry_run or not certificates_enabled:
             print("  WOULD issue %s certificate for %s" % (scope, pod_key))
             continue

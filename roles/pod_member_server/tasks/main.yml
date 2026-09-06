@@ -1,0 +1,215 @@
+---
+# Turns a freshly cloned Windows Server 2022 VM into the pod's member server:
+# named, domain-joined, RSAT-equipped, and administered by that pod's student
+# only. Idempotent, so it is safe to re-run against an already-built server.
+- name: Verify the join credential is attached
+  ansible.builtin.assert:
+    that:
+      - domain_join_user is defined and domain_join_user | length > 0
+      - domain_join_password is defined and domain_join_password | length > 0
+    fail_msg: >-
+      Attach the "CRC Domain Join" credential so domain_join_user and
+      domain_join_password are available.
+
+- name: Read the current name, domain membership and trust health
+  ansible.windows.win_shell: |
+    $cs = Get-CimInstance Win32_ComputerSystem
+    $trust = $false
+    if ($cs.PartOfDomain) {
+      try { $trust = Test-ComputerSecureChannel -ErrorAction Stop } catch { $trust = $false }
+    }
+    "{0}|{1}|{2}" -f $cs.Name, $cs.PartOfDomain, $trust
+  register: current_identity
+  changed_when: false
+
+- name: Note what still has to change
+  ansible.builtin.set_fact:
+    pod_server_joined: "{{ (current_identity.stdout | trim).split('|')[1] | bool }}"
+    pod_server_named: "{{ (current_identity.stdout | trim).split('|')[0] | upper == pod_server_name | upper }}"
+    pod_server_trusted: "{{ (current_identity.stdout | trim).split('|')[2] | bool }}"
+
+# A clone that reached the domain under the template name shares one computer account
+# with its siblings, so its trust breaks as soon as the next pod joins. Such a server
+# is put back into a workgroup and rebuilt from scratch under its own name.
+- name: Decide whether the server has to be rebuilt from a workgroup
+  ansible.builtin.set_fact:
+    pod_server_unjoin: "{{ pod_server_joined and not (pod_server_named and pod_server_trusted) }}"
+
+# The unjoin is local-only (option 0): such a server's computer account is stale or
+# already gone, so Remove-Computer's AD-side cleanup only fails with access denied.
+- name: Leave the domain before rebuilding the identity
+  ansible.windows.win_shell: |
+    $ErrorActionPreference = 'Stop'
+    $result = (Get-WmiObject Win32_ComputerSystem).UnjoinDomainOrWorkgroup($null, $null, 0)
+    if ($result.ReturnValue -ne 0) {
+      throw "local unjoin failed with code $($result.ReturnValue)"
+    }
+  when: pod_server_unjoin
+
+- name: Reboot into the workgroup
+  ansible.windows.win_reboot:
+    reboot_timeout: 900
+    post_reboot_delay: 45
+  when: pod_server_unjoin
+
+# Every clone boots with the template's name, so renaming happens before the join:
+# joining first races all the pods onto a single shared computer account.
+- name: Rename the workgroup clone to its pod name
+  ansible.windows.win_shell: |
+    $ErrorActionPreference = 'Stop'
+    Rename-Computer -NewName '{{ pod_server_name }}' -Force
+  when: not pod_server_named and (pod_server_unjoin or not pod_server_joined)
+
+- name: Reboot so the new name takes effect before joining
+  ansible.windows.win_reboot:
+    reboot_timeout: 900
+    post_reboot_delay: 45
+  when: not pod_server_named and (pod_server_unjoin or not pod_server_joined)
+
+# Add-Computer is used rather than a collection module so the role works on any AWX
+# execution environment; ansible.windows.win_domain_membership was removed in 3.0.0
+# and microsoft.ad is not guaranteed to be present.
+# The join credential is handed over as process environment rather than inside the
+# script body, so it is not part of any script text the guest sees, and the
+# variables die with the WinRM process.
+- name: Join the domain
+  ansible.windows.win_shell: |
+    $ErrorActionPreference = 'Stop'
+    $pw = ConvertTo-SecureString $env:CRC_JOIN_PW -AsPlainText -Force
+    $cred = New-Object System.Management.Automation.PSCredential(
+      "$($env:CRC_JOIN_USER)@{{ shared_domain }}", $pw)
+    Add-Computer -DomainName '{{ shared_domain }}' -Credential $cred `
+      -OUPath 'OU={{ pod_servers_ou_name }},{{ shared_domain_dn }}' -Force
+    Remove-Item Env:CRC_JOIN_PW -ErrorAction SilentlyContinue
+  environment:
+    CRC_JOIN_USER: "{{ domain_join_user }}"
+    CRC_JOIN_PW: "{{ domain_join_password }}"
+  no_log: true
+  when: pod_server_unjoin or not pod_server_joined
+
+- name: Reboot to complete the join
+  ansible.windows.win_reboot:
+    reboot_timeout: 900
+    post_reboot_delay: 45
+  when: pod_server_unjoin or not pod_server_joined
+
+- name: Install the AD management tools the lab guides use
+  ansible.windows.win_feature:
+    name: "{{ pod_server_features }}"
+    include_management_tools: true
+    state: present
+  register: features
+
+- name: Reboot when a feature asked for it
+  ansible.windows.win_reboot:
+    reboot_timeout: 900
+    post_reboot_delay: 30
+  when: features.reboot_required | default(false)
+
+- name: Make the pod's student a local administrator of their own server
+  ansible.windows.win_group_membership:
+    name: Administrators
+    members:
+      - "{{ shared_domain_netbios }}\\{{ pod_student }}"
+    state: present
+
+- name: Allow the pod's student to sign in over RDP
+  ansible.windows.win_group_membership:
+    name: Remote Desktop Users
+    members:
+      - "{{ shared_domain_netbios }}\\{{ pod_student }}"
+    state: present
+
+- name: Create the pod evidence directory
+  ansible.windows.win_file:
+    path: "{{ pod_evidence_dir }}"
+    state: directory
+
+- name: Give the student full control of their own evidence directory
+  ansible.windows.win_acl:
+    path: "{{ pod_evidence_dir }}"
+    user: "{{ shared_domain_netbios }}\\{{ pod_student }}"
+    rights: FullControl
+    type: allow
+    inherit: ContainerInherit, ObjectInherit
+    propagation: None
+
+- name: Enable Remote Desktop
+  ansible.windows.win_regedit:
+    path: HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server
+    name: fDenyTSConnections
+    data: 0
+    type: dword
+
+# Guacamole connects with NLA, and NLA is what keeps an unauthenticated client from
+# reaching the logon UI at all.
+- name: Require Network Level Authentication for Remote Desktop
+  ansible.windows.win_regedit:
+    path: HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp
+    name: UserAuthentication
+    data: 1
+    type: dword
+
+- name: Open the Remote Desktop firewall rules
+  ansible.windows.win_shell: |
+    Enable-NetFirewallRule -DisplayGroup 'Remote Desktop'
+  changed_when: false
+
+# The pod networks have no other time source; the PDC emulator is the only clock
+# Kerberos will agree with.
+- name: Take time from the domain hierarchy
+  ansible.windows.win_shell: |
+    $ErrorActionPreference = 'Continue'
+    & w32tm /config /syncfromflags:domhier /update | Out-String
+    Restart-Service w32time -ErrorAction SilentlyContinue
+    & w32tm /resync /force 2>&1 | Out-String
+  changed_when: false
+
+- name: Add the restricted management account to local Administrators
+  ansible.windows.win_group_membership:
+    name: Administrators
+    members:
+      - "{{ shared_domain_netbios }}\\{{ pod_server_mgmt_account }}"
+    state: present
+  when: pod_server_mgmt_account_present | default(true) | bool
+  register: mgmt_member
+  failed_when:
+    - mgmt_member is failed
+    - "'no mapping between account names' not in (mgmt_member.msg | default('') | lower)"
+
+# Nothing on a student session host should hold a domain-join or provisioning
+# credential once provisioning is done.
+- name: Leave no provisioning credential behind
+  ansible.windows.win_shell: |
+    $ErrorActionPreference = 'Continue'
+    foreach ($p in @(
+      "$env:APPDATA\Microsoft\Windows\PowerShell\PSReadLine\ConsoleHost_history.txt",
+      'C:\Windows\Temp\crc-bootstrap.dat',
+      'C:\Windows\Temp\crc-firstboot.ps1',
+      'C:\Windows\Temp\crc-firstboot.log',
+      'C:\Windows\Panther\unattend.xml',
+      'C:\Windows\Panther\unattend-original.xml',
+      'C:\Windows\System32\Sysprep\unattend.xml'
+    )) { if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Force -ErrorAction SilentlyContinue } }
+    Get-ChildItem 'C:\Users' -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+      $h = Join-Path $_.FullName 'AppData\Roaming\Microsoft\Windows\PowerShell\PSReadLine\ConsoleHost_history.txt'
+      if (Test-Path -LiteralPath $h) { Remove-Item -LiteralPath $h -Force -ErrorAction SilentlyContinue }
+    }
+    & cmdkey.exe /list 2>&1 | Select-String 'Target:' | ForEach-Object { $_.Line.Trim() }
+  changed_when: false
+  register: cred_cleanup
+
+- name: Report what the server ended up as
+  ansible.windows.win_shell: |
+    $cs = Get-CimInstance Win32_ComputerSystem
+    "name={0}" -f $cs.Name
+    "domain={0}" -f $cs.Domain
+    "partOfDomain={0}" -f $cs.PartOfDomain
+    "localAdmins={0}" -f ((Get-LocalGroupMember Administrators).Name -join ';')
+    "rsat={0}" -f ((Get-WindowsFeature RSAT-AD-PowerShell).InstallState)
+  register: server_state
+  changed_when: false
+
+- name: Show the server state
+  ansible.builtin.debug:
+    msg: "{{ server_state.stdout_lines }}"

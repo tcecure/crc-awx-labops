@@ -1,0 +1,59 @@
+---
+# Create the evidence drop share the AC/IA families use once students work on
+# their own member servers.
+#
+# One folder per pod, writable only by that pod's computer account, so the
+# session host can copy evidence in as SYSTEM without any user credential and
+# without being able to touch another pod's evidence. Administrators keep full
+# control so the AC/IA verify plays (which already run on the DC) can read it.
+#
+# Run once, limited to the shared DC. Re-running is safe.
+- name: Create the pod evidence drop share
+  hosts: crc_shared_dcs[0]
+  gather_facts: false
+  vars:
+    drop_root: 'C:\CyberLab\_drop'
+    drop_share: "CyberLabDrop$"
+    drop_pod_count: "{{ pod_count | default(20) | int }}"
+  tasks:
+    - name: Create the drop root
+      ansible.windows.win_file:
+        path: "{{ drop_root }}"
+        state: directory
+
+    - name: Publish the drop share to the pod servers only
+      ansible.windows.win_share:
+        name: "{{ drop_share }}"
+        path: "{{ drop_root }}"
+        description: Pod evidence drop for the member-server session hosts
+        full: Administrators
+        change: Domain Computers
+        list: false
+
+    - name: Create one drop folder per pod, writable only by that pod's server
+      ansible.windows.win_shell: |
+        $ErrorActionPreference = 'Stop'
+        $pod = 'Pod{0:D2}' -f {{ item }}
+        $path = Join-Path '{{ drop_root }}' $pod
+        New-Item -ItemType Directory -Force -Path $path | Out-Null
+        $account = ('{0}\POD{1:D2}-SRV$' -f $env:USERDOMAIN, {{ item }})
+        $acl = Get-Acl -LiteralPath $path
+        $acl.SetAccessRuleProtection($true, $false)
+        $acl.Access | ForEach-Object { $null = $acl.RemoveAccessRule($_) }
+        foreach ($grant in @(
+          @('BUILTIN\Administrators', 'FullControl'),
+          @('NT AUTHORITY\SYSTEM', 'FullControl'),
+          @($account, 'Modify')
+        )) {
+          $acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule(
+            $grant[0], $grant[1], 'ContainerInherit,ObjectInherit', 'None', 'Allow')))
+        }
+        Set-Acl -LiteralPath $path -AclObject $acl
+        "{0}: {1}" -f $pod, $account
+      loop: "{{ range(1, (drop_pod_count | int) + 1) | list }}"
+      register: drop_folders
+      changed_when: true
+
+    - name: Show the drop folders
+      ansible.builtin.debug:
+        msg: "{{ drop_folders.results | map(attribute='stdout') | map('trim') | list }}"

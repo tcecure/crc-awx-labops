@@ -1,0 +1,113 @@
+---
+# Between-cohort reset of the existing student accounts.
+#
+# The accounts themselves are never recreated: `student01` … `student20` stay
+# in place with their pod OU and delegation, which is what the AC/IA labs are
+# graded against. What this play does is make the previous cohort's
+# credentials useless and hand the next cohort a clean starting point:
+#
+#   * new unique password per student
+#   * account disabled, so nothing can be used before the cohort starts
+#   * lockouts cleared and any leftover session logged off
+#   * group membership trimmed back to the pod's own groups
+#   * membership in that pod's admin group re-asserted
+#
+# Passwords arrive in one environment variable (the `CRC Student Passwords`
+# credential in AWX, ordered student01..student20) so they never appear in a
+# job argument, in job output, or in a file on the domain controller. The
+# tasks that touch them are no_log.
+#
+# Passwords are deliberately *not* flagged "must change at next logon":
+# students connect over RDP with NLA through Guacamole, which cannot carry a
+# change-password-at-logon prompt. Rotation is handled by handing each student
+# their own password at cohort start.
+- name: Reset the student identities between cohorts
+  hosts: crc_shared_dcs[0]
+  gather_facts: false
+  vars:
+    student_count: "{{ pod_count | default(20) | int }}"
+    keep_enabled: "{{ student_reset_keep_enabled | default(false) | bool }}"
+  tasks:
+    - name: Check that a password was supplied for every student
+      ansible.builtin.assert:
+        that:
+          - (lookup('env', 'CRC_STUDENT_PASSWORDS') | trim | length) > 0
+          - (lookup('env', 'CRC_STUDENT_PASSWORDS').split(',') | map('trim')
+             | select | list | length) >= (student_count | int)
+        fail_msg: >-
+          Attach the CRC Student Passwords credential with one password per
+          student, ordered student01..student{{ '%02d' | format(student_count | int) }}.
+        success_msg: Passwords supplied for every student
+      no_log: true
+
+    - name: Reset the password, disable the account and trim the group membership
+      ansible.windows.win_powershell:
+        script: |
+          param($Index, $KeepEnabled)
+          $ErrorActionPreference = 'Stop'
+          Import-Module ActiveDirectory
+          $user = 'student{0:D2}' -f $Index
+          $pod = 'Pod{0:D2}' -f $Index
+          $keys = $env:CRC_STUDENT_PASSWORDS -split ',' | ForEach-Object { $_.Trim() }
+          $secret = ConvertTo-SecureString $keys[$Index - 1] -AsPlainText -Force
+          $account = Get-ADUser -Identity $user -Properties MemberOf
+
+          Set-ADAccountPassword -Identity $account -Reset -NewPassword $secret
+          Unlock-ADAccount -Identity $account
+          Set-ADUser -Identity $account -ChangePasswordAtLogon $false `
+            -PasswordNeverExpires $false -Enabled ([bool]$KeepEnabled)
+
+          # A student only ever belongs to their own pod's groups. Anything else
+          # is left over from a previous cohort or was added by hand.
+          $allowed = @("$pod-Admins", 'Remote Desktop Users')
+          $removed = @()
+          foreach ($dn in $account.MemberOf) {
+              $group = Get-ADGroup -Identity $dn
+              if ($allowed -notcontains $group.Name) {
+                  Remove-ADGroupMember -Identity $group -Members $account -Confirm:$false
+                  $removed += $group.Name
+              }
+          }
+          if (-not (Get-ADGroupMember -Identity "$pod-Admins" |
+                    Where-Object { $_.SamAccountName -eq $user })) {
+              Add-ADGroupMember -Identity "$pod-Admins" -Members $account
+          }
+
+          $Ansible.Result = @{
+              user = $user
+              enabled = [bool]$KeepEnabled
+              removed_groups = $removed
+          }
+        parameters:
+          Index: "{{ item }}"
+          KeepEnabled: "{{ keep_enabled | bool }}"
+      environment:
+        CRC_STUDENT_PASSWORDS: "{{ lookup('env', 'CRC_STUDENT_PASSWORDS') }}"
+      loop: "{{ range(1, (student_count | int) + 1) | list }}"
+      loop_control:
+        label: "student{{ '%02d' | format(item) }}"
+      register: reset_students
+      changed_when: true
+      no_log: true
+
+    - name: Log off any session the previous cohort left behind
+      ansible.windows.win_shell: |
+        $ErrorActionPreference = 'Continue'
+        $out = @()
+        foreach ($line in (quser 2>$null | Select-Object -Skip 1)) {
+          $fields = ($line.Trim() -replace '\s{2,}', '|').Split('|')
+          $name = $fields[0].TrimStart('>')
+          if ($name -match '^student[0-9]{2}$') {
+            $id = ($fields | Where-Object { $_ -match '^[0-9]+$' } | Select-Object -First 1)
+            if ($id) { logoff $id 2>$null; $out += "$name logged off" }
+          }
+        }
+        if ($out.Count -eq 0) { 'no student sessions' } else { $out -join '; ' }
+      register: student_sessions
+      changed_when: "'logged off' in student_sessions.stdout"
+
+    - name: Report the reset
+      ansible.builtin.debug:
+        msg: >-
+          {{ reset_students.results | map(attribute='result') | list }}
+          sessions: {{ student_sessions.stdout | trim }}

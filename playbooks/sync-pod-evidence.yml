@@ -1,0 +1,73 @@
+---
+# Keep the AC and IA families gradable after students move to their own member
+# servers.
+#
+# Those two families are the only ones that read Active Directory, so their
+# checks have to keep running on a domain controller. The *files* travel
+# instead, through a drop share on the shared DC
+# (`setup-pod-evidence-drop.yml`).
+#
+# Every copy is initiated from the session host and runs as SYSTEM, so the
+# network identity is the pod server's own computer account (`PODXX-SRV$`) and
+# no user credential is ever presented on a box where the student is a local
+# administrator. The drop folder for a pod is writable only by that pod's
+# computer account, so a student who abuses the machine account of their own
+# server can still only reach their own evidence.
+#
+#   sync_direction: pull   session host -> drop share  (before AC/IA verify)
+#   sync_direction: push   drop share   -> session host (after AC/IA seed/reset)
+#
+# The DC end of the trip stays inside the AC/IA playbooks themselves, which
+# already run on the DC with the DC credential, so this play never needs
+# credentials for two different security boundaries at once.
+#
+# The play is a no-op unless crc_target_mode is member_server, so the legacy
+# shared-DC path keeps working untouched.
+- name: Synchronize pod evidence between the session host and the drop share
+  hosts: crc_pod_servers
+  gather_facts: false
+  vars:
+    member_mode: "{{ (crc_target_mode | default('shared_dc')) == 'member_server' }}"
+    direction: "{{ sync_direction | default('pull') }}"
+    # The pod number comes from the host itself, so a run limited to a group of
+    # session hosts syncs each host's own folder instead of repeating one pod.
+    pod_num: "{{ inventory_hostname | regex_replace('^[Pp][Oo][Dd]0*([0-9]+)-[Ss][Rr][Vv]$', '\\1') }}"
+    pod_name: "Pod{{ '%02d' | format(pod_num | int) }}"
+    # pods=/pod_id= narrow the sync the same way the seed and verify plays do.
+    pod_scope: >-
+      {{ ((pods | default(pod_id) | default('') | string).split(',') | map('trim')
+          | select('match', '^[0-9]+$') | map('int') | list)
+         if ((pods | default('') | string | trim) != '' or (pod_id | default('') | string | trim) != '')
+         else [] }}
+    in_scope: >-
+      {{ (member_mode | bool)
+         and ((pod_scope | length) == 0 or (pod_num | int) in pod_scope) }}
+    evidence_root: 'C:\CyberLab'
+    drop_host: "{{ pod_evidence_drop_host | default('dc01') }}"
+    drop_share: "{{ pod_evidence_drop_share | default('CyberLabDrop$') }}"
+  tasks:
+    - name: Copy the pod evidence between the session host and the drop share
+      ansible.windows.win_shell: |
+        $ErrorActionPreference = 'Stop'
+        $local = '{{ evidence_root }}\{{ pod_name }}'
+        $drop = '\\{{ hostvars[drop_host].ansible_host | default(drop_host) }}\{{ drop_share }}\{{ pod_name }}'
+        if ('{{ direction }}' -eq 'pull') { $src = $local; $dst = $drop }
+        else { $src = $drop; $dst = $local }
+        if (-not (Test-Path -LiteralPath $src)) { 'nothing_to_sync'; exit 0 }
+        New-Item -ItemType Directory -Force -Path $dst | Out-Null
+        # /MIR so a reset on one end is reflected on the other; robocopy uses
+        # 1-7 for success.
+        $null = robocopy $src $dst /MIR /R:2 /W:2 /NFL /NDL /NJH /NJS /NP
+        if ($LASTEXITCODE -gt 7) { throw "robocopy exit $LASTEXITCODE" }
+        'synced={0}' -f (Get-ChildItem -Recurse -File -LiteralPath $dst | Measure-Object).Count
+      become: true
+      become_method: ansible.builtin.runas
+      become_user: SYSTEM
+      register: synced
+      changed_when: "'synced=' in synced.stdout"
+      when: in_scope | bool
+
+    - name: Report what moved
+      ansible.builtin.debug:
+        msg: "{{ pod_name }} {{ direction }}: {{ synced.stdout | default('skipped') | trim }}"
+      when: in_scope | bool

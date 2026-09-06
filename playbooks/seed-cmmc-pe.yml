@@ -1,12 +1,25 @@
 ---
-- name: "Seed Labs: CMMC Level 1 Physical Protection (PE) - Shared DC"
-  hosts: crc_shared_dcs[0]
+# Runs on the shared DCs by default; set crc_target_mode=member_server to
+# run on each pod session host instead (crc_pod_servers).
+- name: "Seed Labs: CMMC Level 1 Physical Protection (PE)"
+  hosts: >-
+    {{ 'crc_pod_servers'
+       if (crc_target_mode | default('shared_dc')) == 'member_server'
+       else 'crc_shared_dcs[0]' }}
   gather_facts: false
   vars:
+    # In member_server mode the pod comes from the host itself, so a task that
+    # rebinds pod_id for a loop cannot make this expression self-referential.
+    pod_host_num: "{{ inventory_hostname | regex_replace('^[Pp][Oo][Dd]0*([0-9]+)-[Ss][Rr][Vv]$', '\\1') }}"
+    pod_from_host: "{{ pod_host_num if pod_host_num is match('^[0-9]+$') else (pod_id | default(0)) }}"
     pod_list: >-
-      {{ ((pods | default(pod_id) | default('') | string).split(',') | map('trim') | select('match', '^[0-9]+$') | map('int') | list)
-         if ((pods | default('') | string | trim) != '' or (pod_id | default('') | string | trim) != '')
-         else (range(1, (pod_count | default(20) | int) + 1) | list) }}
+      {{ [pod_from_host | int]
+         if (crc_target_mode | default('shared_dc')) == 'member_server'
+         else (
+              ((pods | default(pod_id) | default('') | string).split(',') | map('trim') | select('match', '^[0-9]+$') | map('int') | list)
+              if ((pods | default('') | string | trim) != '' or (pod_id | default('') | string | trim) != '')
+              else (range(1, (pod_count | default(20) | int) + 1) | list)
+         ) }}
   tasks:
     - name: Copy PE seed script
       ansible.windows.win_copy:
