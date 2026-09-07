@@ -1,8 +1,20 @@
 ---
 # IA M2-L1 asks the student to repoint "PodNN ACS Nightly Backup" from
-# PNN-s.jenkins to PNN-svc_backup. On the shared DC that step needs local
-# admin (Windows requires SeTcbPrivilege to store a task credential), which
-# students intentionally do not have, so it is credited automatically while
-# the account-creation half is still graded. Set to false once pods run on
-# their own member servers, where students are local admins.
-ia_m2l1_task_step_waived: true
+# PNN-s.jenkins to PNN-svc_backup. Storing a task credential needs local admin,
+# which students only have on their own session host, so the step is credited
+# automatically in shared-DC mode and graded for real in member-server mode.
+ia_m2l1_task_step_waived: >-
+  {{ (crc_target_mode | default('shared_dc')) != 'member_server' }}
+
+# The scheduled task and the local account policy live on the student's session
+# host, while the AD half of IA is graded on the domain controller. The session
+# host writes both into HostState\host-state.json on every evidence pull
+# (playbooks/sync-pod-evidence.yml) and this is how stale that snapshot may be
+# before the two checks say so instead of guessing.
+ia_host_state_max_age_hours: 24
+
+# IA M3-L2 required settings. In member-server mode they are read from the
+# session host's local account policy, which is the student's own to change;
+# in shared-DC mode they are read from the domain policy every pod shares.
+ia_m3l2_min_password_length: 12
+ia_m3l2_max_lockout_threshold: 10

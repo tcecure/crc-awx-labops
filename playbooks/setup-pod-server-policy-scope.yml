@@ -1,0 +1,41 @@
+---
+# Give each session host its own account policy.
+#
+# The Default Domain Policy is linked at the domain root, and its Account
+# Policies section configures the *local* SAM policy of every member computer
+# it applies to. With OU=PodServers inheriting it, a student who hardens the
+# local password policy of their own server (IA M3-L2) has that work silently
+# reverted at the next gpupdate, and the check that grades it flaps.
+#
+# Blocking inheritance on OU=PodServers leaves each server's local account
+# policy under local control, which is what the lab asks the student to
+# exercise. The Default Domain Policy still governs every domain account,
+# including the students' own, so the domain's password rules are unchanged —
+# and nothing else is linked above OU=PodServers, so no other policy is lost.
+#
+# Run once after the servers are joined, and again if the OU is recreated.
+- name: Keep the domain account policy off the pod session hosts
+  hosts: crc_shared_dcs[0]
+  gather_facts: false
+  tasks:
+    - name: Block Default Domain Policy inheritance on the pod server OU
+      ansible.windows.win_powershell:
+        script: |
+          $ErrorActionPreference = 'Stop'
+          Import-Module GroupPolicy
+          $ou = (Get-ADOrganizationalUnit -Filter "Name -eq '{{ pod_servers_ou_name }}'").DistinguishedName
+          if (-not $ou) { throw "OU '{{ pod_servers_ou_name }}' not found" }
+          $before = (Get-GPInheritance -Target $ou).GpoInheritanceBlocked
+          if ("$before" -ne 'Yes' -and -not [bool]$before) {
+            Set-GPInheritance -Target $ou -IsBlocked Yes | Out-Null
+          }
+          $after = (Get-GPInheritance -Target $ou).GpoInheritanceBlocked
+          $Ansible.Changed = ("$before" -ne "$after")
+          @{ ou = $ou; before = "$before"; after = "$after" }
+      register: inheritance
+
+    - name: Show the pod server OU policy scope
+      ansible.builtin.debug:
+        msg: >-
+          {{ inheritance.output[0].ou }} inheritance blocked:
+          {{ inheritance.output[0].before }} -> {{ inheritance.output[0].after }}

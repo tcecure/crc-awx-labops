@@ -11,7 +11,14 @@ param(
   [Parameter(Mandatory=$true)]
   [ValidateRange(1,20)]
   [int]$PodId,
-  [string]$SeedPassword = $env:SEED_USER_PASSWORD
+  [string]$SeedPassword = $env:SEED_USER_PASSWORD,
+  # Labs whose seeded state lives on the student's session host rather than on
+  # the domain controller; member-server mode seeds those with
+  # playbooks/seed-ia-session-host.yml.
+  [string[]]$SkipLabs = @(),
+  # In member-server mode the M2-L1 scheduled task belongs on the student's own
+  # server, so only its Active Directory half is seeded here.
+  [switch]$SkipHostTaskSeed
 )
 
 Import-Module ActiveDirectory
@@ -161,13 +168,19 @@ function Apply-Lab($id) {
 
       $taskName = "$podName ACS Nightly Backup"
       Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
-      # Use schtasks.exe for reliable task creation on DCs
-      schtasks.exe /Create /TN $taskName /SC DAILY /ST 02:00 `
-        /TR "powershell.exe -ExecutionPolicy Bypass -Command Write-Output 'Backup started'" `
-        /RU "$netBIOS\$prefix-s.jenkins" /RP $SeedPassword /RL HIGHEST /F | Out-Null
-      Grant-TaskVisibility $taskName "$netBIOS\$prefix-s.jenkins"
-      Drop-Marker "IA-M2-L1"
-      Write-Host "  M2-L1 seeded: task '$taskName' running as $prefix-s.jenkins"
+      if ($SkipHostTaskSeed) {
+        Drop-Marker "IA-M2-L1"
+        Write-Host "  M2-L1 seeded: accounts only, task seeded on the session host"
+      }
+      else {
+        # Use schtasks.exe for reliable task creation on DCs
+        schtasks.exe /Create /TN $taskName /SC DAILY /ST 02:00 `
+          /TR "powershell.exe -ExecutionPolicy Bypass -Command Write-Output 'Backup started'" `
+          /RU "$netBIOS\$prefix-s.jenkins" /RP $SeedPassword /RL HIGHEST /F | Out-Null
+        Grant-TaskVisibility $taskName "$netBIOS\$prefix-s.jenkins"
+        Drop-Marker "IA-M2-L1"
+        Write-Host "  M2-L1 seeded: task '$taskName' running as $prefix-s.jenkins"
+      }
     }
 
     "M2-L2" {
@@ -366,7 +379,13 @@ if __name__ == "__main__":
 if ($LabId -eq "ALL") {
   # Order: M2-L3 before M2-L1 so svc_backup removal is the final state
   $allLabs = @("M1-L1","M1-L2","M1-L3","M2-L2","M2-L3","M2-L1","M3-L1","M3-L2","M3-L3","M4-L1","M4-L2","M4-L3")
-  foreach ($lab in $allLabs) { Apply-Lab $lab }
+  foreach ($lab in $allLabs) {
+    if ($SkipLabs -contains $lab) {
+      Write-Host "  $lab skipped on the DC (seeded on the session host)"
+      continue
+    }
+    Apply-Lab $lab
+  }
   Write-Host "All IA labs seeded for $podName on $dnsRoot (shared DC mode)"
 } else {
   Apply-Lab $LabId

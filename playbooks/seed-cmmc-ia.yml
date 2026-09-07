@@ -46,10 +46,15 @@
       loop_control:
         label: "Pod{{ '%02d' | format(item.item) }}"
 
+    # In member-server mode the M2-L1 scheduled task and the M3-L2 account policy
+    # belong to the student's own server, so playbooks/seed-ia-session-host.yml
+    # seeds them there and the domain policy every pod shares is left alone.
     - name: "Apply all IA lab seeds for Pod{{ '%02d' | format(item) }}"
       ansible.windows.win_shell: >
         powershell.exe -ExecutionPolicy Bypass -File C:\Windows\Temp\apply-ia-lab.ps1
         -LabId "ALL" -PodId {{ item }} -SeedPassword "{{ seed_user_password }}"
+        {{ '-SkipLabs "M3-L2" -SkipHostTaskSeed'
+           if (crc_target_mode | default('shared_dc')) == 'member_server' else '' }}
       loop: "{{ pod_list }}"
       register: seed_results
 

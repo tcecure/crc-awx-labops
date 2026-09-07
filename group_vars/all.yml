@@ -15,6 +15,7 @@ seed_user_password: "{{ seed_user_password | default(lookup('env', 'SEED_USER_PA
 # Shared DC configuration (pods 1-20 share acs-p01.local with OU isolation)
 shared_domain: "acs-p01.local"
 shared_domain_dn: "DC=acs-p01,DC=local"
+shared_domain_netbios: "ACS-P01"
 students_ou: "OU=Students,DC=acs-p01,DC=local"
 pod_count: 20
 

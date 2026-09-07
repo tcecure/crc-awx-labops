@@ -350,9 +350,13 @@ Module 2 covers the identities that are not people — service accounts, automat
 
 ### Lab M2-L1 — Scheduled Task Running as a Human Account
 
-**Difficulty:** Intermediate | **Time:** 10 minutes | **Type:** Hands-on (ADUC) — task retarget step is instructor-credited this cohort
+**Difficulty:** Intermediate | **Time:** 10 minutes | **Type:** Hands-on (ADUC + Task Scheduler)
 
-> **Read first — this cohort:** Step 2 (repointing the scheduled task) cannot be done from a student account on the shared domain controller. Windows only lets a local administrator save a task credential, and students are intentionally not administrators there. Complete **Step 1** (create `PXX-svc_backup`), read Step 2 so you know how it is done, then move on to **M2-L2**. Step 2 is credited automatically and no longer affects your completion status. Pods get their own member servers in a later release, where you will perform this step yourself.
+> **Where the task lives:** `PodXX ACS Nightly Backup` is a task on **your own
+> pod server**, not on the domain controller, and you are a local administrator
+> there — so you make the change yourself and both steps below are graded. Open
+> Task Scheduler from an elevated session (right-click → **Run as
+> administrator**) so Windows lets you save the task credential.
 
 #### Scenario
 The nightly backup task **`PodXX ACS Nightly Backup`** runs under a real employee's account, `PXX-s.jenkins`. Automated jobs should run as dedicated service accounts: when Steve leaves, the backup breaks, and his credentials are needlessly exposed.
@@ -371,7 +375,7 @@ The nightly backup task **`PodXX ACS Nightly Backup`** runs under a real employe
      **"Password never expires"**, uncheck *"User must change password at next logon"* → **Next → Finish**
    - Double-click the account and add a **Description:** `Service account for nightly backup automation`
 
-2. **Point the task at the service account** *(reference only this cohort — expect "Access is denied"; do not troubleshoot it)*:
+2. **Point the task at the service account:**
    - Open **Task Scheduler** (**Windows + R** → `taskschd.msc`)
    - Click **Task Scheduler Library** and find **`PodXX ACS Nightly Backup`**
    - Right-click → **Properties** → **General** tab
@@ -379,19 +383,17 @@ The nightly backup task **`PodXX ACS Nightly Backup`** runs under a real employe
    - Click **Change User or Group...**, type `PXX-svc_backup`, click **Check Names → OK**
    - Click **OK** and enter the service account password when prompted
 
-3. **Look at the task, read-only.** You can open the task and view its settings;
-   you cannot save a change to the account it runs under. This command shows the
-   account it currently uses:
+3. **Confirm the change:**
 
    ```powershell
    (Get-ScheduledTask -TaskName "PodXX ACS Nightly Backup").Principal.UserId
    ```
 
-   It still returns `PXX-s.jenkins`, and that is the expected result this cohort.
+   It should now return `ACS-P01\PXX-svc_backup`.
 
 #### Completion Criteria
 - [ ] `PXX-svc_backup` exists in Active Directory
-- [ ] Task principal change — credited automatically this cohort (requires administrator on the shared DC)
+- [ ] `PodXX ACS Nightly Backup` on your pod server runs as `PXX-svc_backup`, not `PXX-s.jenkins`
 
 #### Why This Matters
 IA.L1-3.5.1 covers "processes acting on behalf of users". A dedicated service account gives the automated process its own identity and its own accountability.
@@ -553,66 +555,67 @@ Having a policy is not enough — you must be able to show it exists and is revi
 
 ### Lab M3-L2 — Weak Password Policy
 
-**Difficulty:** Intermediate | **Time:** 15 minutes | **Type:** Review and verify
+**Difficulty:** Intermediate | **Time:** 15 minutes | **Type:** Hands-on (Local Security Policy)
 
-> **This cohort:** changing the domain password policy requires Domain Admin
-> rights, and the policy is shared by all 20 pods — one student's change would
-> apply to everyone. The instructor has therefore applied the hardened policy
-> centrally. Work through the settings below and **verify** the live policy in
-> step 2; do not attempt the `Set-` command or the GPO edit (both will be denied).
-> When pods move to their own servers you will set this policy yourself, on your
-> own server.
+> **Where the policy lives:** you harden the account policy of **your own pod
+> server**, which governs the local accounts on that server. The *domain*
+> password policy is shared by all 20 pods and stays with the instructors, so
+> nothing you do here affects anyone else's pod. Work from an elevated session.
 
 #### Scenario
-The domain password policy was dangerously weak: minimum length 6, complexity disabled, and no account lockout.
-
-> **Note:** the password policy is **domain-wide**, shared by every pod — it is the one IA lab whose change is not isolated to your pod.
+Your server's local account policy is dangerously weak: minimum length 6, complexity disabled, and no account lockout. An attacker who reaches a local account can brute-force it in seconds.
 
 #### Required Settings
 
 | Setting | Seeded (FAIL) | Required (PASS) |
 |---|---|---|
-| Minimum password length | 6 | **12** |
+| Minimum password length | 6 | **12 or more** |
 | Password complexity | Disabled | **Enabled** |
-| Account lockout threshold | 0 (no lockout) | **10 attempts** |
+| Account lockout threshold | 0 (no lockout) | **1–10 invalid attempts** |
 
 #### Steps
 
-1. **Verify the live policy** (this is what is graded):
+1. **Read the policy you start with:**
 
    ```powershell
-   Get-ADDefaultDomainPasswordPolicy | Select-Object MinPasswordLength, ComplexityEnabled, LockoutThreshold, PasswordHistoryCount, MaxPasswordAge, MinPasswordAge
+   net accounts
    ```
 
-   Confirm minimum length 12, complexity `True`, and lockout threshold 10 — then
-   note in your own words which weakness each setting removes.
+2. **Harden it — GUI (`secpol.msc`):**
+   - Press **Windows + R**, type `secpol.msc`, press Enter (accept the UAC prompt)
+   - **Account Policies → Password Policy**: set *Minimum password length* to `12`, and *Password must meet complexity requirements* to **Enabled**
+   - **Account Policies → Account Lockout Policy**: set *Account lockout threshold* to `10` invalid logon attempts (Windows will offer lockout duration and reset counter defaults — accept them)
 
-2. **Reference — how the policy is applied** (administrator step, do not attempt this cohort):
+   **PowerShell alternative** (run elevated; complexity has no `net accounts`
+   switch, so it is set through the security database):
 
    ```powershell
-   Set-ADDefaultDomainPasswordPolicy -Identity (Get-ADDomain).DNSRoot `
-       -MinPasswordLength 12 `
-       -ComplexityEnabled $true `
-       -LockoutThreshold 10 `
-       -PasswordHistoryCount 24 `
-       -MaxPasswordAge (New-TimeSpan -Days 90) `
-       -MinPasswordAge (New-TimeSpan -Days 1)
+   net accounts /minpwlen:12 /lockoutthreshold:10 /uniquepw:24
 
-   gpupdate /force
+   $inf = "$env:TEMP\pwpolicy.inf"
+   @'
+   [Unicode]
+   Unicode=yes
+   [Version]
+   signature="$CHICAGO$"
+   Revision=1
+   [System Access]
+   PasswordComplexity = 1
+   '@ | Set-Content -LiteralPath $inf -Encoding Unicode
+   secedit /configure /db "$env:TEMP\pwpolicy.sdb" /cfg $inf /areas SECURITYPOLICY
    ```
 
-   The equivalent GUI path is `gpmc.msc` → **Forest → Domains → acs-p01.local →
-   Default Domain Policy** → **Computer Configuration → Policies → Windows
-   Settings → Security Settings → Account Policies**, setting minimum password
-   length, complexity, and the lockout threshold.
+3. **Confirm your work** — `net accounts` should now report minimum length 12 and
+   a lockout threshold of 10, and `secedit /export /cfg "$env:TEMP\now.cfg"`
+   should show `PasswordComplexity = 1`.
 
 #### Completion Criteria
-- [ ] `MinPasswordLength` is 12 or more
-- [ ] `ComplexityEnabled` is `True`
-- [ ] `LockoutThreshold` is 10 or more
+- [ ] Minimum password length on your pod server is 12 or more
+- [ ] Password complexity is enabled
+- [ ] Account lockout threshold is between 1 and 10 invalid attempts
 
 #### Why This Matters
-A 6-character password with no complexity and no lockout can be brute-forced in seconds. IA.L1-3.5.2 requires authentication that actually resists common attacks.
+A 6-character password with no complexity and no lockout can be brute-forced in seconds. IA.L1-3.5.2 requires authentication that actually resists common attacks — on every system in scope, not just the domain.
 
 ---
 

@@ -65,22 +65,41 @@
       $p = "{{ prefix }}"
       $podName = "Pod{{ '%02d' | format(pod_id) }}"
       $waived = ${{ ia_m2l1_task_step_waived | default(true) | bool | ternary('true', 'false') }}
+      $memberMode = ${{ ((crc_target_mode | default('shared_dc')) == 'member_server') | ternary('true', 'false') }}
       $reasons = @()
       $taskName = "$podName ACS Nightly Backup"
-      try {
-        $task = Get-ScheduledTask -TaskName $taskName -ErrorAction Stop
-        $principal = $task.Principal.UserId
-        if ($principal -match [regex]::Escape("$p-s.jenkins")) {
-          if (-not $waived) { $reasons += "still running as $p-s.jenkins" }
+      $principal = $null
+      if ($memberMode) {
+        # The task lives on the student's session host; the pull sync snapshots it
+        # into the pod folder this playbook already imported.
+        $statePath = "C:\CyberLab\$podName\HostState\host-state.json"
+        if (Test-Path $statePath) {
+          $state = Get-Content $statePath -Raw | ConvertFrom-Json
+          $ageHours = ([datetimeoffset]::UtcNow.ToUnixTimeSeconds() - [int64]$state.CollectedEpoch) / 3600
+          if ($ageHours -gt {{ ia_host_state_max_age_hours | default(24) | int }}) {
+            $reasons += ("session host state is {0:N0}h old; run Sync Pod Evidence" -f $ageHours)
+          }
+          $entry = @($state.ScheduledTasks | Where-Object { $_.TaskName -eq $taskName }) | Select-Object -First 1
+          if ($entry) { $principal = [string]$entry.Principal }
         }
-        elseif ($principal -notmatch "svc") { $reasons += "principal '$principal' does not appear to be a service account" }
-      } catch { if (-not $waived) { $reasons += "task '$taskName' not found" } }
+        else { $reasons += "no session host state collected yet; run Sync Pod Evidence" }
+      }
+      else {
+        try { $principal = (Get-ScheduledTask -TaskName $taskName -ErrorAction Stop).Principal.UserId } catch { }
+      }
+      if (-not $principal) {
+        if (-not $waived) { $reasons += "task '$taskName' not found on your server" }
+      }
+      elseif ($principal -match [regex]::Escape("$p-s.jenkins")) {
+        if (-not $waived) { $reasons += "still running as $p-s.jenkins" }
+      }
+      elseif ($principal -notmatch "svc") { $reasons += "principal '$principal' does not appear to be a service account" }
       # svc_backup should exist
       $svc = Get-ADUser -Filter "SamAccountName -eq '$p-svc_backup'" -ErrorAction SilentlyContinue
       if (-not $svc) { $reasons += "$p-svc_backup not created" }
       if ($reasons.Count -eq 0) {
         if ($waived) { @{ completed=$true; reason="$p-svc_backup created; task retarget waived (requires admin on shared DC)" } }
-        else { @{ completed=$true; reason="Task running as service account" } }
+        else { @{ completed=$true; reason="Task running as $principal" } }
       }
       else { @{ completed=$false; reason=($reasons -join "; ") } }
   register: v_m2l1
@@ -136,16 +155,49 @@
       else { @{ completed=$false; reason=($reasons -join "; ") } }
   register: v_m3l1
 
-- name: "Pod{{ '%02d' | format(pod_id) }} M3-L2 — Password policy strengthened (domain-wide)"
+- name: "Pod{{ '%02d' | format(pod_id) }} M3-L2 — Password policy strengthened"
   ansible.windows.win_powershell:
     script: |
+      $podName = "Pod{{ '%02d' | format(pod_id) }}"
+      $memberMode = ${{ ((crc_target_mode | default('shared_dc')) == 'member_server') | ternary('true', 'false') }}
+      $minLen = {{ ia_m3l2_min_password_length | default(12) | int }}
+      $maxLockout = {{ ia_m3l2_max_lockout_threshold | default(10) | int }}
       $reasons = @()
-      $pol = Get-ADDefaultDomainPasswordPolicy
-      if ($pol.MinPasswordLength -lt 12) { $reasons += "MinPasswordLength=$($pol.MinPasswordLength) (need 12+)" }
-      if (-not $pol.ComplexityEnabled) { $reasons += "ComplexityEnabled=False" }
-      if ($pol.LockoutThreshold -lt 10) { $reasons += "LockoutThreshold=$($pol.LockoutThreshold) (need 10+)" }
-      if ($reasons.Count -eq 0) { @{ completed=$true; reason="MinLen=$($pol.MinPasswordLength), Complexity=On, Lockout=$($pol.LockoutThreshold)" } }
-      else { @{ completed=$false; reason=($reasons -join "; ") } }
+      if ($memberMode) {
+        # Each student hardens the account policy of their own session host, so
+        # the lab is theirs alone rather than the domain policy all 20 pods share.
+        $statePath = "C:\CyberLab\$podName\HostState\host-state.json"
+        if (-not (Test-Path $statePath)) {
+          @{ completed=$false; reason="no session host state collected yet; run Sync Pod Evidence" }
+          return
+        }
+        $state = Get-Content $statePath -Raw | ConvertFrom-Json
+        $ageHours = ([datetimeoffset]::UtcNow.ToUnixTimeSeconds() - [int64]$state.CollectedEpoch) / 3600
+        if ($ageHours -gt {{ ia_host_state_max_age_hours | default(24) | int }}) {
+          $reasons += ("session host state is {0:N0}h old; run Sync Pod Evidence" -f $ageHours)
+        }
+        $pol = $state.LocalPasswordPolicy
+        $length = [int]$pol.MinimumPasswordLength
+        $complexity = [int]$pol.PasswordComplexity
+        $lockout = [int]$pol.LockoutBadCount
+        if ($length -lt $minLen) { $reasons += "minimum password length is $length (need $minLen+)" }
+        if ($complexity -ne 1) { $reasons += "password complexity is disabled" }
+        if ($lockout -lt 1 -or $lockout -gt $maxLockout) {
+          $reasons += "lockout threshold is $lockout (need 1-$maxLockout invalid attempts)"
+        }
+        if ($reasons.Count -eq 0) {
+          @{ completed=$true; reason="$($state.Host) local policy: MinLen=$length, Complexity=On, Lockout=$lockout" }
+        }
+        else { @{ completed=$false; reason=($reasons -join "; ") } }
+      }
+      else {
+        $pol = Get-ADDefaultDomainPasswordPolicy
+        if ($pol.MinPasswordLength -lt $minLen) { $reasons += "MinPasswordLength=$($pol.MinPasswordLength) (need $minLen+)" }
+        if (-not $pol.ComplexityEnabled) { $reasons += "ComplexityEnabled=False" }
+        if ($pol.LockoutThreshold -lt $maxLockout) { $reasons += "LockoutThreshold=$($pol.LockoutThreshold) (need $maxLockout+)" }
+        if ($reasons.Count -eq 0) { @{ completed=$true; reason="MinLen=$($pol.MinPasswordLength), Complexity=On, Lockout=$($pol.LockoutThreshold)" } }
+        else { @{ completed=$false; reason=($reasons -join "; ") } }
+      }
   register: v_m3l2
 
 - name: "Pod{{ '%02d' | format(pod_id) }} M3-L3 — d.chen has must-change-password flag set"

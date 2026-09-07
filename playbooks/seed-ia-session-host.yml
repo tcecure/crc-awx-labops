@@ -1,0 +1,97 @@
+---
+# Seed (and reset) the two IA lab states that live on the student's own session
+# host instead of on the domain controller:
+#
+#   M2-L1  "PodNN ACS Nightly Backup" runs as the human account PNN-s.jenkins
+#          and the student repoints it at their own service account. Storing a
+#          task credential needs local admin, which the student only has here.
+#   M3-L2  the local account policy is weak (6 characters, no complexity, no
+#          lockout) and the student hardens it. The domain policy is shared by
+#          all 20 pods, so grading it credited every pod as soon as one student
+#          (or an instructor) changed it.
+#
+# The evidence pull (playbooks/sync-pod-evidence.yml) snapshots both into
+# HostState\host-state.json so verify-cmmc-ia.yml can grade them on the DC.
+#
+# For M3-L2 to be the student's own lab, OU=PodServers must not inherit the
+# account policy of the Default Domain Policy — playbooks/setup-pod-server-policy-scope.yml
+# blocks that inheritance once, otherwise every gpupdate silently reverts the
+# student's work.
+#
+#   crc_session_host_mode: seed    (default) weak policy + task as s.jenkins
+#   crc_session_host_mode: reset   weak policy, task removed
+- name: "Seed Labs: IA state on the pod session hosts"
+  hosts: crc_pod_servers
+  gather_facts: false
+  vars:
+    seed_mode: "{{ crc_session_host_mode | default('seed') }}"
+    pod_num: "{{ inventory_hostname | regex_replace('^[Pp][Oo][Dd]0*([0-9]+)-[Ss][Rr][Vv]$', '\\1') }}"
+    pod_name: "Pod{{ '%02d' | format(pod_num | int) }}"
+    prefix: "P{{ '%02d' | format(pod_num | int) }}"
+    task_name: "{{ pod_name }} ACS Nightly Backup"
+    # pods=/pod_id= narrow the run the same way the seed and verify plays do.
+    pod_scope: >-
+      {{ ((pods | default(pod_id) | default('') | string).split(',') | map('trim')
+          | select('match', '^[0-9]+$') | map('int') | list)
+         if ((pods | default('') | string | trim) != '' or (pod_id | default('') | string | trim) != '')
+         else [] }}
+    in_scope: >-
+      {{ ((crc_target_mode | default('shared_dc')) == 'member_server')
+         and ((pod_scope | length) == 0 or (pod_num | int) in pod_scope) }}
+  tasks:
+    - name: "Seed the weak M3-L2 local account policy on {{ pod_name }}"
+      ansible.windows.win_shell: |
+        $ErrorActionPreference = 'Stop'
+        $inf = Join-Path $env:TEMP 'crc-ia-m3l2-seed.inf'
+        @'
+        [Unicode]
+        Unicode=yes
+        [Version]
+        signature="$CHICAGO$"
+        Revision=1
+        [System Access]
+        MinimumPasswordLength = 6
+        PasswordComplexity = 0
+        PasswordHistorySize = 0
+        MaximumPasswordAge = 90
+        MinimumPasswordAge = 0
+        LockoutBadCount = 0
+        '@ | Set-Content -LiteralPath $inf -Encoding Unicode
+        $db = Join-Path $env:TEMP 'crc-ia-m3l2-seed.sdb'
+        Remove-Item -LiteralPath $db -Force -ErrorAction SilentlyContinue
+        $null = secedit /configure /db $db /cfg $inf /areas SECURITYPOLICY /quiet
+        if ($LASTEXITCODE -ne 0) { throw "secedit exit $LASTEXITCODE" }
+        Remove-Item -LiteralPath $inf, $db -Force -ErrorAction SilentlyContinue
+        'seeded_weak_local_policy'
+      changed_when: true
+      when: in_scope | bool
+
+    # schtasks.exe rather than a module, because only ansible.windows is
+    # available in the execution environment and it stores a task credential
+    # the same way the DC seed does.
+    - name: "Remove the M2-L1 scheduled task on {{ pod_name }}"
+      ansible.windows.win_shell: |
+        Unregister-ScheduledTask -TaskName '{{ task_name }}' -Confirm:$false -ErrorAction SilentlyContinue
+        'removed'
+      changed_when: true
+      when: in_scope | bool
+
+    - name: "Seed the M2-L1 scheduled task as a human account on {{ pod_name }}"
+      ansible.windows.win_shell: >
+        schtasks.exe /Create /TN "{{ task_name }}" /SC DAILY /ST 02:00
+        /TR "powershell.exe -ExecutionPolicy Bypass -Command Write-Output 'Backup started'"
+        /RU "{{ shared_domain_netbios }}\{{ prefix }}-s.jenkins" /RP "{{ seed_user_password }}"
+        /RL HIGHEST /F
+      no_log: true
+      changed_when: true
+      when:
+        - in_scope | bool
+        - seed_mode == 'seed'
+
+    - name: Report the seeded session host state
+      ansible.builtin.debug:
+        msg: >-
+          {{ pod_name }} {{ seed_mode }}: local account policy weakened
+          {{ "and '" ~ task_name ~ "' running as " ~ prefix ~ "-s.jenkins"
+             if seed_mode == 'seed' else "and the M2-L1 task removed" }}
+      when: in_scope | bool
