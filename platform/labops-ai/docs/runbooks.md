@@ -25,7 +25,9 @@ in-flight runs. Verify a restore quarterly by booting the snapshot on an isolate
      -H 'Accept: application/vnd.oci.image.index.v1+json' \
      https://ghcr.io/v2/openhands/agent-server/manifests/<new-tag> | grep -i docker-content-digest
    ```
-4. Deploy on staging, run `scripts/verify-deployment.sh`, run one real investigation end to end.
+4. Deploy on `drcc-labops-01`, run `scripts/verify-deployment.sh` and the three `test-*.sh`
+   suites, then one real investigation against a designated test ticket. There is no staging
+   host to stage this on — keep the previous image so rollback is one restart.
 5. `git pull` on the host, `systemctl restart labops-agent`, verify again. Keep the previous image (`docker image ls`) until sign-off.
 
 ## Update — gateway / frontend
@@ -39,8 +41,9 @@ ln -sfn /opt/labops/app/releases/<new> /opt/labops/app/current
 systemctl start labops-gateway && scripts/verify-deployment.sh
 ```
 
-Migrations, if any, are applied to staging first and only with the approval recorded in
-the app repo's `checkpoint-migrations-rls.md`.
+Migrations, if any, follow `docs/labops-ai/production-first-workflow.md` in the app repo:
+validated on a throwaway local Postgres, then applied to production with explicit approval and
+recorded with rollback SQL in `docs/labops-ai/phase2-apply-log.md`. There is no staging project.
 
 ## Rollback
 

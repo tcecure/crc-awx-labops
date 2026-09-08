@@ -9,10 +9,13 @@
 # never prints it.
 set -euo pipefail
 
+# Phase 2 split the gateway environment out of labops.env; fall back for a pre-split host.
 # shellcheck disable=SC1091
-set -a; . /etc/labops/labops.env; set +a
+set -a; . "$([ -r /etc/labops/gateway.env ] && echo /etc/labops/gateway.env || echo /etc/labops/labops.env)"; set +a
 
-AGENT=${LABOPS_AGENT_SERVER_URL:-http://127.0.0.1:8000}
+# labops-model is internal, so the agent has no published host port; the host reaches it on
+# the bridge address the gateway is configured with.
+AGENT=${LABOPS_AGENT_SERVER_URL:-http://172.31.241.3:8000}
 BODY=$(cat <<'JSON'
 {
   "workspace": { "kind": "LocalWorkspace", "working_dir": "/workspace/contract-check" },

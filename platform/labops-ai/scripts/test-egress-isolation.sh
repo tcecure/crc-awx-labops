@@ -3,8 +3,10 @@
 # Usage: test-egress-isolation.sh <run_id>
 # Every probe has a 5 s timeout, so a drop shows up as a timeout rather than a refusal.
 set -uo pipefail
-run_id="${1:?run id required}"
-c="labops-inv-${run_id}"
+# LABOPS_TEST_CONTAINER targets the transitional shared agent server; normally the container
+# name is derived from the run id.
+run_id="${1:-}"
+c="${LABOPS_TEST_CONTAINER:-labops-inv-${run_id:?run id required}}"
 PROXY="${LABOPS_MODEL_PROXY:-172.31.241.2:8081}"
 HOST_LAN_IP="${LABOPS_HOST_LAN_IP:-192.168.1.65}"
 
