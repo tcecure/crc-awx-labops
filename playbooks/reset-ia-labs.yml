@@ -46,3 +46,81 @@
       ansible.builtin.include_tasks: tasks/sync-drop-local.yml
       vars:
         drop_direction: export
+
+    # Host state describes the session host, so a reset that left it behind
+    # would keep crediting M2-L1 and M3-L2 from the previous cohort.
+    - name: "Drop the collected host state for Pod{{ '%02d' | format(item.1) }}"
+      ansible.windows.win_file:
+        path: "C:\\CyberLab\\{{ item.0 }}Pod{{ '%02d' | format(item.1) }}\\HostState"
+        state: absent
+      loop: "{{ ['', '_drop\\'] | product(pod_list) | list }}"
+      loop_control:
+        label: "{{ item.0 }}Pod{{ '%02d' | format(item.1) }}"
+      when: (crc_target_mode | default('shared_dc')) == 'member_server'
+
+# The M2-L1 task and the M3-L2 local policy live on the student's own server,
+# so resetting them there is what makes the next cohort start from the seeded
+# state instead of inheriting the previous student's work.
+- name: "Reset Labs: IA state on the pod session hosts"
+  hosts: crc_pod_servers
+  gather_facts: false
+  vars:
+    pod_num: "{{ inventory_hostname | regex_replace('^[Pp][Oo][Dd]0*([0-9]+)-[Ss][Rr][Vv]$', '\\1') }}"
+    pod_name: "Pod{{ '%02d' | format(pod_num | int) }}"
+    task_name: "{{ pod_name }} ACS Nightly Backup"
+    evidence_root: "{{ pod_evidence_root | default('C:\\CyberLab') }}"
+    pod_scope: >-
+      {{ ((pods | default(pod_id) | default('') | string).split(',') | map('trim')
+          | select('match', '^[0-9]+$') | map('int') | list)
+         if ((pods | default('') | string | trim) != '' or (pod_id | default('') | string | trim) != '')
+         else [] }}
+    in_scope: >-
+      {{ ((crc_target_mode | default('shared_dc')) == 'member_server')
+         and ((pod_scope | length) == 0 or (pod_num | int) in pod_scope) }}
+  tasks:
+    - name: "Remove the M2-L1 scheduled task on {{ pod_name }}"
+      ansible.windows.win_shell: |
+        Unregister-ScheduledTask -TaskName '{{ task_name }}' -Confirm:$false -ErrorAction SilentlyContinue
+        'removed'
+      changed_when: true
+      when: in_scope | bool
+
+    - name: "Restore the seeded weak local account policy on {{ pod_name }}"
+      ansible.windows.win_shell: |
+        $ErrorActionPreference = 'Stop'
+        $inf = Join-Path $env:TEMP 'crc-ia-m3l2-reset.inf'
+        @'
+        [Unicode]
+        Unicode=yes
+        [Version]
+        signature="$CHICAGO$"
+        Revision=1
+        [System Access]
+        MinimumPasswordLength = 6
+        PasswordComplexity = 0
+        PasswordHistorySize = 0
+        MaximumPasswordAge = 90
+        MinimumPasswordAge = 0
+        LockoutBadCount = 0
+        '@ | Set-Content -LiteralPath $inf -Encoding Unicode
+        $db = Join-Path $env:TEMP 'crc-ia-m3l2-reset.sdb'
+        Remove-Item -LiteralPath $db -Force -ErrorAction SilentlyContinue
+        $null = secedit /configure /db $db /cfg $inf /areas SECURITYPOLICY /quiet
+        if ($LASTEXITCODE -ne 0) { throw "secedit exit $LASTEXITCODE" }
+        Remove-Item -LiteralPath $inf, $db -Force -ErrorAction SilentlyContinue
+        'reset_weak_local_policy'
+      changed_when: true
+      when: in_scope | bool
+
+    - name: "Drop the local host state snapshot on {{ pod_name }}"
+      ansible.windows.win_file:
+        path: "{{ evidence_root }}\\{{ pod_name }}\\HostState"
+        state: absent
+      when: in_scope | bool
+
+    - name: Report the reset session host state
+      ansible.builtin.debug:
+        msg: >-
+          {{ pod_name }} reset: '{{ task_name }}' removed, local account policy
+          back to the seeded weak values, host state cleared
+      when: in_scope | bool

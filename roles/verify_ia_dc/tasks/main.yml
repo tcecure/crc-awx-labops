@@ -77,7 +77,7 @@
           $state = Get-Content $statePath -Raw | ConvertFrom-Json
           $ageHours = ([datetimeoffset]::UtcNow.ToUnixTimeSeconds() - [int64]$state.CollectedEpoch) / 3600
           if ($ageHours -gt {{ ia_host_state_max_age_hours | default(24) | int }}) {
-            $reasons += ("session host state is {0:N0}h old; run Sync Pod Evidence" -f $ageHours)
+            $reasons += ("session host state is {0:N1}h old (limit {1}h); run Sync Pod Evidence" -f $ageHours, {{ ia_host_state_max_age_hours | default(24) | int }})
           }
           $entry = @($state.ScheduledTasks | Where-Object { $_.TaskName -eq $taskName }) | Select-Object -First 1
           if ($entry) { $principal = [string]$entry.Principal }
@@ -174,7 +174,7 @@
         $state = Get-Content $statePath -Raw | ConvertFrom-Json
         $ageHours = ([datetimeoffset]::UtcNow.ToUnixTimeSeconds() - [int64]$state.CollectedEpoch) / 3600
         if ($ageHours -gt {{ ia_host_state_max_age_hours | default(24) | int }}) {
-          $reasons += ("session host state is {0:N0}h old; run Sync Pod Evidence" -f $ageHours)
+          $reasons += ("session host state is {0:N1}h old (limit {1}h); run Sync Pod Evidence" -f $ageHours, {{ ia_host_state_max_age_hours | default(24) | int }})
         }
         $pol = $state.LocalPasswordPolicy
         $length = [int]$pol.MinimumPasswordLength
