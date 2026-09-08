@@ -136,9 +136,40 @@ instead:
   session host the student logs into.
 * Both directions are a no-op while `crc_target_mode` is `shared_dc`.
 
-One IA check (`M2-L1`, the scheduled task) and the MP media-mount step inspect live
-host state and remain waived (`ia_m2l1_task_step_waived`,
-`mp_media_mount_waived`) until the pilots prove them on a session host.
+## The retired waivers
+
+`ia_m2l1_task_step_waived` and `mp_media_mount_waived` are no longer fixed to
+`true`: both now evaluate to `false` whenever `crc_target_mode` is
+`member_server`, so nothing is credited for free on a session host and
+`shared_dc` keeps the legacy behaviour for rollback.
+
+* **MP M1-L1/M1-L2** — MP already runs on the session host, where the verifier
+  account is a local administrator, so the seeded VHDX is really mounted and the
+  label, emptiness and volume identity are graded.
+* **IA M2-L1** — the scheduled task is seeded on, and graded from, the session
+  host. `playbooks/seed-ia-session-host.yml` registers `PodXX ACS Nightly Backup`
+  as `PXX-s.jenkins` there (the DC seed only creates the accounts), and the
+  evidence pull writes `HostState\host-state.json` with each `PodXX *` task and
+  its principal for the DC to grade.
+* **IA M3-L2** — graded from the session host's *local* account policy, captured
+  into the same `host-state.json` via `secedit /export`. The domain policy is
+  shared by 20 pods, so grading it credited every pod as soon as one change was
+  made. `playbooks/setup-pod-server-policy-scope.yml` blocks Default Domain
+  Policy inheritance on `OU=PodServers` once, otherwise gpupdate reverts the
+  student's local policy; domain accounts are still governed by the domain
+  policy.
+
+Both checks fail with an explicit reason when `host-state.json` is missing or
+older than `ia_host_state_max_age_hours` (24 by default), so a stale snapshot
+never reads as a pass. The evidence pull therefore has to run before
+`verify-cmmc-ia.yml`, which is how the auto-verify schedules are ordered.
+
+Seeding or resetting the session-host half runs against `crc_pod_servers` with
+the pod-server credential:
+
+```text
+playbooks/seed-ia-session-host.yml   crc_session_host_mode=seed | reset
+```
 
 ## Running a verify job for one pod
 

@@ -46,6 +46,56 @@
     drop_host: "{{ pod_evidence_drop_host | default('dc01') }}"
     drop_share: "{{ pod_evidence_drop_share | default('CyberLabDrop$') }}"
   tasks:
+    # Two IA checks grade host state rather than files: the M2-L1 scheduled task
+    # and the M3-L2 local account policy, both of which now live here instead of
+    # on the domain controller. They are written into the pod folder so they
+    # travel with the evidence in the same pull below.
+    - name: Record the session host state the IA checks grade
+      ansible.windows.win_shell: |
+        $ErrorActionPreference = 'Stop'
+        $dir = '{{ evidence_root }}\{{ pod_name }}\HostState'
+        New-Item -ItemType Directory -Force -Path $dir | Out-Null
+        $tasks = @(Get-ScheduledTask | Where-Object { $_.TaskName -like '{{ pod_name }} *' } |
+          ForEach-Object {
+            [ordered]@{
+              TaskName  = $_.TaskName
+              Principal = [string]$_.Principal.UserId
+              LogonType = [string]$_.Principal.LogonType
+              State     = [string]$_.State
+            }
+          })
+        $cfg = Join-Path $env:TEMP 'crc-secpol.cfg'
+        Remove-Item -LiteralPath $cfg -Force -ErrorAction SilentlyContinue
+        $null = secedit /export /areas SECURITYPOLICY /cfg $cfg /quiet
+        $wanted = @(
+          'MinimumPasswordLength', 'PasswordComplexity', 'LockoutBadCount',
+          'PasswordHistorySize', 'MaximumPasswordAge', 'MinimumPasswordAge'
+        )
+        $policy = @{}
+        foreach ($line in (Get-Content -LiteralPath $cfg)) {
+          if ($line -match '^\s*([A-Za-z]+)\s*=\s*(-?\d+)\s*$' -and $wanted -contains $Matches[1]) {
+            $policy[$Matches[1]] = [int]$Matches[2]
+          }
+        }
+        Remove-Item -LiteralPath $cfg -Force -ErrorAction SilentlyContinue
+        [ordered]@{
+          Host                = $env:COMPUTERNAME
+          CollectedUtc        = [datetimeoffset]::UtcNow.ToString('o')
+          CollectedEpoch      = [datetimeoffset]::UtcNow.ToUnixTimeSeconds()
+          ScheduledTasks      = $tasks
+          LocalPasswordPolicy = $policy
+        } | ConvertTo-Json -Depth 5 |
+          Set-Content -LiteralPath (Join-Path $dir 'host-state.json') -Encoding UTF8
+        'host_state_tasks={0}' -f $tasks.Count
+      become: true
+      become_method: ansible.builtin.runas
+      become_user: SYSTEM
+      register: host_state
+      changed_when: true
+      when:
+        - in_scope | bool
+        - direction == 'pull'
+
     - name: Copy the pod evidence between the session host and the drop share
       ansible.windows.win_shell: |
         $ErrorActionPreference = 'Stop'

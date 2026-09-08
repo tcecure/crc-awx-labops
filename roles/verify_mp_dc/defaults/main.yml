@@ -1,8 +1,10 @@
 ---
 # MP M1-L1 and M1-L2 ask the student to mount and re-create a VHDX volume. Both
-# operations need local admin on the shared DC (mounting fails with "A required
-# privilege is not held by the client"), which students intentionally do not
-# have, so the media-inspection half is credited automatically and the
-# classification and sanitization paperwork is still graded. Set to false once
-# pods run on their own member servers, where students are local admins.
-mp_media_mount_waived: true
+# operations need local admin (on the shared DC mounting fails with "A required
+# privilege is not held by the client"), which students only have on their own
+# session host. In shared-DC mode the media half is credited automatically and
+# only the classification and sanitization paperwork is graded; in
+# member-server mode MP runs on the session host and the media is really
+# mounted and inspected.
+mp_media_mount_waived: >-
+  {{ (crc_target_mode | default('shared_dc')) != 'member_server' }}
