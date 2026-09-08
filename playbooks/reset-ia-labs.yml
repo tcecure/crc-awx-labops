@@ -13,7 +13,13 @@
   hosts: crc_shared_dcs[0]
   gather_facts: false
   vars:
-    pod_list: "{{ range(1, (pod_count | default(20) | int) + 1) | list }}"
+    # pods=/pod_id= narrow the reset the same way the seed and verify plays do,
+    # so a single-pod reset cannot wipe the other 19 pods.
+    pod_list: >-
+      {{ ((pods | default(pod_id) | default('') | string).split(',') | map('trim')
+          | select('match', '^[0-9]+$') | map('int') | list)
+         if ((pods | default('') | string | trim) != '' or (pod_id | default('') | string | trim) != '')
+         else (range(1, (pod_count | default(20) | int) + 1) | list) }}
   tasks:
     - name: Copy reset-ia-labs.ps1
       ansible.windows.win_copy:
@@ -49,13 +55,22 @@
 
     # Host state describes the session host, so a reset that left it behind
     # would keep crediting M2-L1 and M3-L2 from the previous cohort.
-    - name: "Drop the collected host state for Pod{{ '%02d' | format(item.1) }}"
+    - name: "Drop the graded host state for Pod{{ '%02d' | format(item) }}"
       ansible.windows.win_file:
-        path: "C:\\CyberLab\\{{ item.0 }}Pod{{ '%02d' | format(item.1) }}\\HostState"
+        path: "C:\\CyberLab\\Pod{{ '%02d' | format(item) }}\\HostState"
         state: absent
-      loop: "{{ ['', '_drop\\'] | product(pod_list) | list }}"
+      loop: "{{ pod_list }}"
       loop_control:
-        label: "{{ item.0 }}Pod{{ '%02d' | format(item.1) }}"
+        label: "Pod{{ '%02d' | format(item) }}"
+      when: (crc_target_mode | default('shared_dc')) == 'member_server'
+
+    - name: "Drop the dropped host state for Pod{{ '%02d' | format(item) }}"
+      ansible.windows.win_file:
+        path: "C:\\CyberLab\\_drop\\Pod{{ '%02d' | format(item) }}\\HostState"
+        state: absent
+      loop: "{{ pod_list }}"
+      loop_control:
+        label: "Pod{{ '%02d' | format(item) }}"
       when: (crc_target_mode | default('shared_dc')) == 'member_server'
 
 # The M2-L1 task and the M3-L2 local policy live on the student's own server,
