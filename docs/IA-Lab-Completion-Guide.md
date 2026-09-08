@@ -391,6 +391,12 @@ The nightly backup task **`PodXX ACS Nightly Backup`** runs under a real employe
 
    It should now return `ACS-P01\PXX-svc_backup`.
 
+> **If Windows warns "Batch logon privilege needs to be enabled":** the task is
+> saved and graded, but it cannot actually start until the service account holds
+> that right. Grant it on your own server in **secpol.msc → Local Policies →
+> User Rights Assignment → Log on as a batch job**, add `PXX-svc_backup`, and
+> reopen the task to confirm it saves without the warning.
+
 #### Completion Criteria
 - [ ] `PXX-svc_backup` exists in Active Directory
 - [ ] `PodXX ACS Nightly Backup` on your pod server runs as `PXX-svc_backup`, not `PXX-s.jenkins`
