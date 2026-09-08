@@ -103,6 +103,16 @@
         - seed_mode == 'seed'
         - (task_seed.rc | default(0)) != 0
 
+    # A reset that left the snapshot behind would keep crediting M2-L1 and
+    # M3-L2 from the previous cohort until the next evidence pull.
+    - name: "Drop the collected host state on {{ pod_name }}"
+      ansible.windows.win_file:
+        path: "{{ pod_evidence_root | default('C:\\CyberLab') }}\\{{ pod_name }}\\HostState"
+        state: absent
+      when:
+        - in_scope | bool
+        - seed_mode == 'reset'
+
     - name: Report the seeded session host state
       ansible.builtin.debug:
         msg: >-
