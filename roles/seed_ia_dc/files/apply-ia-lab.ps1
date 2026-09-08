@@ -386,7 +386,10 @@ if ($LabId -eq "ALL") {
     }
     Apply-Lab $lab
   }
-  Write-Host "All IA labs seeded for $podName on $dnsRoot (shared DC mode)"
+  $scope = if ($SkipLabs.Count -gt 0 -or $SkipHostTaskSeed) {
+    "domain half only, the rest on the session host"
+  } else { "shared DC mode" }
+  Write-Host "All IA labs seeded for $podName on $dnsRoot ($scope)"
 } else {
   Apply-Lab $LabId
   Write-Host "IA lab $LabId seeded for $podName on $dnsRoot"

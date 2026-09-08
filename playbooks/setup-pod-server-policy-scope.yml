@@ -17,6 +17,8 @@
 - name: Keep the domain account policy off the pod session hosts
   hosts: crc_shared_dcs[0]
   gather_facts: false
+  vars:
+    pod_servers_ou_name: PodServers
   tasks:
     - name: Block Default Domain Policy inheritance on the pod server OU
       ansible.windows.win_powershell:
