@@ -26,11 +26,33 @@
        if (crc_target_mode | default('shared_dc')) == 'member_server'
        else 'crc_shared_dcs[0]' }}
   gather_facts: false
+  vars:
+    pod_host_num: "{{ inventory_hostname | regex_replace('^[Pp][Oo][Dd]0*([0-9]+)-[Ss][Rr][Vv]$', '\\1') }}"
+    pod_from_host: "{{ pod_host_num if pod_host_num is match('^[0-9]+$') else (pod_id | default(0)) }}"
+    pod_list: >-
+      {{ [pod_from_host | int]
+         if (crc_target_mode | default('shared_dc')) == 'member_server'
+         else (
+              ((pods | default(pod_id) | default('') | string).split(',') | map('trim')
+                | select('match', '^[0-9]+$') | map('int') | list)
+              if ((pods | default('') | string | trim) != '' or (pod_id | default('') | string | trim) != '')
+              else (range(1, (pod_count | default(20) | int) + 1) | list)
+         ) }}
   tasks:
+    - name: Ensure the scripts directory exists
+      ansible.windows.win_file:
+        path: 'C:\CyberLab\_Scripts'
+        state: directory
+
+    - name: Copy reset-sc-labs.ps1
+      ansible.windows.win_copy:
+        src: "{{ playbook_dir }}/../roles/seed_sc_dc/files/reset-sc-labs.ps1"
+        dest: 'C:\CyberLab\_Scripts\reset-sc-labs.ps1'
+
     - name: Reset SC artifacts for each pod
       ansible.windows.win_shell: |
         powershell -ExecutionPolicy Bypass -File C:\CyberLab\_Scripts\reset-sc-labs.ps1 -PodId {{ item }}
-      loop: "{{ range(1, 21) | list }}"
+      loop: "{{ pod_list }}"
       loop_control:
         label: "Pod{{ '%02d' | format(item) }}"
 
@@ -38,6 +60,6 @@
       ansible.windows.win_file:
         path: "C:\\CyberLab\\Pod{{ '%02d' | format(item) }}\\.families\\SC.seeded"
         state: absent
-      loop: "{{ range(1, 21) | list }}"
+      loop: "{{ pod_list }}"
       loop_control:
         label: "Pod{{ '%02d' | format(item) }}"
