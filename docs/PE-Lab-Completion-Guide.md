@@ -52,7 +52,7 @@ You will connect to the lab through **Apache Guacamole** — a web-based remote 
 ### Step 1: Open the Guacamole Gateway
 
 1. Open your web browser (Chrome, Firefox, or Edge)
-2. Go to: **https://crc.guac.01.tcecure.com/#/**
+2. Go to: **https://guac.01.digitalrcc.com/#/**
 3. You will see a login screen
 
 ### Step 2: Log In with Your Student Credentials
@@ -83,7 +83,7 @@ This is the only connection you get: every PE lab is done on this desktop.
 
 **Option 1:** Click the "Check Your Progress — Pod XX" banner at the top of the Guacamole interface.
 
-**Option 2:** Go directly to **https://training.status.tcecure.com/pod/XX** (replace XX with your pod number).
+**Option 2:** Go directly to **https://training.digitalrcc.com/pod/XX** (replace XX with your pod number).
 
 ---
 
@@ -483,7 +483,7 @@ PE.L1-3.10.5 requires control of physical access devices. A lost badge is a live
 | Edit a CSV as a spreadsheet | Open with **Excel**, then Save as CSV (same name) |
 | Open PowerShell | **Windows + R** → `powershell` |
 | Preview a CSV in PowerShell | `Import-Csv "C:\CyberLab\PodXX\PE-Artifacts\PE-M1-L2_BadgeLog.csv" \| Format-Table` |
-| Check your lab progress | https://training.status.tcecure.com/pod/XX |
+| Check your lab progress | https://training.digitalrcc.com/pod/XX |
 
 ### Key IDs Across the Labs
 
@@ -540,7 +540,7 @@ PE.L1-3.10.5 requires control of physical access devices. A lost badge is a live
 **After completing each lab:**
 1. Confirm your answer CSVs are saved in `C:\CyberLab\PodXX\PE-Artifacts\` with their original names
 2. Confirm all seeded evidence files are still present
-3. Check your status at https://training.status.tcecure.com/pod/XX
+3. Check your status at https://training.digitalrcc.com/pod/XX
 
 ---
 
