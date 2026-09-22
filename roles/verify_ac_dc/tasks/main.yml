@@ -1,6 +1,14 @@
 ---
 # Verify tasks for shared DC mode (OU-based pod isolation)
 # Expects variables: pod_id (int), prefix (e.g. "P01")
+- name: "Pod{{ '%02d' | format(pod_id) }} - Read the AC family seed marker"
+  ansible.windows.win_powershell:
+    script: |
+      $marker = "C:\CyberLab\Pod{{ '%02d' | format(pod_id) }}\.families\AC.seeded"
+      @{ seeded = [bool](Test-Path -LiteralPath $marker) }
+  register: v_marker
+  changed_when: false
+
 - name: "Pod{{ '%02d' | format(pod_id) }} L1.1 - Check ex.employee exists, disabled, not in Finance"
   ansible.windows.win_powershell:
     script: |
@@ -259,9 +267,9 @@
       }
   register: v_l43
 
-- name: "Consolidate Pod{{ '%02d' | format(pod_id) }} results"
+- name: "Collect the graded Pod{{ '%02d' | format(pod_id) }} results"
   ansible.builtin.set_fact:
-    "pod{{ '%02d' | format(pod_id) }}_results":
+    ac_graded_results:
       L1.1: "{{ v_l11.output[0] }}"
       L1.2: "{{ v_l12.output[0] }}"
       L1.3: "{{ v_l13.output[0] }}"
@@ -274,3 +282,12 @@
       L4.1: "{{ v_l41.output[0] }}"
       L4.2: "{{ v_l42.output[0] }}"
       L4.3: "{{ v_l43.output[0] }}"
+
+- name: "Consolidate Pod{{ '%02d' | format(pod_id) }} results"
+  ansible.builtin.set_fact:
+    "pod{{ '%02d' | format(pod_id) }}_results": >-
+      {{ ac_graded_results
+         if (v_marker.output[0].seeded | default(false) | bool)
+         else dict(ac_lab_ids | zip([{'completed': false,
+                                      'reason': ac_unseeded_reason | trim}]
+                                    * (ac_lab_ids | length))) }}

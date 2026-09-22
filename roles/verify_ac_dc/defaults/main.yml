@@ -1,0 +1,21 @@
+---
+# Every AC lab this role grades, in report order.
+ac_lab_ids:
+  - L1.1
+  - L1.2
+  - L1.3
+  - L2.1
+  - L2.2
+  - L2.3
+  - L3.1
+  - L3.2
+  - L3.3
+  - L4.1
+  - L4.2
+  - L4.3
+
+# Shown for every lab when the pod has no AC seed marker. Several AC labs ask
+# the student to remove misconfigured access, so an unseeded pod looks
+# indistinguishable from a finished one; the marker tells the two apart.
+ac_unseeded_reason: >-
+  AC labs are not seeded for this pod yet; ask staff to run Seed CMMC AC Labs
