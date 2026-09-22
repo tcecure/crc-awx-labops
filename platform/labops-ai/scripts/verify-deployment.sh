@@ -17,7 +17,7 @@ echo "== existing systems must be unaffected =="
 # Deliberately not probed from here: Phase 2 gives this host a default-deny output chain, and
 # crc.ai, the tracker and the portal are not on its allow-list, so a probe would only measure
 # the firewall. Verify them from an operator workstation.
-for u in https://crc.ai.tcecure.com/ https://training.status.tcecure.com/ https://my.digitalrcc.com/; do
+for u in https://crc.ai.tcecure.com/ https://training.digitalrcc.com/ https://my.digitalrcc.com/; do
   printf '  skip  %s (verify off-host: this host is default-deny egress)\n' "$u"
 done
 
@@ -58,7 +58,7 @@ check "no docker socket in containers"       "! docker ps -q | xargs -r docker i
 check "telemetry disabled"                   "docker inspect labops-agent-server -f '{{json .Config.Env}}' | grep -q 'DO_NOT_TRACK=1'"
 
 echo "== public edge =="
-EDGE=labops.drcc.digitalrcc.com
+EDGE=labops.digitalrcc.com
 # The public hostname is not on this host's egress allow-list, so these have to be measured
 # from a workstation: LABOPS_VERIFY_EDGE=1 ./verify-deployment.sh. Run there, they are the
 # checks that matter; run here, they would only report the firewall.

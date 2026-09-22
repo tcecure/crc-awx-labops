@@ -1,0 +1,69 @@
+---
+# Creates the restricted domain account AWX manages the pod member servers with,
+# so no shared *local* administrator password has to survive provisioning.
+#
+# The account is a member of no privileged domain group. It becomes a local
+# administrator of the pod servers only, because roles/pod_member_server adds it
+# to that one local group on each PODXX-SRV. It is never used on DC01/DC02, and
+# Stage "privileged account protection" of the migration adds the deny-logon
+# policy that keeps it (and Domain Admins) off the student session hosts
+# interactively.
+#
+# Credentials required in AWX:
+#   - Machine credential for the shared DCs ("CRC WinRM Verifier")
+#   - "CRC Pod Server Domain Mgmt" custom credential, injecting
+#     pod_mgmt_user / pod_mgmt_password
+- name: "Pod servers: create the restricted management account"
+  hosts: crc_shared_dcs[0]
+  gather_facts: false
+  tasks:
+    - name: Fail fast when the management credential was not supplied
+      ansible.builtin.assert:
+        that:
+          - pod_mgmt_user is defined and pod_mgmt_user | length > 0
+          - pod_mgmt_password is defined and pod_mgmt_password | length > 0
+        fail_msg: >-
+          Attach the "CRC Pod Server Domain Mgmt" credential so pod_mgmt_user and
+          pod_mgmt_password are available. Never pass them as extra vars.
+
+    - name: Ensure the account exists, is enabled and holds the supplied password
+      ansible.windows.win_shell: |
+        $ErrorActionPreference = 'Stop'
+        Import-Module ActiveDirectory
+        $pw = ConvertTo-SecureString $env:CRC_MGMT_PW -AsPlainText -Force
+        $sam = $env:CRC_MGMT_USER
+        $existing = Get-ADUser -Filter "SamAccountName -eq '$sam'" -ErrorAction SilentlyContinue
+        if ($existing) {
+          Set-ADAccountPassword -Identity $existing -Reset -NewPassword $pw
+          Set-ADUser -Identity $existing -Enabled $true -PasswordNeverExpires $true
+        } else {
+          New-ADUser -Name $sam -SamAccountName $sam -AccountPassword $pw `
+            -Enabled $true -PasswordNeverExpires $true `
+            -Description 'Restricted AWX management account for pod member servers (no privileged group membership)' `
+            -Path '{{ shared_domain_dn }}'
+        }
+        Remove-Item Env:CRC_MGMT_PW -ErrorAction SilentlyContinue
+      environment:
+        CRC_MGMT_USER: "{{ pod_mgmt_user }}"
+        CRC_MGMT_PW: "{{ pod_mgmt_password }}"
+      no_log: true
+      changed_when: true
+
+    - name: Prove it holds no privileged group membership
+      ansible.windows.win_shell: |
+        $ErrorActionPreference = 'Stop'
+        Import-Module ActiveDirectory
+        $u = Get-ADUser -Identity '{{ pod_mgmt_user }}' -Properties MemberOf
+        $groups = @($u.MemberOf | ForEach-Object { (Get-ADGroup $_).Name })
+        "groups={0}" -f ($groups -join ';')
+        $privileged = @('Domain Admins','Enterprise Admins','Schema Admins','Administrators',
+                        'Account Operators','Server Operators','Backup Operators','Print Operators')
+        $bad = @($groups | Where-Object { $privileged -contains $_ })
+        if ($bad.Count -gt 0) { throw "management account is in privileged groups: $($bad -join ',')" }
+        "privileged=none"
+      register: mgmt_groups
+      changed_when: false
+
+    - name: Show the account state
+      ansible.builtin.debug:
+        msg: "{{ mgmt_groups.stdout_lines }}"

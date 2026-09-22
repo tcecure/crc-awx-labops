@@ -49,7 +49,7 @@ You will connect to the lab through **Apache Guacamole** — a web-based remote 
 ### Step 1: Open the Guacamole Gateway
 
 1. Open your web browser (Chrome, Firefox, or Edge)
-2. Go to: **https://crc.guac.01.tcecure.com/#/**
+2. Go to: **https://guac.01.digitalrcc.com/#/**
 3. You will see a login screen
 
 ### Step 2: Log In with Your Student Credentials
@@ -600,6 +600,14 @@ A previous administrator left messy, insecure firewall rules. You must audit eve
    Save as: C:\CyberLab\PodXX\SC-Artifacts\M3-L1_CleanRules.png
    ```
 
+**How the automated check scores this lab:** it objects to a pass rule of **any to
+any** with no protocol, and to **two identical rules on the same interface tab**
+(same action, protocol, source and destination). Duplicates are judged per
+interface, so the separate default-deny rule each interface needs after M2-L2 and
+M2-L3 is not counted as a copy of another tab's deny. A failure reads
+`FAIL:Issues(N)` followed by the rule it objected to — `N` is how many rules it
+objected to, not a task number.
+
 ---
 
 ### Lab M3-L2: Rule Ordering Challenge
@@ -691,6 +699,13 @@ The accounting application at 10.51.XX.100 only needs HTTPS (TCP 443). But the f
 
 #### Why This Matters
 Least privilege means giving only the minimum access needed. An application that only needs port 443 should not have ports 21, 22, 23, 80, 3306, and 8080 open. Each open port is an attack surface.
+
+**How the automated check scores this lab:** it looks for exactly one pass rule whose
+destination is the **host** `10.51.XX.100` on port 443 (`443`, `HTTPS` and `443-443`
+all count, and `.100/32` is accepted), on any interface tab. `FAIL:ExtraPorts(N)`
+lists the unnecessary ports still open; `FAIL:NoHTTPSRuleTo10.51.XX.100` means the
+keeper rule is gone — usually all seven rules were deleted, or the survivor points at
+an interface or network address instead of the host, or its protocol is UDP.
 
 ---
 
@@ -835,6 +850,14 @@ This lab is the practical assessment for the entire SC module. You will use ever
    - Enable logging on **every** block rule (edit the rule and tick **Log
      packets that are handled by this rule**) — the automated check requires all
      block rules to log
+   - This includes block rules on the **OPT/VLAN tabs**, not just LAN and WAN, and a
+     block rule you created in an earlier lab counts. Turning on logging under
+     **Status → System Logs → Settings** does *not* satisfy the check — pfSense stores
+     logging per rule
+   - **How the automated check reports this lab:** `capstone: passed 4/5 checks; failing:
+     logging (logging off on rule 10 on opt1 ('Block DMZ to LAN lateral movement'))` — the
+     failing item is named, and for logging every block rule still missing the tick is
+     listed by number, interface tab and description
    - Enable logging on critical allow rules
    - Verify logs appear in **Status → System Logs**
 

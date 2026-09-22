@@ -48,7 +48,7 @@ You will connect to the lab through **Apache Guacamole** — a web-based remote 
 ### Step 1: Open the Guacamole Gateway
 
 1. Open your web browser (Chrome, Firefox, or Edge)
-2. Go to: **https://crc.guac.01.tcecure.com/#/**
+2. Go to: **https://guac.01.digitalrcc.com/#/**
 3. You will see a login screen
 
 ### Step 2: Log In with Your Student Credentials
@@ -79,7 +79,7 @@ This is the only connection you get: every MP lab is done on this desktop.
 
 **Option 1:** Click the "Check Your Progress — Pod XX" banner at the top of the Guacamole interface.
 
-**Option 2:** Go directly to **https://training.status.tcecure.com/pod/XX** (replace XX with your pod number).
+**Option 2:** Go directly to **https://training.digitalrcc.com/pod/XX** (replace XX with your pod number).
 
 ---
 
@@ -237,11 +237,10 @@ You cannot protect FCI you have not identified. Media classification is the firs
 
 **Difficulty:** Intermediate | **Time:** 25 minutes | **Type:** Sanitization records
 
-> **This cohort:** re-creating and formatting a volume requires administrator
-> rights on this shared server, so the disk-management step is performed by the
-> instructor and is not graded. Read step 3 so you know how it is done, then
-> complete the log and certificate in step 5 — that is what is graded. When pods
-> move to their own servers you will perform the sanitization yourself.
+> You are a local administrator on your own pod server, so you perform the
+> sanitization yourself in step 3 and it **is** graded: the verification mounts
+> the media and checks the label, that the volume is empty, and that it is a new
+> volume rather than an emptied one.
 
 #### Scenario
 `PXX-FCI-USB` is being reassigned to a non-federal project team. Before release for reuse it must be sanitized in accordance with **ACS-POL-MP-001**. A previous employee "sanitized" a drive by selecting the files and pressing Delete — the data was recovered by an auditor two weeks later. You will do it properly.
@@ -261,7 +260,7 @@ You cannot protect FCI you have not identified. Media classification is the firs
 2. **Confirm what is on the media before it is sanitized (evidence for your log):**
    - Open `PXX-FCI-USB-Contents.txt` and note the current volume label (`PXX-FCI-MEDIA`) and the folders present
 
-3. **How the volume is re-created** (reference for this cohort — administrator step, do not attempt): the volume is deleted and a new one created and fully formatted, not merely emptied.
+3. **Re-create the volume:** delete it and create a new one, fully formatted — not merely emptied. Do this from an **elevated** session (right-click PowerShell → Run as administrator; accept the UAC prompt).
 
    **Option A — Disk Management (GUI):**
    - Press **Windows + R**, type `diskmgmt.msc`, press Enter
@@ -298,7 +297,7 @@ You cannot protect FCI you have not identified. Media classification is the firs
 
    *(Replace `PodXX` / `PXX` with your pod values. `-Full` performs the overwriting format.)*
 
-4. **Validation** (performed with the sanitization): the label reads `PXX-SANITIZED` and the volume is empty apart from `System Volume Information` and `$RECYCLE.BIN`.
+4. **Validate your own work:** the label reads `PXX-SANITIZED` and the volume is empty apart from `System Volume Information` and `$RECYCLE.BIN`. Dismount the image when you are finished — leaving it attached does not fail the check, but the drive letter stays in use.
 
 5. **Complete `MediaSanitizationLog.csv` and `MediaSanitizationCertificate.csv`.** Both files use the same columns and both must be filled in:
 
@@ -312,6 +311,7 @@ You cannot protect FCI you have not identified. Media classification is the firs
    | `Date` | The date the sanitization was performed, e.g., `2026-06-10` |
 
 #### Completion Criteria
+- [ ] `PXX-FCI-USB.vhdx` holds a **new** NTFS volume labelled `PXX-SANITIZED` with no files or folders left on it
 - [ ] Sanitization **log** and **certificate** both record `Clear` or `Purge`, `Pass`, `Reuse`, a `SanitizedBy` name, and a valid date
 - [ ] `MP-M1-L2_SeedMetadata.json` is still present and unmodified
 
@@ -388,7 +388,7 @@ MP.L1-3.8.3 gives you two valid outcomes for FCI media: sanitize it or destroy i
 | Open the artifacts folder | `C:\CyberLab\PodXX\MP-Artifacts\` |
 | Read what is on simulated media | Open `PXX-<name>-Contents.txt` in the artifacts folder |
 | Open PowerShell | **Windows + R** → `powershell` |
-| Check your lab progress | https://training.status.tcecure.com/pod/XX |
+| Check your lab progress | https://training.digitalrcc.com/pod/XX |
 
 ### Media Handling Terms
 
@@ -433,7 +433,7 @@ MP.L1-3.8.3 gives you two valid outcomes for FCI media: sanitize it or destroy i
 **After completing each lab:**
 1. Confirm your answer CSVs are saved in `C:\CyberLab\PodXX\MP-Artifacts\` with their original names
 2. Confirm all seeded evidence files are still present
-3. Check your status at https://training.status.tcecure.com/pod/XX
+3. Check your status at https://training.digitalrcc.com/pod/XX
 
 ---
 

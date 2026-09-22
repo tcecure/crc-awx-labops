@@ -34,7 +34,7 @@ ansible-playbook playbooks/verify-cmmc-sc.yml -i inventories/prod.ini
 
 ### Student Access
 
-Students connect via Guacamole (`https://crc.guac.01.tcecure.com`):
+Students connect via Guacamole (`https://guac.01.digitalrcc.com`):
 - **PODXX-DC** — the only student connection; lab artifacts, evidence, and the
   pfSense web UI (browse to `http://10.51.XX.1` from that desktop)
 

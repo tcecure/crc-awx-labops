@@ -1,0 +1,71 @@
+---
+# Creates the least-privilege service account used to domain-join pod member
+# servers, plus the OU their computer objects live in.
+#
+# The account gets only "Create/Delete Computer Objects" on OU=PodServers and is
+# a member of no privileged group, so a leaked join credential cannot be used to
+# administer the domain.
+#
+# Credentials required in AWX:
+#   - Machine credential for the shared DCs ("CRC WinRM Verifier")
+#   - "CRC Domain Join" custom credential, which injects domain_join_user and
+#     domain_join_password
+- name: "Pod servers: create the delegated domain-join account"
+  hosts: crc_shared_dcs[0]
+  gather_facts: false
+  vars:
+    pod_servers_ou_name: PodServers
+  tasks:
+    - name: Fail fast when the join credential was not supplied
+      ansible.builtin.assert:
+        that:
+          - domain_join_user is defined and domain_join_user | length > 0
+          - domain_join_password is defined and domain_join_password | length > 0
+        fail_msg: >-
+          Attach the "CRC Domain Join" credential to this job template so
+          domain_join_user and domain_join_password are available.
+
+    - name: Ensure the pod member server OU exists
+      ansible.windows.win_shell: |
+        $ErrorActionPreference = 'Stop'
+        Import-Module ActiveDirectory
+        $ou = 'OU={{ pod_servers_ou_name }},{{ shared_domain_dn }}'
+        if (-not (Get-ADOrganizationalUnit -Filter "Name -eq '{{ pod_servers_ou_name }}'" -ErrorAction SilentlyContinue)) {
+          New-ADOrganizationalUnit -Name '{{ pod_servers_ou_name }}' -Path '{{ shared_domain_dn }}' -ProtectedFromAccidentalDeletion $true
+        }
+        (Get-ADOrganizationalUnit -Identity $ou).DistinguishedName
+      register: ou_result
+      changed_when: false
+
+    - name: Ensure the join account exists with the supplied password
+      ansible.windows.win_shell: |
+        $ErrorActionPreference = 'Stop'
+        Import-Module ActiveDirectory
+        $pw = ConvertTo-SecureString '{{ domain_join_password }}' -AsPlainText -Force
+        $existing = Get-ADUser -Filter "SamAccountName -eq '{{ domain_join_user }}'" -ErrorAction SilentlyContinue
+        if ($existing) {
+          Set-ADAccountPassword -Identity $existing -Reset -NewPassword $pw
+          Set-ADUser -Identity $existing -Enabled $true -PasswordNeverExpires $true
+        } else {
+          New-ADUser -Name '{{ domain_join_user }}' -SamAccountName '{{ domain_join_user }}' `
+            -AccountPassword $pw -Enabled $true -PasswordNeverExpires $true `
+            -Description 'Delegated pod member server domain-join account (no privileged group membership)' `
+            -Path '{{ shared_domain_dn }}'
+        }
+      no_log: true
+      changed_when: true
+
+    - name: Delegate computer object creation on the pod server OU
+      ansible.windows.win_shell: |
+        $ErrorActionPreference = 'Stop'
+        Import-Module ActiveDirectory
+        $ou = 'OU={{ pod_servers_ou_name }},{{ shared_domain_dn }}'
+        # dsacls is used rather than the AD provider because it applies the
+        # well-known "create computer objects" permission set in one call.
+        & dsacls.exe $ou /I:T /G "{{ domain_join_user }}:CCDC;computer" | Out-String
+      register: delegate_result
+      changed_when: true
+
+    - name: Show delegation result
+      ansible.builtin.debug:
+        msg: "{{ delegate_result.stdout_lines | default([]) | last }}"

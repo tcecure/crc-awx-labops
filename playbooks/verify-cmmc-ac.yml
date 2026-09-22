@@ -1,4 +1,11 @@
 ---
+# AC and IA are the only families that read Active Directory, so their
+# checks stay on the domain controller even after students move to their
+# own member servers. Student evidence travels instead, through the drop share
+# on the DC: the session hosts copy it with playbooks/sync-pod-evidence.yml as
+# their own computer account, and this playbook moves it between the drop
+# folder and the graded pod folder locally on the DC. Set
+# crc_target_mode=member_server to enable it.
 # Shared DC mode: verify all pods on the shared DCs using OU-based isolation
 - name: "Verify Labs: CMMC Level 1 Access Control (AC) - Shared DC"
   hosts: crc_shared_dcs[0]
@@ -6,6 +13,11 @@
   vars:
     pod_list: "{{ range(1, (pod_count | default(20) | int) + 1) | list }}"
   tasks:
+    - name: Import the evidence the session hosts dropped
+      ansible.builtin.include_tasks: tasks/sync-drop-local.yml
+      vars:
+        drop_direction: import
+
     - name: "Verify Pod{{ '%02d' | format(item) }}"
       ansible.builtin.include_role:
         name: verify_ac_dc

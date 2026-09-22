@@ -23,6 +23,7 @@
   failed_when: false
   no_log: true
   when:
+    - crc_publish_tracker | default(true) | bool
     - lookup('env', 'DRCC_PORTAL_URL') | length > 0
     - lookup('env', 'AWX_PROGRESS_SECRET') | length > 0
 

@@ -15,8 +15,16 @@ seed_user_password: "{{ seed_user_password | default(lookup('env', 'SEED_USER_PA
 # Shared DC configuration (pods 1-20 share acs-p01.local with OU isolation)
 shared_domain: "acs-p01.local"
 shared_domain_dn: "DC=acs-p01,DC=local"
+shared_domain_netbios: "ACS-P01"
 students_ou: "OU=Students,DC=acs-p01,DC=local"
 pod_count: 20
+
+# Pod member server session hosts. Kept here rather than only in
+# roles/pod_member_server/defaults so the standalone pod-server playbooks
+# (harden, patch, LAPS) see the same values as the role.
+pod_servers_ou_name: PodServers
+pod_server_bootstrap_account: crcsvc
+pod_server_mgmt_account: svc-podmgmt
 
 # Legacy domain naming pattern (per-pod DCs, deprecated)
 # Pod number derived from inventory hostname (e.g., dc01-p01 -> 01)

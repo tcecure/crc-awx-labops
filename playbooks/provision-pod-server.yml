@@ -1,0 +1,15 @@
+---
+# Provisions one or more pod member servers. Limit the job to the pod servers you
+# want built (for example -l pod03-srv); an unlimited run targets every server in
+# the crc_pod_servers group.
+#
+# Credentials required in AWX:
+#   - "CRC Pod Server Local" machine credential (local crcsvc account created by
+#     the first-boot bootstrap)
+#   - "CRC Domain Join" custom credential
+- name: "Pod servers: provision member servers"
+  hosts: crc_pod_servers
+  gather_facts: false
+  serial: 4
+  roles:
+    - pod_member_server

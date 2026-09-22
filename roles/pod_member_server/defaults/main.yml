@@ -1,0 +1,27 @@
+---
+# Two-digit pod label used for the computer name, OU and evidence directory.
+pod_tag: "Pod{{ '%02d' | format(pod_id | int) }}"
+pod_server_name: "POD{{ '%02d' | format(pod_id | int) }}-SRV"
+pod_student: "student{{ '%02d' | format(pod_id | int) }}"
+pod_evidence_dir: "C:\\CyberLab\\{{ pod_tag }}"
+pod_servers_ou_name: PodServers
+pod_server_features:
+  - RSAT-AD-Tools
+  - RSAT-AD-PowerShell
+  - RSAT-ADDS
+  - GPMC
+
+# The restricted domain account AWX manages the pod servers with after the
+# bootstrap. It is a local administrator of the pod servers only and is a member
+# of no privileged domain group, so the shared local bootstrap account can be
+# retired (see playbooks/harden-pod-server.yml).
+pod_server_mgmt_account: svc-podmgmt
+
+# Set to false to provision before playbooks/setup-pod-management-account.yml has
+# created that account; the membership task is then skipped instead of failing.
+pod_server_mgmt_account_present: true
+
+# The local account the offline first-boot bootstrap creates. It exists only
+# until the domain management account works, then harden-pod-server.yml rotates
+# its password to a random value and disables it.
+pod_server_bootstrap_account: crcsvc
