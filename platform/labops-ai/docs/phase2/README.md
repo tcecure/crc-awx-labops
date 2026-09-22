@@ -30,5 +30,8 @@ matrix and LabOps role guard) and the support-ticket integration live in the app
 4. Model proxy up; `scripts/run-investigation.sh` smoke run; `test-investigation-isolation.sh`.
 5. `scripts/bootstrap-host.sh` egress section; `test-egress-isolation.sh`.
 6. One real read-only investigation end to end — the run checkpoint 1 cannot yet demonstrate.
-7. Staging migration + staging end-to-end; production migration only after that.
+7. Production migration — **done** (2026-08-29, owner-approved). There is no staging
+   environment; the migration was validated on a throwaway local Postgres and its invariants
+   replayed against production inside a rolled-back transaction. See
+   `docs/labops-ai/production-first-workflow.md` and `phase2-apply-log.md` in the app repo.
 8. Write flags stay `false` until each integration's runbook is separately approved and piloted.

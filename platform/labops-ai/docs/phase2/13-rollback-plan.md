@@ -51,8 +51,11 @@ prerequisite, not an optional extra.
 
 The Phase 2 migration is **additive only**: new tables and new nullable columns, no drops, no
 type changes, no data rewrites. Rollback is the paired `down` file that drops exactly the new
-objects; existing `support_*` and `ai_*` data is never read-modify-written by it. It is applied
-to staging first and to production only after the checkpoint is approved.
+objects; existing `support_*` and `ai_*` data is never read-modify-written by it. There is no
+staging environment, so it is validated on a throwaway local Postgres and applied to production
+only with explicit approval; the exact statements applied and their rollback SQL are recorded in
+`docs/labops-ai/phase2-apply-log.md` in the app repo. The Phase 2 broker migration was applied
+on 2026-08-29 and the owner has directed that it stays in place.
 
 ## 7. Application
 

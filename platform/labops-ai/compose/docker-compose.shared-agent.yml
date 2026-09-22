@@ -1,0 +1,62 @@
+# Transitional shared agent server.
+#
+# docker-compose.yml alone expresses the Phase 2 target: no long-lived agent, one ephemeral
+# container per investigation via scripts/run-investigation.sh. The gateway release on the
+# host still talks to a single agent server at 127.0.0.1:8000, so removing it would break the
+# verified Phase 1 path. This override keeps that server while the gateway learns to launch
+# per-run containers, but already applies the Phase 2 secret split: the container reads
+# /etc/labops/agent.env, which carries no Supabase, AWX, Wiki or provider credential, and it
+# sits on labops-model (internal) so the model proxy is the only address it can reach.
+#
+# Delete this file — and the COMPOSE_FILE line in compose/.env — once the gateway launches
+# investigations through scripts/run-investigation.sh.
+services:
+  agent-server:
+    image: ghcr.io/openhands/agent-server:1.42.1-python@sha256:141a3628925a18ad55f07a09c0a1e3db9852ab0043458dbe7c8003c92396d143
+    container_name: labops-agent-server
+    restart: on-failure:3
+    env_file: /etc/labops/agent.env
+    environment:
+      OH_TELEMETRY_EXPORTER: none
+      DO_NOT_TRACK: "1"
+    # No published port: labops-model is an internal network, which docker cannot publish from,
+    # and the gateway reaches the agent at LABOPS_AGENT_SERVER_URL=http://172.31.241.3:8000 over
+    # that bridge. Nothing off-host can route to it.
+    volumes:
+      - agent-state:/workspace
+      - agent-home:/home/openhands/.openhands
+    tmpfs:
+      - /tmp:size=1g,mode=1777,exec
+      - /home/openhands/.config:size=64m,mode=0700,uid=10001,gid=10001
+      - /home/openhands/.cache:size=256m,mode=0700,uid=10001,gid=10001
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          cpus: "4"
+          memory: 8g
+          pids: 2048
+    logging:
+      driver: json-file
+      options:
+        max-size: 20m
+        max-file: "5"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    networks:
+      # static, so it can never take 172.31.241.2 — the address investigation containers and
+      # this server use to reach the model proxy
+      labops-model:
+        ipv4_address: 172.31.241.3
+
+volumes:
+  agent-state:
+  agent-home:

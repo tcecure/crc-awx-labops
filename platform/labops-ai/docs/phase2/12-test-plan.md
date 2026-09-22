@@ -1,8 +1,13 @@
 # Checkpoint 12 — Test plan
 
-Nothing in Phase 2 is enabled on production before the row it depends on passes. Production is
-used for **read-only verification only**; every write path is exercised against the
-`DRCC-staging` project (`cudbheihfdvbetwtcfdi`) and a throwaway local Postgres.
+Nothing in Phase 2 is enabled on production before the row it depends on passes.
+
+**There is no staging environment.** `DRCC-staging` (`cudbheihfdvbetwtcfdi`) is legacy and
+unavailable, and it never had the conversation tables. Write paths are therefore exercised
+against a throwaway local Postgres; production verification is read-only, except for probes that
+run inside a transaction that rolls back and controlled tests against a clearly identified test
+record. One capability is enabled at a time and disabled again after its pilot. Procedure of
+record: `docs/labops-ai/production-first-workflow.md` in the app repo.
 
 ## Where each test runs
 
@@ -11,9 +16,9 @@ used for **read-only verification only**; every write path is exercised against 
 | Unit / route / broker invariants | CI + local | `npm test` |
 | Types | CI + local | `npm run typecheck` |
 | Build | CI + local | `npm run build` |
-| Migration up/down + RLS | isolated ephemeral Postgres, then `DRCC-staging` | `labops_migration_harness/run.sh` |
+| Migration up/down + RLS | isolated ephemeral Postgres, then production inside a rolled-back transaction | `supabase/tests/labops/run.sh`, then `prod_behaviour.sql` |
 | Isolation / egress / secrets | `drcc-labops-01`, live containers | `scripts/test-*.sh` |
-| End-to-end investigation | staging Supabase + live host | manual, owner-driven |
+| End-to-end investigation | live host + a designated test `support_requests` row | manual, owner-driven |
 
 ## A. Support-conversation intake (checkpoint / task 31)
 
