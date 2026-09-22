@@ -13,7 +13,7 @@ deny() { if eval "$2" >/dev/null 2>&1; then bad "$1 (was reachable!)"; else ok "
 
 echo "== existing systems must be unaffected =="
 check "crc.ai.tcecure.com responds"          "curl -m 10 -sf -o /dev/null https://crc.ai.tcecure.com/"
-check "training tracker responds"            "curl -m 10 -sf -o /dev/null https://training.status.tcecure.com/"
+check "training tracker responds"            "curl -m 10 -sf -o /dev/null https://training.digitalrcc.com/"
 check "my.digitalrcc.com responds"           "curl -m 10 -sf -o /dev/null https://my.digitalrcc.com/"
 
 if [ "${1:-}" = "--pre" ]; then
@@ -47,7 +47,7 @@ check "no docker socket in containers"       "! docker ps -q | xargs -r docker i
 check "telemetry disabled"                   "docker inspect labops-agent-server -f '{{json .Config.Env}}' | grep -q 'DO_NOT_TRACK=1'"
 
 echo "== public edge =="
-EDGE=labops.drcc.digitalrcc.com
+EDGE=labops.digitalrcc.com
 check "edge serves the console over TLS"     "curl -m 15 -sf -o /dev/null https://$EDGE/"
 check "edge health denies anonymous"         "curl -m 15 -s https://$EDGE/api/labops/health | grep -E unauthenticated >/dev/null"
 check "edge redirects http to https"         "[ \"\$(curl -m 15 -s -o /dev/null -w '%{http_code}' http://$EDGE/)\" = 301 ]"
