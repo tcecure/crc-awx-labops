@@ -48,7 +48,7 @@ You will connect to the lab through **Apache Guacamole** — a web-based remote 
 ### Step 1: Open the Guacamole Gateway
 
 1. Open your web browser (Chrome, Firefox, or Edge)
-2. Go to: **https://crc.guac.01.tcecure.com/#/**
+2. Go to: **https://guac.01.digitalrcc.com/#/**
 3. You will see a login screen
 
 ### Step 2: Log In with Your Student Credentials
@@ -79,7 +79,7 @@ This is the only connection you get: every MP lab is done on this desktop.
 
 **Option 1:** Click the "Check Your Progress — Pod XX" banner at the top of the Guacamole interface.
 
-**Option 2:** Go directly to **https://training.status.tcecure.com/pod/XX** (replace XX with your pod number).
+**Option 2:** Go directly to **https://training.digitalrcc.com/pod/XX** (replace XX with your pod number).
 
 ---
 
@@ -388,7 +388,7 @@ MP.L1-3.8.3 gives you two valid outcomes for FCI media: sanitize it or destroy i
 | Open the artifacts folder | `C:\CyberLab\PodXX\MP-Artifacts\` |
 | Read what is on simulated media | Open `PXX-<name>-Contents.txt` in the artifacts folder |
 | Open PowerShell | **Windows + R** → `powershell` |
-| Check your lab progress | https://training.status.tcecure.com/pod/XX |
+| Check your lab progress | https://training.digitalrcc.com/pod/XX |
 
 ### Media Handling Terms
 
@@ -433,7 +433,7 @@ MP.L1-3.8.3 gives you two valid outcomes for FCI media: sanitize it or destroy i
 **After completing each lab:**
 1. Confirm your answer CSVs are saved in `C:\CyberLab\PodXX\MP-Artifacts\` with their original names
 2. Confirm all seeded evidence files are still present
-3. Check your status at https://training.status.tcecure.com/pod/XX
+3. Check your status at https://training.digitalrcc.com/pod/XX
 
 ---
 

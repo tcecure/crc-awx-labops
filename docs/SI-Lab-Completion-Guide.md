@@ -49,7 +49,7 @@ You will connect to the lab through **Apache Guacamole** — a web-based remote 
 ### Step 1: Open the Guacamole Gateway
 
 1. Open your web browser (Chrome, Firefox, or Edge)
-2. Go to: **https://crc.guac.01.tcecure.com/#/**
+2. Go to: **https://guac.01.digitalrcc.com/#/**
 3. You will see a login screen
 
 ### Step 2: Log In with Your Student Credentials
@@ -89,7 +89,7 @@ You can check your lab verification status in two ways:
 Click the "Check Your Progress — Pod XX" banner at the top of the Guacamole interface.
 
 **Option 2:**
-Go directly to: **https://training.status.tcecure.com/pod/XX** (replace XX with your pod number, e.g., `01`)
+Go directly to: **https://training.digitalrcc.com/pod/XX** (replace XX with your pod number, e.g., `01`)
 
 ---
 
