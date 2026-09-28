@@ -8,6 +8,12 @@
 #   drop_direction: import   drop -> C:\CyberLab\PodXX  (before verification)
 #   drop_direction: export   C:\CyberLab\PodXX -> drop  (after seed or reset)
 #
+# AC.seeded and IA.seeded are written here, on the DC, by the AC/IA seed plays;
+# the session host never writes them. /MIR would therefore delete them from the
+# graded pod folder on the first import, which reads as "this pod was never
+# seeded" and blanks every AC result. They are excluded from the mirror in both
+# directions so each side keeps the markers it owns.
+#
 # A no-op outside member_server mode.
 - name: "Move pod evidence on the domain controller: {{ drop_direction }}"
   ansible.windows.win_shell: |
@@ -19,7 +25,8 @@
     else { $src = $lab; $dst = $drop }
     if (-not (Test-Path -LiteralPath $src)) { 'nothing_to_sync'; exit 0 }
     New-Item -ItemType Directory -Force -Path $dst | Out-Null
-    $null = robocopy $src $dst /MIR /R:2 /W:2 /NFL /NDL /NJH /NJS /NP
+    $null = robocopy $src $dst /MIR /XF AC.seeded IA.seeded /R:2 /W:2 `
+      /NFL /NDL /NJH /NJS /NP
     if ($LASTEXITCODE -gt 7) { throw "robocopy exit $LASTEXITCODE" }
     '{0} {1}={2}' -f $pod, '{{ drop_direction }}', (Get-ChildItem -Recurse -File -LiteralPath $dst |
       Measure-Object).Count
