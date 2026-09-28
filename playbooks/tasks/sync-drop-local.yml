@@ -32,3 +32,13 @@
   ansible.builtin.debug:
     msg: "{{ drop_sync.results | default([]) | map(attribute='stdout') | map('trim') | list }}"
   when: (crc_target_mode | default('shared_dc')) == 'member_server'
+
+- name: Warn that the export still has to reach the session hosts
+  ansible.builtin.debug:
+    msg: >-
+      Seeded evidence is only in C:\CyberLab\_drop on the domain controller.
+      Run playbooks/sync-pod-evidence.yml with sync_direction=push (the
+      "+ Deliver" workflows do this) or the next evidence pull mirrors it away.
+  when:
+    - (crc_target_mode | default('shared_dc')) == 'member_server'
+    - drop_direction == 'export'
