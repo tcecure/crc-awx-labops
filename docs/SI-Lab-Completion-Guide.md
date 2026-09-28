@@ -1,6 +1,6 @@
 # CMMC Level 1 System & Information Integrity (SI) Labs — Student Completion Guide
 
-This guide provides step-by-step instructions for completing all 12 System & Information Integrity labs. Each lab presents a real-world scenario involving vulnerability management, malware protection, or incident investigation that you must analyze and respond to using artifacts on the domain controller.
+This guide provides step-by-step instructions for completing all 12 System & Information Integrity labs. Each lab presents a real-world scenario involving vulnerability management, malware protection, or incident investigation that you must analyze and respond to using artifacts on your pod server.
 
 ---
 
@@ -25,7 +25,7 @@ This guide provides step-by-step instructions for completing all 12 System & Inf
 ### What You Need
 
 - Your **Pod number** (your instructor will assign this, e.g., Pod01, Pod05, Pod12)
-- Your **Guacamole login credentials** (your instructor will provide your username and password)
+- Your **Guacamole login credentials** — your username and lab password are shown in the portal at https://my.digitalrcc.com under **Start Here → Lab Access**
 - A computer with a web browser (Chrome, Firefox, or Edge) — no special software needed
 
 ### What You Will Be Doing
@@ -60,20 +60,22 @@ You will connect to the lab through **Apache Guacamole** — a web-based remote 
    - Pod 05 → `student05`
    - Pod 12 → `student12`
    - *(and so on — the number matches your assigned pod)*
-2. Enter your **Password** (provided by your instructor)
+2. Enter your **Password** — sign in to the portal at https://my.digitalrcc.com, open **Start Here**, and under **Lab Access** click **Show my lab password**
 3. Click **Login**
 
-### Step 3: Connect to the Domain Controller
+### Step 3: Connect to Your Pod Server
 
 After logging in you will see one pre-configured connection for your pod:
 
 | Connection Name | What It Is |
 |---|---|
-| **PODXX-DC** | Domain Controller — **use this for all SI labs** |
+| **PODXX-SRV** | Your pod server — **use this for all SI labs** |
 
-This is the only connection you get: every SI lab is done on this desktop.
+This is the only connection you get: every SI lab is done on this desktop. The
+server is joined to the `acs-p01.local` domain, so you never sign in to a domain
+controller.
 
-1. Click on **PODXX-DC** (where XX is your pod number, e.g., **POD03-DC**)
+1. Click on **PODXX-SRV** (where XX is your pod number, e.g., **POD03-SRV**)
 2. The remote desktop session will open directly in your browser — no extra login is needed (credentials are pre-configured)
 3. Wait a few seconds for the Windows Server desktop to appear
 
@@ -95,7 +97,7 @@ Go directly to: **https://training.digitalrcc.com/pod/XX** (replace XX with your
 
 ## How to Open Your Lab Artifacts
 
-All SI lab artifacts are stored in a single folder on the domain controller. You will open files in this folder for every lab.
+All SI lab artifacts are stored in a single folder on your pod server. You will open files in this folder for every lab.
 
 ### Navigate to Your Artifacts Folder
 
