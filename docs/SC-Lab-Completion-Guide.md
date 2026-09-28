@@ -26,7 +26,7 @@ This guide provides step-by-step instructions for completing all 12 System & Com
 ### What You Need
 
 - Your **Pod number** (your instructor will assign this, e.g., Pod01, Pod05, Pod12)
-- Your **Guacamole login credentials** (your instructor will provide your username and password)
+- Your **Guacamole login credentials** — your username and lab password are shown in the portal at https://my.digitalrcc.com under **Start Here → Lab Access**
 - A computer with a web browser (Chrome, Firefox, or Edge) — no special software needed
 
 ### What You Will Be Doing
@@ -60,21 +60,21 @@ You will connect to the lab through **Apache Guacamole** — a web-based remote 
    - Pod 05 → `student05`
    - Pod 12 → `student12`
    - *(and so on — the number matches your assigned pod)*
-2. Enter your **Password** (provided by your instructor)
+2. Enter your **Password** — sign in to the portal at https://my.digitalrcc.com, open **Start Here**, and under **Lab Access** click **Show my lab password**
 3. Click **Login**
 
-### Step 3: Connect to the Domain Controller
+### Step 3: Connect to Your Pod Server
 
 After logging in, you will see a list of available connections:
 
 | Connection Name | What It Is |
 |---|---|
-| **PODXX-DC** | Domain Controller — your desktop for every lab, including the firewall labs |
+| **PODXX-SRV** | Your pod server — your desktop for every lab, including the firewall labs |
 
 The pfSense firewall is not a separate connection. You reach it from a browser
-inside **PODXX-DC**, as described in the next section.
+inside **PODXX-SRV**, as described in the next section.
 
-1. Click on **PODXX-DC** (where XX is your pod number, e.g., **POD03-DC**)
+1. Click on **PODXX-SRV** (where XX is your pod number, e.g., **POD03-SRV**)
 2. The remote desktop session will open in your browser
 3. Wait for the Windows Server desktop to appear
 
@@ -87,7 +87,7 @@ inside **PODXX-DC**, as described in the next section.
 Most SC labs require you to log into the pfSense firewall web interface. Do it
 from inside your remote desktop:
 
-1. Connect to **PODXX-DC** via Guacamole
+1. Connect to **PODXX-SRV** via Guacamole
 2. Open a web browser (Edge or Firefox) **on that desktop**
 3. Navigate to: **http://10.51.XX.1** (replace XX with your pod number)
    - Pod 01 → `http://10.51.1.1`
@@ -107,9 +107,9 @@ After logging in, you will see the pfSense Dashboard showing system status, inte
 
 ## How to Open Lab Artifacts
 
-Lab artifacts (worksheets, instructions, evidence templates) are stored on the Domain Controller:
+Lab artifacts (worksheets, instructions, evidence templates) are stored on your pod server:
 
-1. Connect to **PODXX-DC** via Guacamole
+1. Connect to **PODXX-SRV** via Guacamole
 2. Open **File Explorer** (click the folder icon in the taskbar)
 3. Navigate to: `C:\CyberLab\PodXX\SC-Artifacts\`
 4. You will see files for each lab:
@@ -132,12 +132,12 @@ Each student has an isolated pod environment:
 
 ```
 Your Pod (PodXX)
-├── PODXX-DC (Domain Controller)
-│   ├── Active Directory
+├── PODXX-SRV (your domain-joined pod server)
+│   ├── Active Directory management tools
 │   ├── Lab artifacts: C:\CyberLab\PodXX\SC-Artifacts\
 │   └── Shared with AC, IA, SI labs
 │
-└── PODXX-GW (Gateway/Firewall — reached from a browser on PODXX-DC)
+└── PODXX-GW (Gateway/Firewall — reached from a browser on PODXX-SRV)
     ├── WAN Interface: Connected to external network
     ├── LAN Interface: 10.51.XX.1/24
     ├── Web UI: http://10.51.XX.1
@@ -165,7 +165,7 @@ You are the new cybersecurity analyst at ACS Consulting, a small defense contrac
 #### Steps
 
 1. **Open the Network Topology reference:**
-   - On PODXX-DC, navigate to `C:\CyberLab\PodXX\SC-Artifacts\`
+   - On PODXX-SRV, navigate to `C:\CyberLab\PodXX\SC-Artifacts\`
    - Open `SC-M1-L1_Network_Topology.txt`
    - Review the network layout
 

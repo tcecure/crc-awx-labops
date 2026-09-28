@@ -24,7 +24,7 @@ This guide provides step-by-step instructions for completing all 6 Physical Prot
 ### What You Need
 
 - Your **Pod number** (your instructor will assign this, e.g., Pod01, Pod05, Pod12)
-- Your **Guacamole login credentials** (your instructor will provide your username and password)
+- Your **Guacamole login credentials** — your username and lab password are shown in the portal at https://my.digitalrcc.com under **Start Here → Lab Access**
 - A computer with a web browser (Chrome, Firefox, or Edge) — no special software needed
 
 ### What You Will Be Doing
@@ -62,18 +62,20 @@ You will connect to the lab through **Apache Guacamole** — a web-based remote 
    - Pod 05 → `student05`
    - Pod 12 → `student12`
    - *(and so on — the number matches your assigned pod)*
-2. Enter your **Password** (provided by your instructor)
+2. Enter your **Password** — sign in to the portal at https://my.digitalrcc.com, open **Start Here**, and under **Lab Access** click **Show my lab password**
 3. Click **Login**
 
-### Step 3: Connect to the Domain Controller
+### Step 3: Connect to Your Pod Server
 
 | Connection Name | What It Is |
 |---|---|
-| **PODXX-DC** | Domain Controller — **use this for all PE labs** |
+| **PODXX-SRV** | Your pod server — **use this for all PE labs** |
 
-This is the only connection you get: every PE lab is done on this desktop.
+This is the only connection you get: every PE lab is done on this desktop. The
+server is joined to the `acs-p01.local` domain, so you never sign in to a domain
+controller.
 
-1. Click on **PODXX-DC** (where XX is your pod number, e.g., **POD03-DC**)
+1. Click on **PODXX-SRV** (where XX is your pod number, e.g., **POD03-SRV**)
 2. The remote desktop session opens directly in your browser — no extra login is needed
 3. Wait a few seconds for the Windows Server desktop to appear
 
