@@ -131,10 +131,60 @@ instead:
   `C:\CyberLab\PodXX` on the session host, brings it through the controller and
   expands it on the DC. `verify-cmmc-ac.yml` and `verify-cmmc-ia.yml` import it
   before grading, so the DC grades what the student actually did on their server.
-* The same playbook with `sync_direction=push` runs at the end of the AC/IA seed
-  and reset playbooks, so seeded artifacts and post-reset state land on the
-  session host the student logs into.
+* The same playbook with `sync_direction=push` carries the drop share back down,
+  so seeded artifacts and post-reset state land on the session host the student
+  logs into. It is a **separate job**: the AC/IA seed and reset playbooks end at
+  the drop share (`tasks/sync-drop-local.yml`, `drop_direction: export`) because
+  they run on the DC with the DC credential, and writing to the pod servers needs
+  the pod-server credential. See *Delivering a seed to the session hosts* below.
 * Both directions are a no-op while `crc_target_mode` is `shared_dc`.
+
+### Delivering a seed to the session hosts
+
+A DC-side seed that is never pushed down is silently undone: the session host
+does not have the seeded folders, so the next `sync_direction=pull` mirrors them
+out of the drop share, and the following verify imports that emptied share back
+over `C:\CyberLab\PodXX` on the DC. That is how every pod lost the AC `Lab4-2`
+and `Lab4-3` folders and the IA artifacts under `IA-Artifacts` and
+`LabArtifacts` — the labs read as unseeded to the student even though the seed
+job had succeeded.
+
+So never launch the AC/IA seed or reset job templates on their own. Use the
+workflows, which run the DC job and then the push as a second node with the
+pod-server credential:
+
+```text
+Seed CMMC AC Labs (Member Server) + Deliver
+Seed CMMC IA Labs (Member Server) + Deliver
+Reset AC Labs (Member Server) + Deliver
+Reset IA Labs (Member Server) + Deliver
+```
+
+Equivalent by hand, in this order:
+
+```text
+playbooks/seed-cmmc-ac.yml      limit dc01,localhost         (DC credential)
+playbooks/sync-pod-evidence.yml sync_direction=push          (pod credential)
+```
+
+After either, confirm the artifacts exist where the student will look:
+
+```powershell
+Test-Path C:\CyberLab\Pod02\Lab4-2          # on POD02-SRV, not just on DC01
+```
+
+### Why the copy never deletes
+
+Both halves copy with `/E`, not `/MIR`. Each side legitimately holds content the
+other has never seen — the DC holds the seed, the session host holds the
+student's evidence — so a mirror in either direction deletes real work: a push
+run before the matching pull wipes whatever the student has produced since, and
+a pull run before the matching push wipes a fresh seed out of the drop share.
+Both have happened.
+
+Only a reset wants the destination emptied, and `reset-ac-labs.yml` /
+`reset-ia-labs.yml` ask for it explicitly with `sync_prune: true`. Pass the same
+variable by hand only when you intend to destroy the student's evidence.
 
 ## The retired waivers
 
