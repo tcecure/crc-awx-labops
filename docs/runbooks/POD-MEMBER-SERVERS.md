@@ -173,6 +173,19 @@ After either, confirm the artifacts exist where the student will look:
 Test-Path C:\CyberLab\Pod02\Lab4-2          # on POD02-SRV, not just on DC01
 ```
 
+### Why the copy never deletes
+
+Both halves copy with `/E`, not `/MIR`. Each side legitimately holds content the
+other has never seen — the DC holds the seed, the session host holds the
+student's evidence — so a mirror in either direction deletes real work: a push
+run before the matching pull wipes whatever the student has produced since, and
+a pull run before the matching push wipes a fresh seed out of the drop share.
+Both have happened.
+
+Only a reset wants the destination emptied, and `reset-ac-labs.yml` /
+`reset-ia-labs.yml` ask for it explicitly with `sync_prune: true`. Pass the same
+variable by hand only when you intend to destroy the student's evidence.
+
 ## The retired waivers
 
 `ia_m2l1_task_step_waived` and `mp_media_mount_waived` are no longer fixed to

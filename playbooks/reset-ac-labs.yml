@@ -48,3 +48,4 @@
       ansible.builtin.include_tasks: tasks/sync-drop-local.yml
       vars:
         drop_direction: export
+        sync_prune: true
