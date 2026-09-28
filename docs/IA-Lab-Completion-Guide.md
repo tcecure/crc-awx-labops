@@ -380,8 +380,15 @@ The nightly backup task **`PodXX ACS Nightly Backup`** runs under a real employe
    - Click **Task Scheduler Library** and find **`PodXX ACS Nightly Backup`**
    - Right-click → **Properties** → **General** tab
    - The "When running the task, use the following user account" field shows `ACS-P01\PXX-s.jenkins`
-   - Click **Change User or Group...**, type `PXX-svc_backup`, click **Check Names → OK**
-   - Click **OK** and enter the service account password when prompted
+   - Click **Change User or Group...** — the dialog opens with **Location** set
+     to your own server, `PODXX-SRV`, which is where Windows always starts. The
+     service account is a domain account, so click **Locations...** and pick
+     **acs-p01.local** first, otherwise **Check Names** cannot find it.
+   - Type `PXX-svc_backup`, click **Check Names → OK**
+   - Back on the **General** tab, leave **"Run whether user is logged on or
+     not"** selected and leave **"Do not store password"** *unchecked*
+   - Click **OK** — Windows prompts for the service account's password. Enter
+     the password you set in step 1.
 
 3. **Confirm the change:**
 
@@ -389,13 +396,30 @@ The nightly backup task **`PodXX ACS Nightly Backup`** runs under a real employe
    (Get-ScheduledTask -TaskName "PodXX ACS Nightly Backup").Principal.UserId
    ```
 
-   It should now return `ACS-P01\PXX-svc_backup`.
+   It should now return `ACS-P01\PXX-svc_backup`. Then prove the task can
+   really start as that account:
 
-> **If Windows warns "Batch logon privilege needs to be enabled":** the task is
-> saved and graded, but it cannot actually start until the service account holds
-> that right. Grant it on your own server in **secpol.msc → Local Policies →
-> User Rights Assignment → Log on as a batch job**, add `PXX-svc_backup`, and
-> reopen the task to confirm it saves without the warning.
+   ```powershell
+   Start-ScheduledTask -TaskName "PodXX ACS Nightly Backup"
+   Start-Sleep -Seconds 20
+   (Get-ScheduledTaskInfo -TaskName "PodXX ACS Nightly Backup").LastTaskResult
+   ```
+
+   `0` means it ran.
+
+> **If you click OK, see no password prompt, and the old account is back when
+> you reopen the task:** the save was rejected rather than applied. It happens
+> when **"Do not store password"** is checked — that option asks Windows to run
+> the task without a stored credential, which this server does not allow — or
+> when Task Scheduler was not started elevated. Reopen it with right-click →
+> **Run as administrator**, uncheck the option, and save again so the password
+> prompt appears.
+
+> **If `LastTaskResult` is `267011` (0x41303) and nothing runs:** the account
+> executing the task does not hold *Log on as a batch job* on this server. It is
+> granted for domain accounts when your pod is built, so tell your instructor —
+> you can check it yourself in **secpol.msc → Local Policies → User Rights
+> Assignment → Log on as a batch job**.
 
 #### Completion Criteria
 - [ ] `PXX-svc_backup` exists in Active Directory
