@@ -1,0 +1,37 @@
+ACS FIREWALL CHANGE REQUEST - Pod{{ pod_id_padded }}
+====================================================
+
+CHANGE ID:    CHG-{{ prefix }}-2026-0552
+REQUESTED BY: ACS Network Security
+TARGET:       Pod{{ pod_id_padded }} gateway ({{ prefix }}-GW, 10.51.{{ pod_id }}.1)
+
+FINDING
+-------
+The Pod{{ pod_id_padded }} gateway contains a permissive rule described as:
+
+    {{ prefix }}-ALLOW-LAN-TO-ANY
+
+This rule permits the pod LAN to reach any destination on any port. ACS Network
+Security has requested that it be replaced with rules that permit only the
+communication the environment actually needs.
+
+THE TRAP
+--------
+Tightening a firewall without knowing what depends on it breaks production. The
+point of this lab is to let discovered system/dependency information drive the
+network change.
+
+REQUIRED SEQUENCE
+-----------------
+1. Review {{ prefix }}_Required_Communication_Matrix.csv.
+2. Run CyDeploy discovery for Pod{{ pod_id_padded }} and identify which
+   communication paths the discovered systems and applications appear to need.
+3. Record your dependency analysis on {{ prefix }}_Dependency_Worksheet.docx.
+4. Apply the approved change on {{ prefix }}-GW: remove the permissive rule and
+   permit only the required paths, with an explicit default deny.
+5. Validate that required connectivity still works after the change.
+6. Record the outcome on {{ prefix }}_Change_Validation_Report.docx and submit
+   the response file described in your lab guide.
+
+Scope: Pod{{ pod_id_padded }} and {{ prefix }}-GW only. Do not touch another
+pod's gateway, the shared domain, or the management network.

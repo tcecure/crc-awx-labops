@@ -1,0 +1,144 @@
+---
+# Verify the staged CyDeploy Community Edition SC lab (SC-M5-L1).
+#
+# STAGED and read-only:
+#   * The gateway check is OFF by default (cydeploy_gateway_check_enabled). When
+#     enabled it only reads /cf/conf/config.xml; it never writes gateway config.
+#   * Tracker synchronization is OFF by default (cydeploy_publish_progress), so
+#     current student completion percentages cannot change before go-live.
+- name: "Verify SC CyDeploy gateway state (read-only, staged off)"
+  hosts: crc_pod_gateways
+  gather_facts: false
+  ignore_unreachable: true
+  tasks:
+    - name: Read the pod gateway rule descriptions
+      ansible.builtin.raw: "grep -o '<descr>[^<]*</descr>' /cf/conf/config.xml"
+      register: cydeploy_gw_rules
+      changed_when: false
+      failed_when: false
+      when: cydeploy_gateway_check_enabled | default(false) | bool
+
+    - name: Record whether the permissive rule is still present
+      ansible.builtin.set_fact:
+        sc_cydeploy_gateway_tightened: >-
+          {{ 'false'
+             if (cydeploy_sc_permissive_rule_descr | default('P%02d-ALLOW-LAN-TO-ANY' | format(pod_id | int)))
+                in (cydeploy_gw_rules.stdout | default(''))
+             else 'true' }}
+      when:
+        - cydeploy_gateway_check_enabled | default(false) | bool
+        - cydeploy_gw_rules is defined
+        - not (cydeploy_gw_rules.skipped | default(false))
+
+- name: Verify SC CyDeploy documents and student responses on the shared DC
+  hosts: crc_shared_dcs[0]
+  gather_facts: false
+  vars:
+    pod_list: >-
+      {{ ((pods | default(pod_id) | default('') | string).split(',') | map('trim') | select('match', '^[0-9]+$') | map('int') | list)
+         if ((pods | default('') | string | trim) != '' or (pod_id | default('') | string | trim) != '')
+         else (range(1, (pod_count | default(20) | int) + 1) | list) }}
+  tasks:
+    - name: "Verify SC CyDeploy lab for Pod{{ '%02d' | format(item) }}"
+      ansible.builtin.include_role:
+        name: verify_sc_cydeploy
+      vars:
+        pod_id: "{{ item }}"
+        sc_cydeploy_gateway_tightened: >-
+          {{ hostvars['pod' ~ ('%02d' | format(item | int)) ~ '-gw'].sc_cydeploy_gateway_tightened
+             | default('unknown') }}
+      loop: "{{ pod_list }}"
+      loop_control:
+        label: "Pod{{ '%02d' | format(item) }}"
+
+- name: Consolidate SC CyDeploy results and produce report
+  hosts: localhost
+  gather_facts: false
+  connection: local
+  vars:
+    pod_list: >-
+      {{ ((pods | default(pod_id) | default('') | string).split(',') | map('trim') | select('match', '^[0-9]+$') | map('int') | list)
+         if ((pods | default('') | string | trim) != '' or (pod_id | default('') | string | trim) != '')
+         else (range(1, (pod_count | default(20) | int) + 1) | list) }}
+  tasks:
+    - name: Build SC CyDeploy per-pod results
+      ansible.builtin.set_fact:
+        pod_results: >-
+          {%- set pods_out = {} -%}
+          {%- set dc_host = groups['crc_shared_dcs'][0] -%}
+          {%- for i in pod_list -%}
+            {%- set pad = '%02d' | format(i | int) -%}
+            {%- set key = 'pod' ~ pad ~ '_sc_cydeploy_results' -%}
+            {%- set _ = pods_out.update({'pod' ~ pad: hostvars[dc_host][key] | default({})}) -%}
+          {%- endfor -%}
+          {{ pods_out }}
+
+    - name: Build SC CyDeploy tracker artifacts
+      ansible.builtin.set_fact:
+        pod_results_pub: >-
+          {%- set pods_out = {} -%}
+          {%- for pod_key, pod_val in pod_results.items() -%}
+            {%- set labs = {} -%}
+            {%- for lab_key, lab_val in pod_val.items() -%}
+              {%- set _ = labs.update({'SC-' ~ lab_key: lab_val}) -%}
+            {%- endfor -%}
+            {%- set _ = pods_out.update({pod_key: labs}) -%}
+          {%- endfor -%}
+          {{ pods_out }}
+
+    - name: Compute SC CyDeploy totals
+      ansible.builtin.set_fact:
+        total_completed: >-
+          {%- set count = [0] -%}
+          {%- for pod_val in pod_results.values() -%}
+            {%- for lab_val in pod_val.values() -%}
+              {%- if lab_val.completed | default(false) -%}{%- set _ = count.append(count.pop() + 1) -%}{%- endif -%}
+            {%- endfor -%}
+          {%- endfor -%}
+          {{ count[0] }}
+        total_incomplete: >-
+          {%- set count = [0] -%}
+          {%- for pod_val in pod_results.values() -%}
+            {%- for lab_val in pod_val.values() -%}
+              {%- if not (lab_val.completed | default(false)) -%}{%- set _ = count.append(count.pop() + 1) -%}{%- endif -%}
+            {%- endfor -%}
+          {%- endfor -%}
+          {{ count[0] }}
+
+    - name: Publish SC CyDeploy results as AWX job artifacts
+      ansible.builtin.set_stats:
+        data: "{{ pod_results_pub }}"
+        aggregate: false
+        per_host: false
+
+    - name: Report that tracker synchronization is staged off
+      ansible.builtin.debug:
+        msg: >-
+          SC CyDeploy tracker synchronization is disabled
+          (cydeploy_publish_progress=false). Results were published as job
+          artifacts only; student completion percentages were not touched.
+      when: not (cydeploy_publish_progress | default(false) | bool)
+
+    - name: Synchronize SC CyDeploy results with the DRCC portal
+      ansible.builtin.include_tasks: ../../tasks/publish-progress.yml
+      vars:
+        progress_family: SC-CYDEPLOY
+        progress_pods: "{{ pod_results_pub }}"
+      when: cydeploy_publish_progress | default(false) | bool
+
+    - name: Write SC CyDeploy verification report
+      ansible.builtin.copy:
+        content: "{{ {'course': 'CMMC SC CyDeploy Community Edition (staged)', 'pods': pod_results_pub, 'totals': {'completed': total_completed | int, 'incomplete': total_incomplete | int}} | to_nice_json }}"
+        dest: /runner/artifacts/SC_CyDeploy_Verification_Report.json
+      failed_when: false
+
+    - name: Print SC CyDeploy completion matrix
+      ansible.builtin.debug:
+        msg: |
+          === CMMC SC CyDeploy Community Edition (STAGED) ===
+          {% for i in pod_list %}
+          {%- set pad = '%02d' | format(i | int) -%}
+          {%- set pod = pod_results['pod' ~ pad] -%}
+          POD{{ pad }}: M5 [L1 {{ 'C' if pod['M5-L1'].completed | default(false) else 'I' }}]
+          {% endfor %}
+          TOTAL: completed={{ total_completed }} incomplete={{ total_incomplete }}

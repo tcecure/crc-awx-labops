@@ -1,0 +1,34 @@
+ACS MAINTENANCE REQUEST - Pod{{ pod_id_padded }}
+================================================
+
+CHANGE ID:   CHG-{{ prefix }}-2026-0431
+REQUESTED BY: ACS Security Operations
+TARGET:      {{ prefix }}-APP01 (Pod{{ pod_id_padded }} application host)
+
+REQUESTED CHANGE
+----------------
+ACS Security has determined that the service "{{ prefix }}-LabTelemetry" is not
+required for business operations. Security has requested that the service be
+stopped and disabled.
+
+WHY THIS IS NOT A ONE-STEP TASK
+-------------------------------
+A change is only defensible if you can show the state of the environment BEFORE
+the change, the state AFTER the change, and that the difference is the change
+you intended - and nothing else.
+
+REQUIRED SEQUENCE
+-----------------
+1. Run CyDeploy discovery/configuration collection and record the baseline.
+2. Apply the approved change from the change request.
+3. Run CyDeploy discovery/configuration collection again.
+4. Compare the two results.
+5. Decide whether the change achieved the intended condition, and whether
+   anything unintended also changed.
+6. Record your determination as PASS or FAIL with supporting evidence.
+
+Record your work on {{ prefix }}_Baseline_Worksheet.docx and
+{{ prefix }}_Change_Validation_Report.docx, then submit the response file
+described in your lab guide.
+
+Scope: Pod{{ pod_id_padded }} only.

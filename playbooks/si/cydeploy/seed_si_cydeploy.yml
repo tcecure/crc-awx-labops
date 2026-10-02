@@ -1,0 +1,48 @@
+---
+# Seed the staged CyDeploy Community Edition SI labs (SI-M5-L1/L2/L3).
+#
+# STAGED: do not run this against an active student pod until CYDEPLOY-GO-LIVE.md
+# has been completed. It only creates C:\CyberLab\PodNN\SI-Artifacts\CyDeploy and
+# a separate .families\SI-CYDEPLOY.seeded marker, so it never modifies the
+# existing SI labs, but it does make new lab folders visible to a student.
+#
+# Pod selection matches the existing families:
+#   pods="7"  pods="7,9,12"  pod_id=7  (default: pods 1..pod_count)
+- name: "Seed Labs: CMMC SI CyDeploy Community Edition (staged) - Shared DC"
+  hosts: crc_shared_dcs[0]
+  gather_facts: false
+  vars:
+    pod_list: >-
+      {{ ((pods | default(pod_id) | default('') | string).split(',') | map('trim') | select('match', '^[0-9]+$') | map('int') | list)
+         if ((pods | default('') | string | trim) != '' or (pod_id | default('') | string | trim) != '')
+         else (range(1, (pod_count | default(20) | int) + 1) | list) }}
+  tasks:
+    - name: Install CyDeploy Community Edition (disabled by default)
+      ansible.builtin.include_role:
+        name: cydeploy_community
+
+    - name: Copy SI CyDeploy seed script
+      ansible.windows.win_copy:
+        src: "{{ playbook_dir }}/../../../roles/seed_si_cydeploy/files/apply-si-cydeploy-lab.ps1"
+        dest: C:\Windows\Temp\apply-si-cydeploy-lab.ps1
+
+    - name: Deploy SI CyDeploy templates
+      ansible.windows.win_copy:
+        src: "{{ playbook_dir }}/../../../templates/si/cydeploy/"
+        dest: C:\CyberLab\_Templates\SI-CyDeploy\
+
+    - name: "Seed SI CyDeploy labs for Pod{{ '%02d' | format(item) }}"
+      ansible.windows.win_shell: >
+        powershell.exe -ExecutionPolicy Bypass -File C:\Windows\Temp\apply-si-cydeploy-lab.ps1
+        -PodId {{ item }} -LabId {{ cydeploy_lab_id | default('ALL') }}
+        -TemplatesPath "C:\CyberLab\_Templates\SI-CyDeploy"
+        -ForceReseed {{ '1' if (force_reseed | default(false) | bool) else '0' }}
+      loop: "{{ pod_list }}"
+      register: seed_results
+
+    - name: Show SI CyDeploy seed results
+      ansible.builtin.debug:
+        msg: "Pod{{ '%02d' | format(item.item) }}: {{ item.stdout_lines | default([]) }}"
+      loop: "{{ seed_results.results }}"
+      loop_control:
+        label: "Pod{{ '%02d' | format(item.item) }}"
