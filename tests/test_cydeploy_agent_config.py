@@ -181,3 +181,75 @@ def test_findings_document_records_the_isolation_decision() -> None:
         "CyDeployWebSetup-1.0.16226.940.msi",
     ):
         assert claim in body, f"the findings document must address {claim}"
+
+
+# --- Permanence -------------------------------------------------------------
+#
+# CyDeploy stays on a pod once installed. The pod server is still a Windows box
+# a student has administrative rights on, and it can be rebuilt or rolled back,
+# so permanence is three properties: the routine restore point contains the
+# agent, there is an idempotent way to re-assert it, and uninstalling takes a
+# deliberate act.
+
+INSTALL_PLAY = REPO / "playbooks" / "cydeploy" / "install.yml"
+ENSURE_PLAY = REPO / "playbooks" / "cydeploy" / "ensure.yml"
+REMOVE_PLAY = REPO / "playbooks" / "cydeploy" / "remove.yml"
+SI_RESET = REPO / "roles" / "seed_si_cydeploy" / "files" / "reset-si-cydeploy-labs.ps1"
+SC_RESET = REPO / "roles" / "seed_sc_cydeploy" / "files" / "reset-sc-cydeploy-labs.ps1"
+
+
+def test_install_snapshots_the_pod_with_the_agent_present(pod_vars: dict) -> None:
+    assert pod_vars["cydeploy_installed_snapshot_name"] == "cydeploy-installed"
+    assert pod_vars["cydeploy_installed_snapshot_name"] != pod_vars["cydeploy_snapshot_name"]
+    assert pod_vars["cydeploy_post_install_snapshot"] is True
+
+    body = INSTALL_PLAY.read_text()
+    install = body.index("name: cydeploy_community")
+    snapshot = body.index("cydeploy_installed_snapshot_name")
+    assert install < snapshot, (
+        "the agent-present snapshot must be taken after the install, otherwise "
+        "it is just another pre-install baseline"
+    )
+    assert "qm" in body and "snapshot" in body
+
+
+def test_an_idempotent_play_can_re_assert_the_agent() -> None:
+    body = ENSURE_PLAY.read_text()
+
+    assert "cydeploy_targets | mandatory" in body
+    assert "name: cydeploy_preflight" in body, (
+        "drift repair must not be allowed to run on a pod a student is using"
+    )
+    assert "name: cydeploy_community" in body, (
+        "repair must reuse the install role rather than keep a second copy of "
+        "the approved configuration"
+    )
+
+
+def test_uninstall_requires_a_deliberate_approval() -> None:
+    body = REMOVE_PLAY.read_text()
+
+    assert "cydeploy_removal_approved" in body
+    gate = body.index("cydeploy_removal_approved")
+    preflight = body.index("name: cydeploy_preflight")
+    assert gate < preflight, "the removal gate must be the first thing the play does"
+
+    pod_vars = yaml.safe_load(POD_VARS.read_text())
+    assert pod_vars["cydeploy_removal_approved"] is False
+
+
+@pytest.mark.parametrize("script", (SI_RESET, SC_RESET), ids=("si", "sc"))
+def test_lab_resets_leave_the_agent_installed(script: Path) -> None:
+    body = script.read_text()
+
+    for survivor in (
+        "CyDefenseService",
+        "CRC-CYDEPLOY-GUARD",
+        r"C:\CyberLab\_Tools\CyDeploy",
+        r"C:\Program Files\CyDeploy",
+        "msiexec",
+    ):
+        assert survivor not in body, (
+            f"{script.name} must not touch {survivor}; a lab reset clears the "
+            "student's artifacts, not the agent"
+        )

@@ -43,3 +43,44 @@
     - name: Install CyDeploy Community Edition
       ansible.builtin.include_role:
         name: cydeploy_community
+
+    # CyDeploy stays on the pod for good, so the pod needs a restore point that
+    # has it. Without this, the only snapshot to roll back to is the pre-install
+    # one, and a routine between-cohort rollback would quietly uninstall the
+    # agent.
+    - name: Snapshot the pod with CyDeploy present
+      when:
+        - cydeploy_install_enabled | bool
+        - cydeploy_post_install_snapshot | bool
+        - not (cydeploy_has_installed_snapshot | bool)
+      block:
+        - name: "Snapshot {{ cydeploy_expected_hostname }} as {{ cydeploy_installed_snapshot_name }}"
+          ansible.builtin.command:
+            argv:
+              - qm
+              - snapshot
+              - "{{ cydeploy_vmid }}"
+              - "{{ cydeploy_installed_snapshot_name }}"
+              - --description
+              - "CyDeploy agent {{ cydeploy_version }} installed and configured by AWX; restore point that keeps the agent"
+              - --vmstate
+              - "0"
+          delegate_to: "{{ cydeploy_proxmox_host }}"
+
+        - name: Confirm the agent-present snapshot exists
+          ansible.builtin.command:
+            argv:
+              - qm
+              - listsnapshot
+              - "{{ cydeploy_vmid }}"
+          delegate_to: "{{ cydeploy_proxmox_host }}"
+          changed_when: false
+          register: cydeploy_installed_snapshot_check
+          failed_when: cydeploy_installed_snapshot_name not in cydeploy_installed_snapshot_check.stdout
+
+    - name: Report which restore points the pod now has
+      ansible.builtin.debug:
+        msg:
+          pod: "{{ cydeploy_pod_name }}"
+          keeps_cydeploy: "qm rollback {{ cydeploy_vmid }} {{ cydeploy_installed_snapshot_name }}"
+          removes_cydeploy: "qm rollback {{ cydeploy_vmid }} {{ cydeploy_snapshot_name }}"

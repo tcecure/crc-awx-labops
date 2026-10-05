@@ -98,7 +98,7 @@ offline run, stage a report and set
 
 ---
 
-## The 16 AWX job templates
+## The 17 AWX job templates
 
 All manually launched. **No schedules.** Every one requires `cydeploy_targets` at
 launch; none may carry a default target, and none may use a `--limit` that
@@ -115,7 +115,8 @@ widens to a group of all pods.
 | CYDEPLOY - Seed SC-M5-L1 | `playbooks/sc/cydeploy/seed_sc_cydeploy.yml` |
 | CYDEPLOY - Verify SC-M5-L1 | `playbooks/sc/cydeploy/verify_sc_cydeploy.yml` |
 | CYDEPLOY - Reset SC-M5-L1 | `playbooks/sc/cydeploy/reset_sc_cydeploy.yml` |
-| CYDEPLOY - Remove and Restore Baseline | `playbooks/cydeploy/remove.yml` |
+| CYDEPLOY - Ensure Installed | `playbooks/cydeploy/ensure.yml` |
+| CYDEPLOY - Remove and Restore Baseline | `playbooks/cydeploy/remove.yml` (needs `cydeploy_removal_approved=true`) |
 
 Publication is off by default: `cydeploy_publish_progress=false` keeps verifier
 results in AWX job artifacts only, so a staged verify cannot move a live
@@ -147,6 +148,39 @@ stops the wave.
 
 ---
 
+## The agent stays on the pod
+
+CyDeploy is a permanent part of a pod member server once installed. It is not
+reinstalled per cohort and the lab resets do not remove it:
+
+- **Lab resets** only delete the pod's `SI-Artifacts\CyDeploy` and
+  `SC-Artifacts\CyDeploy` trees, the family markers, and the student's own
+  `P<NN>-CYDEPLOY-*` firewall rules. The agent's guard rules live in the
+  separate `CRC-CYDEPLOY-GUARD-*` namespace precisely so the SC-M5-L1 reset
+  cannot take them with it.
+- **Install** finishes by taking a second Proxmox snapshot,
+  `cydeploy-installed`, so the routine restore point has the agent in it.
+  `cydeploy-baseline` is the pre-install escape hatch and rolling back to it
+  removes CyDeploy.
+- **Removal** refuses to run without `cydeploy_removal_approved=true`.
+
+Two things can still lose the agent: a rebuild through
+`playbooks/provision-pod-server.yml`, and a rollback to `cydeploy-baseline`.
+After either, and after any cohort in which a student had administrative rights
+on the pod, run **CYDEPLOY - Ensure Installed**:
+
+```bash
+-e cydeploy_targets=pod19-srv,pod20-srv cydeploy_install_enabled=true
+```
+
+It reports what drifted, then reinstalls only if the MSI is not registered and
+rewrites the registry configuration, the disabled imaging helper and the egress
+guard every time. A correct pod reports no change. Preflight still applies, so
+it will refuse a pod that is assigned or was recently used — drift repair
+happens between cohorts, never underneath a working student.
+
+---
+
 ## Rollback
 
 In increasing order of severity:
@@ -155,9 +189,11 @@ In increasing order of severity:
 |-----------|--------|
 | One lab needs a retake | Reset that lab: `cydeploy_lab_id=M5-LN`. Restores the seeded baseline (Spooler, the permissive rule) and leaves other labs alone. |
 | A pod's CyDeploy state is wrong | Reset `ALL`, then reseed. |
+| The agent is missing, stopped, or misconfigured | **CYDEPLOY - Ensure Installed**. Repairs in place and keeps the pod's lab state. |
+| A pod needs its pre-lab state but must keep CyDeploy | `qm rollback <vmid> cydeploy-installed` then `qm start <vmid>`. |
 | CyDeploy itself must go | **CYDEPLOY - Remove and Restore Baseline**. Uninstalls, clears the workspace and artifacts, confirms they are gone. |
 | The pod must return to its pre-CyDeploy state | The same template with `cydeploy_restore_baseline=true` — rolls the VM back to `cydeploy-baseline`, starts it, waits for WinRM. |
-| Manual last resort | On `pve1`: `qm rollback <vmid> cydeploy-baseline` then `qm start <vmid>`. |
+| Manual last resort | On `pve1`: `qm rollback <vmid> cydeploy-baseline` then `qm start <vmid>`. This is the pre-install snapshot, so the agent is gone afterwards; follow with **CYDEPLOY - Ensure Installed** if it should come back. |
 
 A snapshot rollback discards **everything** on that pod since the snapshot. That
 is safe on an inactive pod and destructive on an active one — which is why

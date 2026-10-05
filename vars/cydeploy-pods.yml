@@ -81,6 +81,17 @@ cydeploy_vmid_base: 400
 cydeploy_snapshot_name: cydeploy-baseline
 cydeploy_require_snapshot: true
 
+# CyDeploy is a permanent part of a pod server once installed, so the install
+# finishes by taking a second snapshot with the agent present. Routine
+# between-cohort rollbacks restore this one and keep the agent;
+# cydeploy_snapshot_name is the pre-install escape hatch and reverting to it
+# removes CyDeploy from the pod.
+cydeploy_installed_snapshot_name: cydeploy-installed
+cydeploy_post_install_snapshot: true
+
+# Uninstalling is break-glass: an operator has to ask for it by name.
+cydeploy_removal_approved: false
+
 # Free space required on C: before installing CyDeploy.
 cydeploy_min_free_gb: 10
 

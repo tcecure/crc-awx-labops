@@ -2,8 +2,14 @@
 # Remove CyDeploy and the four CyDeploy labs from an approved inactive pod, and
 # optionally roll the pod back to its baseline snapshot.
 #
-# Set cydeploy_restore_baseline=true to finish with a Proxmox rollback, which is
-# the stronger of the two paths and the one the pilot proves at least once.
+# Break-glass only. CyDeploy is meant to stay on a pod once installed, so this
+# play refuses to run unless an operator passes cydeploy_removal_approved=true
+# on the launch; between cohorts the pod keeps the agent and only the lab
+# artifacts are reset, and drift is repaired with CYDEPLOY - Ensure Installed.
+#
+# Set cydeploy_restore_baseline=true to finish with a Proxmox rollback to the
+# pre-install snapshot, which is the stronger of the two paths and the one the
+# pilot proves at least once.
 - name: "CYDEPLOY - Remove and Restore Baseline"
   hosts: "{{ cydeploy_targets | mandatory }}"
   gather_facts: false
@@ -13,6 +19,16 @@
   vars_files:
     - ../../vars/cydeploy-pods.yml
   tasks:
+    - name: Require an explicit removal approval
+      ansible.builtin.assert:
+        that:
+          - cydeploy_removal_approved | default(false) | bool
+        fail_msg: >-
+          Refusing to uninstall CyDeploy. The agent is a permanent part of a pod
+          server; relaunch with cydeploy_removal_approved=true only if removal is
+          genuinely intended. To clear lab artifacts without removing the agent,
+          run the per-lab reset templates instead.
+
     - name: Run the CyDeploy preflight checks
       ansible.builtin.include_role:
         name: cydeploy_preflight

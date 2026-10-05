@@ -182,9 +182,11 @@
   changed_when: false
   register: cydeploy_vm_snapshots
 
-- name: Record whether the baseline snapshot already exists
+- name: Record which CyDeploy snapshots already exist
   ansible.builtin.set_fact:
     cydeploy_has_baseline_snapshot: "{{ cydeploy_snapshot_name in cydeploy_vm_snapshots.stdout }}"
+    cydeploy_has_installed_snapshot: >-
+      {{ (cydeploy_installed_snapshot_name | default('cydeploy-installed')) in cydeploy_vm_snapshots.stdout }}
 
 - name: Verify the installer checksum before installation is allowed
   when: cydeploy_install_enabled | bool
@@ -226,5 +228,6 @@
       result: approved
       quiet_minutes: "{{ cydeploy_pod_eligibility.quietMinutes | default('never used') }}"
       baseline_snapshot: "{{ 'present' if cydeploy_has_baseline_snapshot | bool else 'absent' }}"
+      installed_snapshot: "{{ 'present' if cydeploy_has_installed_snapshot | bool else 'absent' }}"
       free_gb: "{{ cydeploy_host_identity.result.free_gb }}"
       install_enabled: "{{ cydeploy_install_enabled | bool }}"
