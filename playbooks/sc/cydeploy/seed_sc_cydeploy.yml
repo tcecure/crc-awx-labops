@@ -1,0 +1,59 @@
+---
+# Seed the staged CyDeploy Community Edition SC lab (SC-M5-L1).
+#
+# STAGED: do not run this against an active student pod until CYDEPLOY-GO-LIVE.md
+# has been completed. This playbook only writes documents into
+# C:\CyberLab\PodNN\SC-Artifacts\CyDeploy on the shared DC. It deliberately does
+# NOT touch any pod gateway. The permissive rule the lab asks the student to
+# remove is NOT created here and does not exist yet: staging it is a go-live task
+# (see docs/cydeploy/CYDEPLOY-GO-LIVE.md), because creating it would change
+# production firewall configuration for an active class.
+#
+# Pod selection matches the existing families:
+#   pods="7"  pods="7,9,12"  pod_id=7  (default: pods 1..pod_count)
+- name: "Seed Labs: CMMC SC CyDeploy Community Edition (staged) - Shared DC"
+  hosts: crc_shared_dcs[0]
+  gather_facts: false
+  vars:
+    pod_list: >-
+      {{ ((pods | default(pod_id) | default('') | string).split(',') | map('trim') | select('match', '^[0-9]+$') | map('int') | list)
+         if ((pods | default('') | string | trim) != '' or (pod_id | default('') | string | trim) != '')
+         else (range(1, (pod_count | default(20) | int) + 1) | list) }}
+  tasks:
+    - name: Install CyDeploy Community Edition (disabled by default)
+      ansible.builtin.include_role:
+        name: cydeploy_community
+
+    - name: Copy SC CyDeploy seed script
+      ansible.windows.win_copy:
+        src: "{{ playbook_dir }}/../../../roles/seed_sc_cydeploy/files/apply-sc-cydeploy-lab.ps1"
+        dest: C:\Windows\Temp\apply-sc-cydeploy-lab.ps1
+
+    - name: Deploy SC CyDeploy templates
+      ansible.windows.win_copy:
+        src: "{{ playbook_dir }}/../../../templates/sc/cydeploy/"
+        dest: C:\CyberLab\_Templates\SC-CyDeploy\
+
+    - name: "Seed SC CyDeploy lab for Pod{{ '%02d' | format(item) }}"
+      ansible.windows.win_shell: >
+        powershell.exe -ExecutionPolicy Bypass -File C:\Windows\Temp\apply-sc-cydeploy-lab.ps1
+        -PodId {{ item }} -LabId {{ cydeploy_lab_id | default('ALL') }}
+        -TemplatesPath "C:\CyberLab\_Templates\SC-CyDeploy"
+        -ForceReseed {{ '1' if (force_reseed | default(false) | bool) else '0' }}
+      loop: "{{ pod_list }}"
+      register: seed_results
+
+    - name: Show SC CyDeploy seed results
+      ansible.builtin.debug:
+        msg: "Pod{{ '%02d' | format(item.item) }}: {{ item.stdout_lines | default([]) }}"
+      loop: "{{ seed_results.results }}"
+      loop_control:
+        label: "Pod{{ '%02d' | format(item.item) }}"
+
+    - name: Remind that the gateway condition is not seeded here
+      ansible.builtin.debug:
+        msg: >-
+          SC-M5-L1 documents are seeded and no gateway configuration was changed.
+          The permissive rule {{ cydeploy_sc_permissive_rule_descr | default('P<NN>-ALLOW-LAN-TO-ANY') }}
+          that this lab asks the student to replace must be staged separately at
+          go-live; until then the lab is documentary only.

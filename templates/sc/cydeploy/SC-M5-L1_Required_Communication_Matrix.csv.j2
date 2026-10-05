@@ -1,0 +1,7 @@
+PathId,Source,Destination,Protocol,Port,Purpose,BusinessRequired
+PATH-01,Pod{{ pod_id_padded }} LAN,10.50.1.10,TCP,389,LDAP authentication to the shared domain controller,Yes
+PATH-02,Pod{{ pod_id_padded }} LAN,10.50.1.10,TCP,445,SMB - Group Policy and logon scripts,Yes
+PATH-03,Pod{{ pod_id_padded }} LAN,10.50.1.10,UDP,53,DNS name resolution,Yes
+PATH-04,Pod{{ pod_id_padded }} LAN,10.50.1.10,TCP,88,Kerberos authentication,Yes
+PATH-05,Pod{{ pod_id_padded }} LAN,ANY,TCP,3389,Ad-hoc remote desktop to arbitrary destinations,No
+PATH-06,Pod{{ pod_id_padded }} LAN,ANY,TCP,ANY,Unrestricted outbound access,No

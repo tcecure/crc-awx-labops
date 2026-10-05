@@ -1,0 +1,86 @@
+---
+# Feature-flagged installation of CyDeploy Community Edition.
+#
+# Default behaviour is a clean skip: with cydeploy_install_enabled false this
+# role reports that installation is staged and changes nothing on the host.
+- name: Report that CyDeploy installation is staged and disabled
+  ansible.builtin.debug:
+    msg: >-
+      CyDeploy Community Edition installation is disabled
+      (cydeploy_install_enabled=false). Nothing was installed or changed on
+      {{ inventory_hostname }}. Set cydeploy_install_enabled=true and provide
+      cydeploy_installer_path once the executable has been supplied and its
+      behaviour documented.
+  when: not (cydeploy_install_enabled | bool)
+
+- name: Install CyDeploy Community Edition
+  when: cydeploy_install_enabled | bool
+  block:
+    - name: Fail fast when the installer path has not been provided
+      ansible.builtin.fail:
+        msg: >-
+          cydeploy_install_enabled is true but cydeploy_installer_path is empty.
+          Supply the installer path (and cydeploy_install_args if the vendor
+          documents silent switches) before enabling installation.
+      when: (cydeploy_installer_path | default('') | trim) == ''
+
+    - name: Ensure the CyDeploy tools directory exists
+      ansible.windows.win_file:
+        path: "{{ cydeploy_tools_dir }}"
+        state: directory
+
+    - name: Stage the CyDeploy installer on the target host
+      ansible.windows.win_copy:
+        src: "{{ cydeploy_installer_src }}"
+        dest: "{{ cydeploy_installer_path }}"
+      when: (cydeploy_installer_src | default('') | trim) != ''
+
+    - name: Confirm the CyDeploy installer is present
+      ansible.windows.win_stat:
+        path: "{{ cydeploy_installer_path }}"
+      register: cydeploy_installer_stat
+
+    - name: Fail when the installer is not present on the target host
+      ansible.builtin.fail:
+        msg: >-
+          CyDeploy installer not found at {{ cydeploy_installer_path }} on
+          {{ inventory_hostname }}. Stage the executable (or set
+          cydeploy_installer_src) and run again.
+      when: not cydeploy_installer_stat.stat.exists
+
+    - name: Check whether CyDeploy has already been installed by this role
+      ansible.windows.win_stat:
+        path: "{{ cydeploy_tools_dir }}\\.installed"
+      register: cydeploy_installed_marker
+
+    - name: Run the CyDeploy installer
+      ansible.windows.win_command: >-
+        "{{ cydeploy_installer_path }}" {{ cydeploy_install_args }}
+      register: cydeploy_install_result
+      changed_when: cydeploy_install_result.rc == 0
+      async: "{{ cydeploy_install_timeout | int }}"
+      poll: 15
+      when: not cydeploy_installed_marker.stat.exists
+
+    - name: Verify the expected CyDeploy service
+      ansible.windows.win_service_info:
+        name: "{{ cydeploy_expected_service }}"
+      register: cydeploy_service_info
+      failed_when: false
+      when: (cydeploy_expected_service | default('') | trim) != ''
+
+    - name: Report the CyDeploy service state
+      ansible.builtin.debug:
+        msg: >-
+          CyDeploy service {{ cydeploy_expected_service }} exists=
+          {{ (cydeploy_service_info.services | default([]) | length) > 0 }}
+      when: (cydeploy_expected_service | default('') | trim) != ''
+
+    - name: Record that this role installed CyDeploy
+      ansible.windows.win_copy:
+        content: |
+          CyDeploy Community Edition installed by the cydeploy_community role
+          at {{ ansible_date_time.iso8601 | default('unknown time') }}
+          installer: {{ cydeploy_installer_path }}
+        dest: "{{ cydeploy_tools_dir }}\\.installed"
+      when: not cydeploy_installed_marker.stat.exists

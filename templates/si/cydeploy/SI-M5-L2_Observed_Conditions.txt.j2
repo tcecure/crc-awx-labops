@@ -1,0 +1,39 @@
+ACS CONFIGURATION REVIEW TASKING - Pod{{ pod_id_padded }}
+=========================================================
+
+FROM:    ACS Security Operations
+TO:      Pod{{ pod_id_padded }} Security Analyst
+SUBJECT: Convert configuration/discovery output into actionable findings
+
+CyDeploy Community Edition reports what it observes. It does not know your
+organization's policy. Your job is to decide what each observation MEANS.
+
+Your CyDeploy configuration review for Pod{{ pod_id_padded }} is expected to
+surface the following observations:
+
+  OBS-01  LegacyReportViewer 3.2 installed
+  OBS-02  FileZilla Server 0.9.60 installed and listening
+  OBS-03  Remote Registry service enabled and running
+  OBS-04  Microsoft Windows Defender Antivirus enabled with current definitions
+  OBS-05  TelemetryAgent 1.4 installed, publisher unverified, no owner recorded
+
+REFERENCE DOCUMENTS
+-------------------
+  {{ prefix }}_Approved_Software_List.csv    - what ACS has approved
+  {{ prefix }}_Exception_Register.csv        - what ACS has formally excepted
+  {{ prefix }}_Configuration_Baseline.pdf    - the ACS configuration baseline
+
+TASKING
+-------
+Classify EVERY observation as exactly one of:
+
+  Finding             - violates the baseline and requires remediation
+  Expected            - matches the baseline; no action required
+  Approved Exception  - deviates from the baseline but is formally approved
+  Needs Investigation - insufficient information to decide
+
+Record your classification and a short justification for each observation on
+{{ prefix }}_CyDeploy_Findings_Worksheet.docx, then submit the response file
+described in your lab guide.
+
+Do not remediate anything in this lab. Analysis and documentation only.
