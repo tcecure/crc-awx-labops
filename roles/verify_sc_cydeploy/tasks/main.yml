@@ -1,19 +1,16 @@
 ---
-# Document/response verification for the SC CyDeploy lab. This runs on the
-# shared DC and never touches a pod gateway.
+# Verification for the SC CyDeploy lab. This runs on the pod member server and
+# grades two things together: the analyst's recorded dependency analysis, and
+# the real state of that server's own Windows Defender Firewall.
 #
-# The authoritative check of the real firewall rule state stays with the
-# existing verify_sc_gw role. This role only evaluates the analyst's recorded
-# dependency analysis and change validation evidence, and (optionally, once
-# go-live is approved) correlates it with the gateway result that the SC
-# CyDeploy verify playbook collected.
+# No gateway, shared firewall or shared domain object is read or changed. The
+# pod gateway rules remain the business of the existing verify_sc_gw role.
 - name: "Verify Pod{{ '%02d' | format(pod_id) }} SC CyDeploy evidence"
   ansible.windows.win_powershell:
     parameters:
-      GatewayRuleTightened: "{{ (sc_cydeploy_gateway_tightened | default('unknown')) | string }}"
-      PermissiveRuleDescr: "{{ cydeploy_sc_permissive_rule_descr | default('P%02d-ALLOW-LAN-TO-ANY' | format(pod_id | int)) }}"
+      PermissiveRuleDescr: "{{ cydeploy_sc_permissive_rule_descr | default('P%02d-CYDEPLOY-ALLOW-ANY-INBOUND' | format(pod_id | int)) }}"
     script: |
-      param([string]$GatewayRuleTightened = 'unknown', [string]$PermissiveRuleDescr = '')
+      param([string]$PermissiveRuleDescr = '')
 
       $podName = "Pod{{ '%02d' | format(pod_id) }}"
       $prefix = "P{{ '%02d' | format(pod_id) }}"
@@ -60,7 +57,7 @@
           if (-not (Test-Truthy $response.completed)) { $reasons.Add('response is not marked completed') }
           if ([string]::IsNullOrWhiteSpace([string]$response.analyst)) { $reasons.Add('analyst name is missing') }
           if (([string]$response.change_id) -notmatch "CHG-$prefix-2026-0552") { $reasons.Add('response does not reference the approved change request') }
-          if ([string]::IsNullOrWhiteSpace($PermissiveRuleDescr)) { $PermissiveRuleDescr = "$prefix-ALLOW-LAN-TO-ANY" }
+          if ([string]::IsNullOrWhiteSpace($PermissiveRuleDescr)) { $PermissiveRuleDescr = "$prefix-CYDEPLOY-ALLOW-ANY-INBOUND" }
           if (([string]$response.overly_broad_rule) -notmatch [regex]::Escape($PermissiveRuleDescr)) { $reasons.Add("the overly broad rule $PermissiveRuleDescr must be identified") }
 
           $required = @($response.required_paths | ForEach-Object { ([string]$_).Trim().ToUpperInvariant() })
@@ -75,17 +72,43 @@
           }
 
           if (([string]$response.dependency_source).Length -lt 15) { $reasons.Add('dependency_source must state how the dependencies were determined') }
-          if (-not (Test-Truthy $response.change_applied)) { $reasons.Add('the approved change must be applied to the pod gateway') }
+          if (-not (Test-Truthy $response.change_applied)) { $reasons.Add('the approved change must be applied to this pod server') }
           if (-not (Test-Truthy $response.connectivity_validated)) { $reasons.Add('required connectivity must be re-tested after the change') }
           if (([string]$response.determination).Trim().ToUpperInvariant() -ne 'PASS') { $reasons.Add('determination must be PASS once the change is applied and validated') }
           if (([string]$response.evidence).Length -lt 25) { $reasons.Add('determination requires supporting evidence') }
       }
 
-      if ($GatewayRuleTightened -eq 'false') {
-          $reasons.Add("the permissive rule is still present on $prefix-GW")
+      # Real rule state on this pod server, not a self-report.
+      $permissive = Get-NetFirewallRule -ErrorAction SilentlyContinue |
+          Where-Object { $_.DisplayName -eq $PermissiveRuleDescr -or $_.Name -eq $PermissiveRuleDescr }
+      if ($permissive | Where-Object { $_.Enabled -eq 'True' }) {
+          $reasons.Add("$PermissiveRuleDescr is still enabled on this server; the permissive rule must be removed or disabled")
       }
 
-      $results['M5-L1'] = New-Result $reasons 'Dependency analysis drove the gateway change, and the change was validated against the required communication matrix'
+      $scoped = @(Get-NetFirewallRule -Direction Inbound -Action Allow -ErrorAction SilentlyContinue |
+          Where-Object {
+              ($_.DisplayName -like "$prefix-CYDEPLOY-*" -or $_.Name -like "$prefix-CYDEPLOY-*") -and
+              $_.DisplayName -ne $PermissiveRuleDescr -and $_.Name -ne $PermissiveRuleDescr -and
+              $_.Enabled -eq 'True'
+          })
+
+      if ($scoped.Count -eq 0) {
+          $reasons.Add("no replacement rule found; create an enabled inbound rule named $prefix-CYDEPLOY-<purpose> that permits only the required communication")
+      } else {
+          $tightened = $false
+          foreach ($rule in $scoped) {
+              $filter = $rule | Get-NetFirewallAddressFilter
+              $ports = $rule | Get-NetFirewallPortFilter
+              $remote = @($filter.RemoteAddress)
+              $localPort = @($ports.LocalPort)
+              if ($remote -notcontains 'Any' -and $localPort -notcontains 'Any') { $tightened = $true }
+          }
+          if (-not $tightened) {
+              $reasons.Add('the replacement rule still allows any remote address or any local port; restrict it to the required sources and ports')
+          }
+      }
+
+      $results['M5-L1'] = New-Result $reasons 'Dependency analysis drove the host firewall change, and the change was validated against the required communication matrix'
       $results
   register: sc_cydeploy_verify
 

@@ -95,7 +95,23 @@ function Seed-M5-L2 {
     Set-LabMarker 'M5-L2'
 }
 
+function Seed-ChangeTargetService {
+    # SI-M5-L3 asks the analyst to stop and disable a service, then prove the
+    # before/after difference. The lab target is the Print Spooler on this pod
+    # server: a real service, not needed here, and safe to stop. Seeding re-arms
+    # it so the baseline state is genuinely running/automatic on every retake.
+    $service = Get-Service -Name 'Spooler' -ErrorAction SilentlyContinue
+    if (-not $service) {
+        Write-Host '[WARN] Spooler service not present; SI-M5-L3 baseline cannot be re-armed'
+        return
+    }
+    Set-Service -Name 'Spooler' -StartupType Automatic
+    if ($service.Status -ne 'Running') { Start-Service -Name 'Spooler' }
+    Write-Host '[SEEDED] Spooler running and automatic (SI-M5-L3 change target)'
+}
+
 function Seed-M5-L3 {
+    Seed-ChangeTargetService
     Deploy-Template 'SI-M5-L3_Change_Request.docx' "${prefix}_Change_Request.docx"
     Deploy-Template 'SI-M5-L3_Baseline_Worksheet.docx' "${prefix}_Baseline_Worksheet.docx"
     Deploy-Template 'SI-M5-L3_Change_Validation_Report.docx' "${prefix}_Change_Validation_Report.docx"

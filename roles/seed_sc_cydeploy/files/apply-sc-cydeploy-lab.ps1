@@ -77,7 +77,33 @@ function Set-LabMarker {
     Write-Host "[MARKER] _LAB_READY_SC-$Lab.txt"
 }
 
+function Seed-PermissiveFirewallRule {
+    # The seeded condition for SC-M5-L1 lives in this pod server's own Windows
+    # Defender Firewall: an inbound rule that accepts anything from anywhere.
+    # It is pod-local by construction, so no shared or gateway firewall is
+    # involved, and the reset script removes it again.
+    $ruleName = "$prefix-CYDEPLOY-ALLOW-ANY-INBOUND"
+    $baseline = Join-Path $artifactDir "${prefix}_Firewall_Baseline.csv"
+
+    Get-NetFirewallRule -Direction Inbound -ErrorAction SilentlyContinue |
+        Select-Object Name, DisplayName, Enabled, Action, Profile |
+        Export-Csv -Path $baseline -NoTypeInformation
+    Write-Host "[DEPLOYED] ${prefix}_Firewall_Baseline.csv"
+
+    if (Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue) {
+        Write-Host "[KEEP] $ruleName already exists"
+        return
+    }
+
+    New-NetFirewallRule -DisplayName $ruleName -Name $ruleName `
+        -Description 'Temporary troubleshooting rule left in place after a 2026 incident. Reviewed by nobody since.' `
+        -Direction Inbound -Action Allow -Protocol TCP -LocalPort Any -RemoteAddress Any `
+        -Profile Any -Enabled True | Out-Null
+    Write-Host "[SEEDED] $ruleName (inbound allow any/any on this pod server only)"
+}
+
 function Seed-M5-L1 {
+    Seed-PermissiveFirewallRule
     Deploy-Template 'SC-M5-L1_Firewall_Change_Request.docx' "${prefix}_Firewall_Change_Request.docx"
     Deploy-Template 'SC-M5-L1_Required_Communication_Matrix.csv' "${prefix}_Required_Communication_Matrix.csv"
     Deploy-Template 'SC-M5-L1_Dependency_Worksheet.docx' "${prefix}_Dependency_Worksheet.docx"
@@ -94,4 +120,4 @@ switch ($LabId) {
 
 New-Item -ItemType Directory -Force -Path (Split-Path $familyMarker -Parent) | Out-Null
 Set-Content -Path $familyMarker -Value (Get-Date -Format o)
-Write-Host "[COMPLETE] SC CyDeploy seeding finished for $podName ($LabId); no gateway configuration and no other SC artifacts were changed"
+Write-Host "[COMPLETE] SC CyDeploy seeding finished for $podName ($LabId); only this pod server's local firewall was touched and no other SC artifacts were changed"

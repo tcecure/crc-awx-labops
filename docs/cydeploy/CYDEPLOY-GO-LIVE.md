@@ -56,7 +56,7 @@ activation is approved.
 ### 1. Active two-week class has ended
 
 Confirm no pod shows in-progress work on the tracker
-(`https://training.status.tcecure.com/training/status`) and that the instructor
+(`https://training.digitalrcc.com/training/status`) and that the instructor
 has closed the class.
 
 ### 2. CyDeploy Community executable provided
@@ -108,8 +108,8 @@ to end. These conditions are deliberately **not** created by this branch:
 |-----|------------------------------|-------|
 | SI-M5-L1 | An undocumented asset `PNN-UNKNOWN01` on the pod LAN | Must be discoverable and absent from `PNN_Expected_Asset_Inventory.csv` |
 | SI-M5-L2 | The five observed conditions (`OBS-01`..`OBS-05`) on a pod host | Decide whether to deploy them or keep the lab as document analysis |
-| SI-M5-L3 | Service `PNN-LabTelemetry` running/automatic on `PNN-APP01` | Reset must also be extended to re-arm this service |
-| SC-M5-L1 | Permissive gateway rule described `PNN-ALLOW-LAN-TO-ANY`, or point `cydeploy_sc_permissive_rule_descr` at the existing SC permissive rule | Must not modify the existing `seed_sc_gw` role used by the live SC family |
+| SI-M5-L3 | Staged by the seed: `Spooler` running/automatic on `PODNN-SRV` | Nothing outstanding; seed arms it and reset restores it |
+| SC-M5-L1 | Staged by the seed: inbound rule `PNN-CYDEPLOY-ALLOW-ANY-INBOUND` in the local Windows Firewall on `PODNN-SRV` | Nothing outstanding; the pod gateway and the shared firewall are untouched |
 
 For each lab: seed the test pod, complete it as a student would, confirm the
 verifier PASSes, then submit a deliberately wrong response and confirm it FAILs
@@ -125,9 +125,13 @@ Confirm on the test pod: first seed deploys everything; a second seed is a no-op
 ### 12. Reset verified
 
 Confirm reset removes only `SI-Artifacts\CyDeploy` / `SC-Artifacts\CyDeploy` and
-the `SI-CYDEPLOY.seeded` / `SC-CYDEPLOY.seeded` markers — and nothing else. Then
-extend the reset path to re-arm the seeded conditions from the table above
-(`PNN-LabTelemetry`, the permissive gateway rule) so a retake is possible.
+the `SI-CYDEPLOY.seeded` / `SC-CYDEPLOY.seeded` markers — and nothing else — and
+that it restores the seeded conditions so a retake is possible: `Spooler` back to
+running/automatic, and only `PNN-CYDEPLOY-*` firewall rules removed, with an
+enabled inbound Remote Desktop rule and a running WinRM service left in place.
+
+Reset takes `cydeploy_lab_id` (`M5-L1`, `M5-L2`, `M5-L3`, `ALL` for SI; `M5-L1`,
+`ALL` for SC) so one lab can be reset without clearing a student's other work.
 
 ### 13. Tracker entries enabled
 

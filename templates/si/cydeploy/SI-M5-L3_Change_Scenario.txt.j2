@@ -3,13 +3,16 @@ ACS MAINTENANCE REQUEST - Pod{{ pod_id_padded }}
 
 CHANGE ID:   CHG-{{ prefix }}-2026-0431
 REQUESTED BY: ACS Security Operations
-TARGET:      {{ prefix }}-APP01 (Pod{{ pod_id_padded }} application host)
+TARGET:      POD{{ pod_id_padded }}-SRV (Pod{{ pod_id_padded }} application host)
 
 REQUESTED CHANGE
 ----------------
-ACS Security has determined that the service "{{ prefix }}-LabTelemetry" is not
-required for business operations. Security has requested that the service be
-stopped and disabled.
+ACS Security has determined that the Print Spooler service (service name
+"Spooler") is not required for business operations on this host. Security has
+requested that the service be stopped and disabled.
+
+The service is running and set to start automatically today, so both the before
+and the after state are observable on this server.
 
 WHY THIS IS NOT A ONE-STEP TASK
 -------------------------------
@@ -31,4 +34,5 @@ Record your work on {{ prefix }}_Baseline_Worksheet.docx and
 {{ prefix }}_Change_Validation_Report.docx, then submit the response file
 described in your lab guide.
 
-Scope: Pod{{ pod_id_padded }} only.
+Scope: POD{{ pod_id_padded }}-SRV only. Do not change a service on the domain
+controllers, on another pod, or anywhere outside your own pod server.

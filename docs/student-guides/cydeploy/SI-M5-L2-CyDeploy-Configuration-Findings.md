@@ -124,7 +124,7 @@ access to AWX.
 2. The scheduled verifier reads your response file and evidence, and decides
    PASS or FAIL.
 3. Check your result on the training tracker:
-   **https://training.status.tcecure.com/pod/XX**, or the "Check Your Progress"
+   **https://training.digitalrcc.com/pod/XX**, or the "Check Your Progress"
    banner in Guacamole.
 4. If a classification is wrong, the tracker tells you which observation ID is
    incorrect — but not the answer. Re-read the baseline and the exception

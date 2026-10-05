@@ -7,7 +7,7 @@
 
 ## Seeded condition
 
-Seeded into `C:\CyberLab\PodNN\SI-Artifacts\CyDeploy\` on the shared DC:
+Seeded into `C:\CyberLab\PodNN\SI-Artifacts\CyDeploy\` on `PODNN-SRV`:
 
 | File | Purpose |
 |------|---------|
@@ -18,11 +18,13 @@ Seeded into `C:\CyberLab\PodNN\SI-Artifacts\CyDeploy\` on the shared DC:
 | `StudentResponses\SI-M5-L3.json` | Response template, pre-populated `change_id` |
 | `_LAB_READY_SI-M5-L3.txt` | Seed marker |
 
-The change target is the service `PNN-LabTelemetry` on `PNN-APP01`.
+The change target is the Windows Print Spooler (`Spooler`) on `PODNN-SRV` — a real
+service, not needed on a lab session host, and safe to stop. The seed re-arms it to
+running/automatic so the documented baseline is genuine on every retake, and the
+verifier reads the live service state rather than trusting the student's response.
 
-**The service is not created by this seed.** Creating a per-pod dummy service (and
-confirming a pod application host exists) is a go-live task; it must not be added
-to an active student pod during the current class.
+Nothing outside the pod server is touched: no domain controller, no other pod, no
+shared service.
 
 ---
 
@@ -40,7 +42,7 @@ collecting a baseline cannot honestly claim `baseline_recorded: yes`.
 | Response field | Expected |
 |----------------|----------|
 | `change_id` | `CHG-PNN-2026-0431` |
-| `target_item` | References `LabTelemetry` |
+| `target_item` | References `Spooler` / `Print Spooler` |
 | `baseline_recorded` | `yes` / `true` |
 | `baseline_state` | Indicates running / started / enabled / automatic |
 | `post_change_state` | Indicates stopped **and** disabled |
@@ -58,28 +60,28 @@ and the seeded documents, parses `StudentResponses\SI-M5-L3.json`, and applies t
 table above. `post_change_state` must match both stopped and disabled; a state
 showing only "stopped" fails, because a stopped-but-automatic service restarts.
 
+The verifier also reads the real `Spooler` state on the host: a response claiming
+the change while the service is still running, or still set to start
+automatically, fails. A student cannot pass this lab on paperwork alone.
+
 Tracker publication is gated by `cydeploy_publish_progress` (default `false`).
 
 ---
 
 ## Reset behavior
 
-`playbooks/si/cydeploy/reset_si_cydeploy.yml` removes `SI-Artifacts\CyDeploy` and
-the `SI-CYDEPLOY.seeded` marker only.
+`playbooks/si/cydeploy/reset_si_cydeploy.yml -e cydeploy_lab_id=M5-L3` removes this
+lab's artifacts and response file, and restores `Spooler` to running/automatic so
+the next attempt starts from the documented baseline. `cydeploy_lab_id=ALL` removes
+the whole `SI-Artifacts\CyDeploy` tree and the `SI-CYDEPLOY.seeded` marker.
 
-Note: the reset does **not** restore the `PNN-LabTelemetry` service to running,
-because this branch does not create the service. When the service is added at
-go-live, the reset script must be extended to set it back to
-running/automatic — that is an explicit go-live task, tracked in
-`docs/cydeploy/CYDEPLOY-GO-LIVE.md`.
+Reset never touches non-CyDeploy artifacts or any host other than the pod server
+named in `cydeploy_targets`.
 
 ---
 
 ## Known limitations
 
-- `PNN-LabTelemetry` and `PNN-APP01` do not exist yet; the lab is documentary
-  until they do.
-- Reset does not yet re-arm the service state (see above).
 - Whether CyDeploy Community Edition supports a comparison/diff view, or whether
   students must compare two exports manually, is unknown until the executable is
   supplied. The lab is written to work either way.
@@ -93,16 +95,16 @@ running/automatic — that is an explicit go-live task, tracked in
 
 | Symptom | Action |
 |---------|--------|
-| Student applied the change before the baseline | Have them record it honestly; re-arm the service (once it exists) and re-run rather than accepting a fabricated baseline. |
+| Student applied the change before the baseline | Have them record it honestly; reseed SI-M5-L3 (which re-arms `Spooler`) and have them re-run rather than accepting a fabricated baseline. |
 | Two collections differ in dozens of places | Confirm both used identical scope; review whether the tool includes volatile data by default. |
-| Service will not stay disabled | Check for a dependent service or scheduled task restarting it — and whether the go-live service definition set a recovery action. |
+| Service will not stay disabled | Check for a dependent service or a print-related role restarting it; `Set-Service -Name Spooler -StartupType Disabled` must hold after a stop. |
 | Verifier reports `response does not reference the approved change request` | The student overwrote `change_id`. Correct value is `CHG-PNN-2026-0431`. |
 
 ---
 
 ## Expected screenshots (to add after the executable is available)
 
-1. Baseline collection showing `PNN-LabTelemetry` running/automatic.
+1. Baseline collection showing `Spooler` running/automatic.
 2. Post-change collection showing it stopped/disabled.
 3. The comparison view or side-by-side export.
 4. Tracker showing SI-M5-L3 complete.

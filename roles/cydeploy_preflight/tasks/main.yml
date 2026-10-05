@@ -1,0 +1,230 @@
+---
+# Fail-closed gate in front of every CyDeploy action.
+#
+# Each check below can only ever veto. Nothing here grants permission by
+# default: absent data, an unreachable eligibility feed, a hostname that does
+# not match the pod number or a Proxmox VM whose name is not the expected one
+# all stop the play for that host. Runs read-only; the snapshot, install, seed,
+# verify, reset and remove playbooks each include this role first.
+
+- name: Load the CyDeploy pod allowlist
+  ansible.builtin.include_vars:
+    file: "{{ playbook_dir }}/../../../vars/cydeploy-pods.yml"
+  when: approved_cydeploy_pods is not defined
+
+- name: Derive the pod identity from the inventory hostname
+  ansible.builtin.set_fact:
+    cydeploy_pod_number: "{{ (inventory_hostname | regex_search('^pod([0-9]{2})-srv$', '\\1') | first) | default('', true) }}"
+
+- name: Refuse a host that is not a pod member server
+  ansible.builtin.assert:
+    that:
+      - cydeploy_pod_number | length == 2
+      - inventory_hostname in groups['crc_pod_servers']
+      - inventory_hostname not in (groups['crc_shared_dcs'] | default([]))
+      - inventory_hostname not in (groups['crc_dcs'] | default([]))
+      - inventory_hostname not in (groups['crc_pod_gateways'] | default([]))
+      - inventory_hostname not in (groups['pve'] | default([]))
+    fail_msg: >-
+      {{ inventory_hostname }} is not a pod member server. CyDeploy may only run
+      against podNN-srv hosts; domain controllers, pod gateways and Proxmox
+      hosts are out of scope.
+
+- name: Record the pod identity
+  ansible.builtin.set_fact:
+    cydeploy_pod_name: "Pod{{ cydeploy_pod_number }}"
+    cydeploy_pod_id: "{{ cydeploy_pod_number | int }}"
+    cydeploy_expected_hostname: "POD{{ cydeploy_pod_number }}-SRV"
+    cydeploy_expected_address: "10.50.{{ cydeploy_pod_number | int }}.20"
+    cydeploy_vmid: "{{ (cydeploy_vmid_base | int) + (cydeploy_pod_number | int) }}"
+
+- name: Refuse a pod that is protected, unapproved, or on both lists
+  ansible.builtin.assert:
+    that:
+      - approved_cydeploy_pods is defined
+      - protected_pods is defined
+      - (protected_pods | intersect(approved_cydeploy_pods)) | length == 0
+      - cydeploy_pod_name in approved_cydeploy_pods
+      - cydeploy_pod_name not in protected_pods
+      - cydeploy_pod_id | int == pod_id | default(cydeploy_pod_id) | int
+    fail_msg: >-
+      {{ cydeploy_pod_name }} is not an approved CyDeploy target. Approved:
+      {{ approved_cydeploy_pods | default([]) | join(', ') }}. Protected:
+      {{ protected_pods | default([]) | join(', ') }}.
+
+- name: Check the inventory address matches the pod number
+  ansible.builtin.assert:
+    that:
+      - (ansible_host | default('')) == cydeploy_expected_address
+    fail_msg: >-
+      {{ inventory_hostname }} resolves to {{ ansible_host | default('(unset)') }}
+      but Pod{{ cydeploy_pod_number }} must be {{ cydeploy_expected_address }}.
+
+- name: Read live pod eligibility from the portal
+  ansible.builtin.uri:
+    url: "{{ cydeploy_eligibility_url }}?pod={{ cydeploy_pod_id }}&quiet_minutes={{ cydeploy_quiet_minutes }}&max_age_minutes={{ cydeploy_eligibility_max_age_minutes }}"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ cydeploy_portal_token }}"
+    return_content: true
+    status_code: 200
+  delegate_to: localhost
+  become: false
+  register: cydeploy_eligibility_response
+  no_log: true
+  when: cydeploy_eligibility_source == 'portal'
+
+- name: Read pod eligibility from the staged snapshot
+  ansible.builtin.slurp:
+    src: "{{ cydeploy_eligibility_file }}"
+  delegate_to: localhost
+  become: false
+  register: cydeploy_eligibility_snapshot
+  when: cydeploy_eligibility_source != 'portal'
+
+- name: Select the eligibility report
+  ansible.builtin.set_fact:
+    cydeploy_eligibility: >-
+      {{ (cydeploy_eligibility_response.json
+          if cydeploy_eligibility_source == 'portal'
+          else (cydeploy_eligibility_snapshot.content | b64decode | from_json)) }}
+
+- name: Find this pod in the eligibility report
+  ansible.builtin.set_fact:
+    cydeploy_pod_eligibility: >-
+      {{ (cydeploy_eligibility.pods | default([]))
+         | selectattr('podId', 'equalto', cydeploy_pod_id | int) | list | first | default({}) }}
+
+- name: Refuse to act on stale or missing eligibility data
+  ansible.builtin.assert:
+    that:
+      - cydeploy_eligibility.activitySource is defined
+      - cydeploy_eligibility.activitySource.fresh | bool
+      - cydeploy_pod_eligibility | length > 0
+      - (cydeploy_eligibility.quietMinutesRequired | int) >= (cydeploy_quiet_minutes | int)
+    fail_msg: >-
+      Pod eligibility data is unusable, so no pod is approved. Feed status
+      {{ cydeploy_eligibility.activitySource.status | default('unknown') }},
+      age {{ cydeploy_eligibility.activitySource.ageMinutes | default('unknown') }} minute(s).
+
+- name: Refuse a pod that is assigned, in use, or recently used
+  ansible.builtin.assert:
+    that:
+      - cydeploy_pod_eligibility.eligible | bool
+      - cydeploy_pod_eligibility.assignment is none or cydeploy_pod_eligibility.assignment is not defined
+      - (cydeploy_pod_eligibility.openSessions | int) == 0
+    fail_msg: >-
+      {{ cydeploy_pod_name }} is not clear: {{ cydeploy_pod_eligibility.reasons | default(['no data']) | join('; ') }}.
+
+- name: Confirm the target identifies itself as the expected pod server
+  ansible.windows.win_powershell:
+    script: |
+      $expected = "{{ cydeploy_expected_hostname }}"
+      $address = "{{ cydeploy_expected_address }}"
+      $resolved = @()
+      try {
+          $resolved = [System.Net.Dns]::GetHostAddresses("$env:COMPUTERNAME.{{ shared_domain }}") |
+              Where-Object { $_.AddressFamily -eq 'InterNetwork' } | ForEach-Object { $_.IPAddressToString }
+      } catch {
+          $resolved = @()
+      }
+      $drive = Get-PSDrive -Name C
+      $Ansible.Result = @{
+          hostname   = $env:COMPUTERNAME
+          matches    = ($env:COMPUTERNAME -eq $expected)
+          resolved   = $resolved
+          resolves   = ($resolved -contains $address)
+          free_gb    = [math]::Round($drive.Free / 1GB, 1)
+          domain     = (Get-CimInstance Win32_ComputerSystem).Domain
+      }
+  changed_when: false
+  register: cydeploy_host_identity
+
+- name: Refuse a target whose identity or free space is wrong
+  ansible.builtin.assert:
+    that:
+      - cydeploy_host_identity.result.matches | bool
+      - cydeploy_host_identity.result.resolves | bool
+      - (cydeploy_host_identity.result.free_gb | float) >= (cydeploy_min_free_gb | float)
+    fail_msg: >-
+      {{ inventory_hostname }} reports itself as
+      {{ cydeploy_host_identity.result.hostname }} resolving to
+      {{ cydeploy_host_identity.result.resolved | join(', ') }} with
+      {{ cydeploy_host_identity.result.free_gb }} GB free; expected
+      {{ cydeploy_expected_hostname }} at {{ cydeploy_expected_address }} with at
+      least {{ cydeploy_min_free_gb }} GB free.
+
+- name: Read the Proxmox VM configuration for this pod
+  ansible.builtin.command:
+    argv:
+      - qm
+      - config
+      - "{{ cydeploy_vmid }}"
+  delegate_to: "{{ cydeploy_proxmox_host }}"
+  changed_when: false
+  register: cydeploy_vm_config
+
+- name: Refuse a VM whose name is not this pod server
+  ansible.builtin.assert:
+    that:
+      - cydeploy_vm_config.stdout is search('name:\s*' ~ cydeploy_expected_hostname ~ '\s*$', multiline=True, ignorecase=True)
+    fail_msg: >-
+      Proxmox VM {{ cydeploy_vmid }} is not {{ cydeploy_expected_hostname }}.
+      Refusing to treat it as {{ cydeploy_pod_name }}.
+
+- name: List existing snapshots for this pod
+  ansible.builtin.command:
+    argv:
+      - qm
+      - listsnapshot
+      - "{{ cydeploy_vmid }}"
+  delegate_to: "{{ cydeploy_proxmox_host }}"
+  changed_when: false
+  register: cydeploy_vm_snapshots
+
+- name: Record whether the baseline snapshot already exists
+  ansible.builtin.set_fact:
+    cydeploy_has_baseline_snapshot: "{{ cydeploy_snapshot_name in cydeploy_vm_snapshots.stdout }}"
+
+- name: Verify the installer checksum before installation is allowed
+  when: cydeploy_install_enabled | bool
+  block:
+    - name: Refuse installation without an installer path and checksum
+      ansible.builtin.assert:
+        that:
+          - (cydeploy_installer_path | default('')) | length > 0
+          - (cydeploy_installer_sha256 | default('')) | length == 64
+        fail_msg: >-
+          Installation is enabled but cydeploy_installer_path and a 64 character
+          cydeploy_installer_sha256 were not both supplied. The installer is
+          never fetched from an unverified location.
+
+    - name: Checksum the staged installer
+      ansible.windows.win_stat:
+        path: "{{ cydeploy_installer_path }}"
+        checksum_algorithm: sha256
+        get_checksum: true
+      register: cydeploy_installer_stat
+
+    - name: Refuse an installer whose checksum does not match
+      ansible.builtin.assert:
+        that:
+          - cydeploy_installer_stat.stat.exists
+          - cydeploy_installer_stat.stat.checksum | lower == cydeploy_installer_sha256 | lower
+        fail_msg: >-
+          {{ cydeploy_installer_path }} does not match the approved checksum on
+          {{ inventory_hostname }}.
+
+- name: Report the preflight outcome
+  ansible.builtin.debug:
+    msg:
+      pod: "{{ cydeploy_pod_name }}"
+      host: "{{ cydeploy_host_identity.result.hostname }}"
+      address: "{{ cydeploy_expected_address }}"
+      vmid: "{{ cydeploy_vmid }}"
+      action: preflight
+      result: approved
+      quiet_minutes: "{{ cydeploy_pod_eligibility.quietMinutes | default('never used') }}"
+      baseline_snapshot: "{{ 'present' if cydeploy_has_baseline_snapshot | bool else 'absent' }}"
+      free_gb: "{{ cydeploy_host_identity.result.free_gb }}"
+      install_enabled: "{{ cydeploy_install_enabled | bool }}"

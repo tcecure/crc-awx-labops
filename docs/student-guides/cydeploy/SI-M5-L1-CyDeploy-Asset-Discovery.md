@@ -128,7 +128,7 @@ access to AWX.
 2. The scheduled verifier reads your response file and evidence, and decides
    PASS or FAIL.
 3. Check your result on the training tracker:
-   **https://training.status.tcecure.com/pod/XX** (use your pod number), or the
+   **https://training.digitalrcc.com/pod/XX** (use your pod number), or the
    "Check Your Progress" banner in Guacamole.
 4. If the lab still shows incomplete, read the reason shown for the lab — it
    tells you exactly what is missing — fix it, save, and wait for the next

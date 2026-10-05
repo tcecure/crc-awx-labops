@@ -1,0 +1,53 @@
+---
+# Take the CyDeploy baseline snapshot of an approved inactive pod server.
+#
+# The snapshot is what makes every later CyDeploy step reversible, so it runs
+# before installation and the install playbook refuses to proceed without it.
+- name: "CYDEPLOY - Snapshot Inactive Pod"
+  hosts: "{{ cydeploy_targets | mandatory }}"
+  gather_facts: false
+  serial: "{{ cydeploy_serial | default(1) }}"
+  any_errors_fatal: true
+  max_fail_percentage: 0
+  vars_files:
+    - ../../vars/cydeploy-pods.yml
+  tasks:
+    - name: Run the CyDeploy preflight checks
+      ansible.builtin.include_role:
+        name: cydeploy_preflight
+
+    - name: "Snapshot {{ cydeploy_expected_hostname }} as {{ cydeploy_snapshot_name }}"
+      ansible.builtin.command:
+        argv:
+          - qm
+          - snapshot
+          - "{{ cydeploy_vmid }}"
+          - "{{ cydeploy_snapshot_name }}"
+          - --description
+          - "CyDeploy Community Edition baseline, taken by AWX before installation"
+          - --vmstate
+          - "0"
+      delegate_to: "{{ cydeploy_proxmox_host }}"
+      when: not (cydeploy_has_baseline_snapshot | bool)
+      register: cydeploy_snapshot_created
+
+    - name: Confirm the baseline snapshot now exists
+      ansible.builtin.command:
+        argv:
+          - qm
+          - listsnapshot
+          - "{{ cydeploy_vmid }}"
+      delegate_to: "{{ cydeploy_proxmox_host }}"
+      changed_when: false
+      register: cydeploy_snapshot_check
+      failed_when: cydeploy_snapshot_name not in cydeploy_snapshot_check.stdout
+
+    - name: Report the snapshot outcome
+      ansible.builtin.debug:
+        msg:
+          pod: "{{ cydeploy_pod_name }}"
+          vmid: "{{ cydeploy_vmid }}"
+          action: snapshot
+          result: "{{ 'created' if cydeploy_snapshot_created is changed else 'already present' }}"
+          snapshot: "{{ cydeploy_snapshot_name }}"
+          rollback: "qm rollback {{ cydeploy_vmid }} {{ cydeploy_snapshot_name }}"

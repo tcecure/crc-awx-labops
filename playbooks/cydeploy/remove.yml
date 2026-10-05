@@ -1,0 +1,121 @@
+---
+# Remove CyDeploy and the four CyDeploy labs from an approved inactive pod, and
+# optionally roll the pod back to its baseline snapshot.
+#
+# Set cydeploy_restore_baseline=true to finish with a Proxmox rollback, which is
+# the stronger of the two paths and the one the pilot proves at least once.
+- name: "CYDEPLOY - Remove and Restore Baseline"
+  hosts: "{{ cydeploy_targets | mandatory }}"
+  gather_facts: false
+  serial: "{{ cydeploy_serial | default(1) }}"
+  any_errors_fatal: true
+  max_fail_percentage: 0
+  vars_files:
+    - ../../vars/cydeploy-pods.yml
+  tasks:
+    - name: Run the CyDeploy preflight checks
+      ansible.builtin.include_role:
+        name: cydeploy_preflight
+
+    - name: Copy the CyDeploy lab reset scripts
+      ansible.windows.win_copy:
+        src: "{{ item }}"
+        dest: 'C:\Windows\Temp\'
+      loop:
+        - "{{ playbook_dir }}/../../roles/seed_si_cydeploy/files/reset-si-cydeploy-labs.ps1"
+        - "{{ playbook_dir }}/../../roles/seed_sc_cydeploy/files/reset-sc-cydeploy-labs.ps1"
+
+    - name: Reset the SI CyDeploy labs
+      ansible.windows.win_shell: >
+        powershell.exe -ExecutionPolicy Bypass -File C:\Windows\Temp\reset-si-cydeploy-labs.ps1
+        -PodId {{ cydeploy_pod_id }}
+      register: cydeploy_si_reset
+      changed_when: "'[REMOVED]' in cydeploy_si_reset.stdout"
+
+    - name: Reset the SC CyDeploy labs
+      ansible.windows.win_shell: >
+        powershell.exe -ExecutionPolicy Bypass -File C:\Windows\Temp\reset-sc-cydeploy-labs.ps1
+        -PodId {{ cydeploy_pod_id }}
+      register: cydeploy_sc_reset
+      changed_when: "'[REMOVED]' in cydeploy_sc_reset.stdout"
+
+    - name: Uninstall CyDeploy Community Edition
+      ansible.builtin.include_role:
+        name: cydeploy_community
+        tasks_from: uninstall
+
+    - name: Remove the staged CyDeploy templates and scripts
+      ansible.windows.win_file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - 'C:\CyberLab\_Templates\SI-CyDeploy'
+        - 'C:\CyberLab\_Templates\SC-CyDeploy'
+        - 'C:\Windows\Temp\apply-si-cydeploy-lab.ps1'
+        - 'C:\Windows\Temp\apply-sc-cydeploy-lab.ps1'
+        - 'C:\Windows\Temp\reset-si-cydeploy-labs.ps1'
+        - 'C:\Windows\Temp\reset-sc-cydeploy-labs.ps1'
+
+    - name: Confirm no CyDeploy lab artifacts remain
+      ansible.windows.win_powershell:
+        script: |
+          $podName = "{{ cydeploy_pod_name }}"
+          $paths = @(
+              "C:\CyberLab\$podName\SI-Artifacts\CyDeploy",
+              "C:\CyberLab\$podName\SC-Artifacts\CyDeploy",
+              "C:\CyberLab\$podName\.families\SI-CYDEPLOY.seeded",
+              "C:\CyberLab\$podName\.families\SC-CYDEPLOY.seeded",
+              "{{ cydeploy_tools_dir | default('C:\\CyberLab\\_Tools\\CyDeploy') }}"
+          )
+          $Ansible.Result = @{
+              remaining = @($paths | Where-Object { Test-Path $_ })
+          }
+      changed_when: false
+      register: cydeploy_removal_check
+      failed_when: cydeploy_removal_check.result.remaining | length > 0
+
+    - name: Roll the pod back to its baseline snapshot
+      when: cydeploy_restore_baseline | default(false) | bool
+      block:
+        - name: Require the baseline snapshot to exist
+          ansible.builtin.assert:
+            that:
+              - cydeploy_has_baseline_snapshot | bool
+            fail_msg: >-
+              {{ cydeploy_pod_name }} has no {{ cydeploy_snapshot_name }}
+              snapshot to roll back to.
+
+        - name: "Roll {{ cydeploy_expected_hostname }} back to {{ cydeploy_snapshot_name }}"
+          ansible.builtin.command:
+            argv:
+              - qm
+              - rollback
+              - "{{ cydeploy_vmid }}"
+              - "{{ cydeploy_snapshot_name }}"
+          delegate_to: "{{ cydeploy_proxmox_host }}"
+
+        - name: Start the pod server again
+          ansible.builtin.command:
+            argv:
+              - qm
+              - start
+              - "{{ cydeploy_vmid }}"
+          delegate_to: "{{ cydeploy_proxmox_host }}"
+          register: cydeploy_rollback_start
+          failed_when:
+            - cydeploy_rollback_start.rc != 0
+            - "'already running' not in cydeploy_rollback_start.stderr"
+
+        - name: Wait for the pod server to answer WinRM again
+          ansible.builtin.wait_for_connection:
+            delay: 20
+            timeout: 600
+
+    - name: Report the removal outcome
+      ansible.builtin.debug:
+        msg:
+          pod: "{{ cydeploy_pod_name }}"
+          vmid: "{{ cydeploy_vmid }}"
+          action: remove
+          result: clean
+          rollback: "{{ 'baseline snapshot restored' if cydeploy_restore_baseline | default(false) | bool else 'artifacts removed in place' }}"

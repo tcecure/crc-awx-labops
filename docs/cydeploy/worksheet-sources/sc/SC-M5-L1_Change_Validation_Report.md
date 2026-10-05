@@ -17,8 +17,8 @@
 |-------|-------|
 | Permissive rule removed (name/description) | |
 | Rules added | |
-| Explicit default deny in place (Y/N) | |
-| Rule order verified (Y/N) | |
+| Every added rule scoped to a specific remote address and port (Y/N) | |
+| Remaining enabled inbound rules reviewed for a broader overlap (Y/N) | |
 
 ## 2. Post-change connectivity validation
 
@@ -55,6 +55,6 @@ Test each path you chose to keep, and at least one path you removed.
 
 | Field | Entry |
 |-------|-------|
-| I confirm the change was applied only to my assigned pod gateway | |
+| I confirm the change was applied only to the host firewall of my assigned pod server | |
 | Signature | |
 | Date | |

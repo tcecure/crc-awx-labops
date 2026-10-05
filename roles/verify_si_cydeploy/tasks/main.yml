@@ -111,7 +111,7 @@
           if (-not (Test-Truthy $response.completed)) { $reasons.Add('response is not marked completed') }
           if ([string]::IsNullOrWhiteSpace([string]$response.analyst)) { $reasons.Add('analyst name is missing') }
           if (([string]$response.change_id) -notmatch "CHG-$prefix-2026-0431") { $reasons.Add('response does not reference the approved change request') }
-          if (([string]$response.target_item) -notmatch 'LabTelemetry') { $reasons.Add('target_item must be the service named in the change request') }
+          if (([string]$response.target_item) -notmatch 'Spooler|Print Spooler') { $reasons.Add('target_item must be the service named in the change request') }
           if (-not (Test-Truthy $response.baseline_recorded)) { $reasons.Add('a baseline must be recorded before the change') }
           if (([string]$response.baseline_state) -notmatch 'running|started|enabled|automatic') { $reasons.Add('baseline_state must describe the service state before the change') }
           if (([string]$response.post_change_state) -notmatch 'stopped|disabled') { $reasons.Add('post_change_state must show the service stopped and disabled') }
@@ -119,6 +119,17 @@
           if (([string]$response.determination).Trim().ToUpperInvariant() -ne 'PASS') { $reasons.Add('determination must be PASS once the intended change is confirmed with no side effects') }
           if (([string]$response.evidence).Length -lt 25) { $reasons.Add('determination requires supporting before/after evidence') }
       }
+
+      # Real state of the change target on this server, not a self-report: the
+      # approved change is only applied once Spooler is stopped and disabled.
+      $target = Get-Service -Name 'Spooler' -ErrorAction SilentlyContinue
+      if (-not $target) {
+          $reasons.Add('the Spooler service is missing from this server; reseed SI-M5-L3 to restore the change target')
+      } else {
+          if ($target.Status -ne 'Stopped') { $reasons.Add('the Spooler service is still running; the approved change has not been applied') }
+          if ($target.StartType -ne 'Disabled') { $reasons.Add('the Spooler service is not disabled; a stopped service that still starts automatically does not satisfy the change') }
+      }
+
       $results['M5-L3'] = New-Result $reasons 'Before-and-after comparison proves the intended change occurred with no unintended change'
 
       $results

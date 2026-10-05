@@ -27,3 +27,16 @@ cydeploy_tools_dir: 'C:\CyberLab\_Tools\CyDeploy'
 
 # Seconds to allow the installer to run.
 cydeploy_install_timeout: 1800
+
+# Vendor version string, recorded on the host so a re-run of the same version is
+# a no-op instead of a reinstall.
+cydeploy_version: ""
+
+# Pod-local working directory. CyDeploy is configured to assess this pod only;
+# the scope file written here records what is deliberately out of scope.
+cydeploy_workspace_dir: 'C:\CyberLab\_Tools\CyDeploy\Workspace'
+
+# Uninstall command, verbatim from vendor docs. Unknown until the executable is
+# supplied; empty means "clean up what automation created and say so".
+cydeploy_uninstall_command: ""
+cydeploy_uninstall_ignore_errors: false

@@ -9,11 +9,11 @@
 
 Seeded by `playbooks/si/cydeploy/seed_si_cydeploy.yml` (role scripts in
 `roles/seed_si_cydeploy/files/`) into
-`C:\CyberLab\PodNN\SI-Artifacts\CyDeploy\` on the shared DC:
+`C:\CyberLab\PodNN\SI-Artifacts\CyDeploy\` on `PODNN-SRV`:
 
 | File | Purpose |
 |------|---------|
-| `PNN_Expected_Asset_Inventory.csv` | Documented inventory: DC, GW, APP01, WS01 |
+| `PNN_Expected_Asset_Inventory.csv` | Documented inventory: the pod DC, the pod gateway, `PODNN-SRV` |
 | `PNN_CyDeploy_Discovery_Worksheet.docx` | Student worksheet |
 | `PNN_Discovery_Scenario.txt` | Tasking memo |
 | `StudentResponses\SI-M5-L1.json` | Response template (pre-populated with pod scope) |
@@ -32,10 +32,10 @@ during the active class.** How it is created is a go-live decision, and it must 
 made only after the CyDeploy executable is available and its discovery behaviour
 is known. Options to evaluate at go-live:
 
-1. A lightweight per-pod VM or container on the pod LAN named `PNN-UNKNOWN01`.
-2. A second IP/alias on an existing pod host, if CyDeploy reports it as a
-   distinct asset.
-3. A dedicated non-student test pod first, in all cases.
+1. A second IP/alias on `PODNN-SRV`, if CyDeploy reports it as a distinct asset —
+   the only option that stays entirely pod-local.
+2. A lightweight per-pod VM or container on the pod LAN named `PNN-UNKNOWN01`.
+3. An inactive pod first, in all cases, with the baseline snapshot in place.
 
 Until then, SI-M5-L1 is verifiable as a documentation exercise only: the
 student's finding must name `PNN-UNKNOWN01`, which is stated in neither the
@@ -46,8 +46,8 @@ discovery output.
 
 ## Expected finding
 
-The documented inventory lists four assets. Discovery is expected to return those
-four plus `PNN-UNKNOWN01`, which has no owner and no inventory row.
+The documented inventory lists three assets. Discovery is expected to return those
+three plus `PNN-UNKNOWN01`, which has no owner and no inventory row.
 
 ## Correct answer
 

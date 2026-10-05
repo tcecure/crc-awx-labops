@@ -43,21 +43,21 @@ By the end of this lab you will be able to:
 
 | System | Where | What you use it for |
 |--------|-------|---------------------|
-| `PODXX-DC` (via Guacamole) | Your Guacamole connection list | Reading the change request and recording your response |
-| Your pod application host | Named in the change request | Applying the approved change |
+| `PODXX-SRV` (via Guacamole) | Your Guacamole connection list | Reading the change request, applying the approved change, recording your response |
 | CyDeploy Community Edition | As installed by your instructor | Before-and-after collection |
 | Your pod artifact folder | `C:\CyberLab\PodXX\SI-Artifacts\CyDeploy\` | Change request, worksheets, and your response file |
 
 ### Scope rules
 
-Collect and change **your own pod only**. Both collections must use the **same
-scope**, or the comparison is meaningless.
+Collect and change **your own pod server only** — never a domain controller,
+another pod, or anything outside `PODXX-SRV`. Both collections must use the
+**same scope**, or the comparison is meaningless.
 
 ---
 
 ## Instructions
 
-1. Connect to Guacamole and open your **PODXX-DC** connection.
+1. Connect to Guacamole and open your **PODXX-SRV** connection.
 2. Open `C:\CyberLab\PodXX\SI-Artifacts\CyDeploy\`.
 3. Read `PXX_Change_Scenario.txt` and `PXX_Change_Request.docx`. Note the change
    ID and the exact item you are authorized to change.
@@ -114,7 +114,7 @@ access to AWX.
 2. The scheduled verifier reads your response file and evidence, and decides
    PASS or FAIL.
 3. Check your result on the training tracker:
-   **https://training.status.tcecure.com/pod/XX**, or the "Check Your Progress"
+   **https://training.digitalrcc.com/pod/XX**, or the "Check Your Progress"
    banner in Guacamole.
 4. If the lab shows incomplete, the reason names the missing or inconsistent
    field. Fix it, save, and wait for the next verification run.
@@ -135,7 +135,12 @@ as observations rather than configuration differences.
 
 **The service will not stop or will not stay disabled.**
 Record exactly what happened, and tell your instructor. A change that cannot be
-applied is a FAIL with evidence — not a lab you should skip.
+applied is a FAIL with evidence — not a lab you should skip. Stopping the service
+named in the change request does not affect your lab session or your other labs.
+
+**The service named in the change request is not on my server.**
+Tell your instructor so the lab can be reseeded. Do not create a service with
+that name yourself.
 
 **CyDeploy output is hard to compare by hand.**
 Compare the specific items you listed in your baseline worksheet first, then scan

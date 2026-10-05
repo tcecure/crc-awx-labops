@@ -53,6 +53,26 @@
         path: "{{ cydeploy_tools_dir }}\\.installed"
       register: cydeploy_installed_marker
 
+    - name: Read the recorded CyDeploy version
+      ansible.windows.win_powershell:
+        script: |
+          $marker = "{{ cydeploy_tools_dir }}\.installed"
+          $version = ''
+          if (Test-Path $marker) {
+              $line = Select-String -Path $marker -Pattern '^version:\s*(.+)$' | Select-Object -First 1
+              if ($line) { $version = $line.Matches[0].Groups[1].Value.Trim() }
+          }
+          $Ansible.Result = @{ version = $version }
+      changed_when: false
+      register: cydeploy_recorded_version
+
+    - name: Decide whether this version is already installed
+      ansible.builtin.set_fact:
+        cydeploy_already_current: >-
+          {{ cydeploy_installed_marker.stat.exists
+             and (cydeploy_version | default('') | trim) != ''
+             and cydeploy_recorded_version.result.version == (cydeploy_version | trim) }}
+
     - name: Run the CyDeploy installer
       ansible.windows.win_command: >-
         "{{ cydeploy_installer_path }}" {{ cydeploy_install_args }}
@@ -60,7 +80,7 @@
       changed_when: cydeploy_install_result.rc == 0
       async: "{{ cydeploy_install_timeout | int }}"
       poll: 15
-      when: not cydeploy_installed_marker.stat.exists
+      when: not (cydeploy_already_current | bool)
 
     - name: Verify the expected CyDeploy service
       ansible.windows.win_service_info:
@@ -76,11 +96,45 @@
           {{ (cydeploy_service_info.services | default([]) | length) > 0 }}
       when: (cydeploy_expected_service | default('') | trim) != ''
 
+    - name: Create the pod-local CyDeploy workspace
+      ansible.windows.win_file:
+        path: "{{ cydeploy_workspace_dir }}"
+        state: directory
+
+    - name: Write the pod-local CyDeploy scope file
+      ansible.windows.win_copy:
+        content: |
+          # Scope for CyDeploy Community Edition on {{ inventory_hostname | upper }}.
+          #
+          # This pod only. The shared domain controllers, the management network,
+          # the Proxmox and Guacamole hosts, the Client Delivery environment and
+          # every other pod are out of scope and must never be discovered or
+          # assessed from here.
+          pod: {{ cydeploy_pod_name | default('Pod' ~ ('%02d' | format(pod_id | int))) }}
+          scope_host: {{ cydeploy_expected_hostname | default(inventory_hostname | upper) }}
+          scope_address: {{ ansible_host }}/32
+          excluded:
+            - 10.50.1.10   # DC01-P01, shared directory service
+            - 10.50.1.11   # DC02-P01, shared directory service
+            - 192.168.1.0/24  # management network
+        dest: "{{ cydeploy_workspace_dir }}\\scope.yml"
+
     - name: Record that this role installed CyDeploy
       ansible.windows.win_copy:
         content: |
           CyDeploy Community Edition installed by the cydeploy_community role
           at {{ ansible_date_time.iso8601 | default('unknown time') }}
           installer: {{ cydeploy_installer_path }}
+          version: {{ cydeploy_version | default('') }}
+          workspace: {{ cydeploy_workspace_dir }}
         dest: "{{ cydeploy_tools_dir }}\\.installed"
-      when: not cydeploy_installed_marker.stat.exists
+      when: not (cydeploy_already_current | bool)
+
+    - name: Report the installation outcome
+      ansible.builtin.debug:
+        msg:
+          pod: "{{ cydeploy_pod_name | default('Pod' ~ ('%02d' | format(pod_id | int))) }}"
+          action: install
+          result: "{{ 'already at this version' if cydeploy_already_current | bool else 'installed' }}"
+          version: "{{ cydeploy_version | default('unrecorded') }}"
+          workspace: "{{ cydeploy_workspace_dir }}"

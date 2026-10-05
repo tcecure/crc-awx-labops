@@ -44,15 +44,14 @@ Work through the required communication matrix. For every path, decide whether i
 
 ## 4. Planned rule set
 
-State the rule set you intend to apply, in order, ending with the default deny.
+State the inbound rules you intend to create on your pod server. Every rule needs a specific remote address and a specific local port; anything you do not permit is blocked by the firewall's default inbound action.
 
-| Order | Action | Source | Destination | Protocol/Port | Description |
-|-------|--------|--------|------------|---------------|-------------|
-| 1 | | | | | |
-| 2 | | | | | |
-| 3 | | | | | |
-| 4 | | | | | |
-| last | Deny | any | any | any | Explicit default deny |
+| Rule name | Remote address | Local port | Protocol | Path it covers | Why it is required |
+|-----------|---------------|-----------|----------|----------------|--------------------|
+| | | | | | |
+| | | | | | |
+| | | | | | |
+| | | | | | |
 
 ## 5. Attestation
 

@@ -1,47 +1,62 @@
 ---
-# Verify the staged CyDeploy Community Edition SI labs (SI-M5-L1/L2/L3).
+# Verify the CyDeploy Community Edition SI labs (SI-M5-L1/L2/L3) on approved
+# inactive pod member servers.
 #
-# STAGED: safe to run (read-only), but by default it does NOT publish to the
-# training tracker. Tracker publication is gated behind
-# cydeploy_publish_progress so current student completion percentages cannot
-# change before go-live.
-- name: "Verify Labs: CMMC SI CyDeploy Community Edition (staged) - Shared DC"
-  hosts: crc_shared_dcs[0]
+# cydeploy_targets is mandatory: name a CyDeploy inventory group or explicit
+# podNN-srv hosts. There is no all-pods default, and preflight re-proves on
+# every run that each target is unassigned, idle and not protected.
+#
+# Tracker and portal publication stay behind cydeploy_publish_progress so a
+# staged verify cannot move live student completion percentages.
+- name: "CYDEPLOY - Verify SI Labs"
+  hosts: "{{ cydeploy_targets | mandatory }}"
   gather_facts: false
-  vars:
-    pod_list: >-
-      {{ ((pods | default(pod_id) | default('') | string).split(',') | map('trim') | select('match', '^[0-9]+$') | map('int') | list)
-         if ((pods | default('') | string | trim) != '' or (pod_id | default('') | string | trim) != '')
-         else (range(1, (pod_count | default(20) | int) + 1) | list) }}
+  serial: "{{ cydeploy_serial | default(2) }}"
+  vars_files:
+    - ../../../vars/cydeploy-pods.yml
   tasks:
-    - name: "Verify SI CyDeploy labs for Pod{{ '%02d' | format(item) }}"
+    - name: Run the CyDeploy preflight checks
+      ansible.builtin.include_role:
+        name: cydeploy_preflight
+
+    - name: "Verify SI CyDeploy labs for {{ cydeploy_pod_name }}"
       ansible.builtin.include_role:
         name: verify_si_cydeploy
       vars:
-        pod_id: "{{ item }}"
-      loop: "{{ pod_list }}"
+        pod_id: "{{ cydeploy_pod_id }}"
 
 - name: Consolidate SI CyDeploy results and produce report
   hosts: localhost
   gather_facts: false
   connection: local
   vars:
-    pod_list: >-
-      {{ ((pods | default(pod_id) | default('') | string).split(',') | map('trim') | select('match', '^[0-9]+$') | map('int') | list)
-         if ((pods | default('') | string | trim) != '' or (pod_id | default('') | string | trim) != '')
-         else (range(1, (pod_count | default(20) | int) + 1) | list) }}
+    # Results live on the pod servers that just ran the verify role, so collect
+    # them from the per-pod fact rather than assuming a pod range. cydeploy_lab_id
+    # narrows the report to a single lab when a single lab was verified.
+    pod_results: >-
+      {%- set out = {} -%}
+      {%- set wanted = cydeploy_lab_id | default('ALL') -%}
+      {%- for host in groups['all'] -%}
+        {%- for key, value in hostvars[host].items() -%}
+          {%- if key.startswith('pod') and key.endswith('_si_cydeploy_results') -%}
+            {%- set pod_key = key | regex_replace('_si_cydeploy_results$', '') -%}
+            {%- if wanted == 'ALL' -%}
+              {%- set _ = out.update({pod_key: value}) -%}
+            {%- elif wanted in value -%}
+              {%- set _ = out.update({pod_key: {wanted: value[wanted]}}) -%}
+            {%- endif -%}
+          {%- endif -%}
+        {%- endfor -%}
+      {%- endfor -%}
+      {{ out }}
   tasks:
-    - name: Build SI CyDeploy per-pod results
-      ansible.builtin.set_fact:
-        pod_results: >-
-          {%- set pods_out = {} -%}
-          {%- set dc_host = groups['crc_shared_dcs'][0] -%}
-          {%- for i in pod_list -%}
-            {%- set pad = '%02d' | format(i | int) -%}
-            {%- set key = 'pod' ~ pad ~ '_si_cydeploy_results' -%}
-            {%- set _ = pods_out.update({'pod' ~ pad: hostvars[dc_host][key] | default({})}) -%}
-          {%- endfor -%}
-          {{ pods_out }}
+    - name: Fail when no pod produced SI CyDeploy results
+      ansible.builtin.fail:
+        msg: >-
+          No SI CyDeploy results were collected. Every target was skipped by
+          preflight, or cydeploy_targets named hosts that never ran the verify
+          role. A verify that grades nothing must not report success.
+      when: pod_results | length == 0
 
     - name: Build SI CyDeploy tracker artifacts
       ansible.builtin.set_fact:
@@ -98,17 +113,16 @@
 
     - name: Write SI CyDeploy verification report
       ansible.builtin.copy:
-        content: "{{ {'course': 'CMMC SI CyDeploy Community Edition (staged)', 'pods': pod_results_pub, 'totals': {'completed': total_completed | int, 'incomplete': total_incomplete | int}} | to_nice_json }}"
+        content: "{{ {'course': 'CMMC SI CyDeploy Community Edition', 'pods': pod_results_pub, 'totals': {'completed': total_completed | int, 'incomplete': total_incomplete | int}} | to_nice_json }}"
         dest: /runner/artifacts/SI_CyDeploy_Verification_Report.json
       failed_when: false
 
     - name: Print SI CyDeploy completion matrix
       ansible.builtin.debug:
         msg: |
-          === CMMC SI CyDeploy Community Edition (STAGED) ===
-          {% for i in pod_list %}
-          {%- set pad = '%02d' | format(i | int) -%}
-          {%- set pod = pod_results['pod' ~ pad] -%}
-          POD{{ pad }}: M5 [L1 {{ 'C' if pod['M5-L1'].completed | default(false) else 'I' }} | L2 {{ 'C' if pod['M5-L2'].completed | default(false) else 'I' }} | L3 {{ 'C' if pod['M5-L3'].completed | default(false) else 'I' }}]
+          === CMMC SI CyDeploy Community Edition ===
+          {% for pod_key in pod_results.keys() | sort %}
+          {%- set pod = pod_results[pod_key] -%}
+          {{ pod_key | upper }}: {% for lab_key in pod.keys() | sort %}{{ lab_key }} {{ 'C' if pod[lab_key].completed | default(false) else 'I' }}{{ ' | ' if not loop.last else '\n' }}{% endfor %}
           {% endfor %}
           TOTAL: completed={{ total_completed }} incomplete={{ total_incomplete }}

@@ -9,14 +9,16 @@
 | Change ID | CHG-2026-0431 (pod-specific suffix on your seeded copy) |
 | Requested by | ACS Security Operations |
 | Change type | Standard — service removal |
-| Target system | Your pod application host (`APP01`) |
-| Requested change | Stop and disable the `LabTelemetry` service |
+| Target system | Your pod server (`PODXX-SRV`) only |
+| Requested change | Stop and disable the Print Spooler service (service name `Spooler`) |
 | Approved window | Any time during the lab |
 | Rollback | Re-enable the service and return it to its previous start type |
 
 ## Justification
 
-The `LabTelemetry` service is not required for any documented business function. Services with no business purpose expand the attack surface and must be removed under the ACS configuration baseline (BL-3).
+The Print Spooler service is not required for any documented business function on this host, and no printer is attached to it. Services with no business purpose expand the attack surface and must be removed under the ACS configuration baseline (BL-3).
+
+The service is running and set to start automatically today, so both the before state and the after state are observable on your own server.
 
 ## Required validation
 
