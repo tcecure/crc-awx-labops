@@ -1,0 +1,78 @@
+---
+# CyDefense Agent (CyDeploy) installation, staged and disabled by default.
+#
+# The values below describe the vendor artifact that was actually supplied and
+# inspected: CyDefenseAgent-1.0.16226.849.msi, a WiX MSI that registers the
+# CyDefenseService and CyDefenseImagingHelper services. docs/cydeploy/
+# CYDEPLOY-AGENT-FINDINGS.md records how each value was established and why the
+# agent is installed offline with insights collection and the imaging helper
+# turned off. Do not change these without re-reading that document.
+cydeploy_install_enabled: false
+
+# Vendor artifact. The checksum is enforced by the cydeploy_preflight role
+# before the installer is allowed to run.
+cydeploy_version: 1.0.16226.849
+cydeploy_installer_filename: CyDefenseAgent-1.0.16226.849.msi
+cydeploy_installer_sha256: 1648363b29d502eb978c0ae805a91fcc11e9c73f627097adfc84c79edd232fb9
+cydeploy_product_code: '{00BDA44B-2F36-464E-BCF9-99E5BD743CA1}'
+
+# Where the MSI lives on the AWX control node, and where it is staged on the pod.
+# The MSI is 28 MB of vendor binary and is deliberately not committed; place it
+# on the control node at this path before enabling installation.
+cydeploy_installer_src: "/var/lib/awx/projects/_cydeploy/{{ cydeploy_installer_filename }}"
+cydeploy_tools_dir: 'C:\CyberLab\_Tools\CyDeploy'
+cydeploy_installer_path: 'C:\CyberLab\_Tools\CyDeploy\CyDefenseAgent-1.0.16226.849.msi'
+
+# Agent configuration, applied as MSI properties and then re-asserted in the
+# registry because an MSI repair resets them.
+#
+# ONLINE_MODE=0 and an APIURL that resolves to the pod itself keep the agent
+# offline: no enrollment, no heartbeat, no uploads, and no server-pushed jobs.
+# The pods have no outbound internet, so an online agent would only produce
+# failing heartbeats and a growing telemetry spool.
+cydeploy_online_mode: 0
+cydeploy_api_url: https://localhost:57523
+
+# The MSI ships Insights=1, which starts window-title, process, DNS, PowerShell
+# script-block and USB telemetry on the student desktop. Student activity is not
+# in scope for these labs, so it is turned off and verified.
+cydeploy_insights_enabled: false
+
+# The imaging helper exists to write multi-gigabyte VHDX images of C: on demand.
+# Any member of BUILTIN\Users can ask for one over the agent's named pipe, so the
+# helper service is disabled; nothing in these labs uses it.
+cydeploy_imaging_helper_enabled: false
+cydeploy_helper_service: CyDefenseImagingHelper
+
+# Install and uninstall commands. win_package drives msiexec, so only the
+# property list and logging are specified here.
+cydeploy_expected_service: CyDefenseService
+cydeploy_install_timeout: 1800
+cydeploy_install_log: 'C:\CyberLab\_Tools\CyDeploy\msi-install.log'
+cydeploy_uninstall_log: 'C:\CyberLab\_Tools\CyDeploy\msi-uninstall.log'
+
+# Local firewall guard. The agent accepts scan_network:<CIDR>, scan_topology and
+# create_backup from any interactive user, so the pod's own firewall is what
+# keeps a student scan inside the pod: the agent binaries get no outbound path
+# at all. The CRC-CYDEPLOY-GUARD- namespace is deliberately outside the
+# P<NN>-CYDEPLOY-* namespace the SC-M5-L1 lab and its reset own, so a student
+# firewall exercise cannot remove the guard.
+cydeploy_guard_egress: true
+cydeploy_guard_rule_prefix: CRC-CYDEPLOY-GUARD
+
+# Product install directory, used for the CVE seed drop and for the guard rules.
+cydeploy_install_dir: 'C:\Program Files\CyDeploy'
+
+# Optional CVE dataset. The MSI does not ship the cvelistv5 tree the CVE scan
+# reads, and refreshing it in-product is a git clone from GitHub, which a pod
+# cannot reach. The service seeds C:\ProgramData\CyDefense\cvelistv5 on start
+# from a cvelistv5.zip sitting in its install directory, so point this at a zip
+# staged on the control node; leave it empty and the CVE scan reports nothing.
+cydeploy_cve_dataset_src: ""
+cydeploy_cve_dataset_dest: 'C:\Program Files\CyDeploy\cvelistv5.zip'
+
+# Pod-local working directory. The scope file written here records what is
+# deliberately out of scope for this pod.
+cydeploy_workspace_dir: 'C:\CyberLab\_Tools\CyDeploy\Workspace'
+
+cydeploy_uninstall_ignore_errors: false

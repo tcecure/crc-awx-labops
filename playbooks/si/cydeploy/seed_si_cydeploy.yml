@@ -1,0 +1,51 @@
+---
+# Seed the CyDeploy Community Edition SI labs (SI-M5-L1/L2/L3) on approved
+# inactive pod member servers.
+#
+# cydeploy_targets is mandatory: a CyDeploy inventory group or explicit
+# podNN-srv hosts. There is no all-pods default, so a forgotten variable fails
+# the job instead of seeding every pod. Preflight proves on every run that the
+# target is unassigned, idle, approved and not protected.
+#
+# cydeploy_lab_id seeds a single lab (M5-L1, M5-L2, M5-L3); the default ALL
+# seeds all three.
+- name: "CYDEPLOY - Seed SI Labs"
+  hosts: "{{ cydeploy_targets | mandatory }}"
+  gather_facts: false
+  serial: "{{ cydeploy_serial | default(1) }}"
+  any_errors_fatal: true
+  max_fail_percentage: 0
+  vars_files:
+    - ../../../vars/cydeploy-pods.yml
+  tasks:
+    - name: Run the CyDeploy preflight checks
+      ansible.builtin.include_role:
+        name: cydeploy_preflight
+
+    - name: Copy SI CyDeploy seed script
+      ansible.windows.win_copy:
+        src: "{{ playbook_dir }}/../../../roles/seed_si_cydeploy/files/apply-si-cydeploy-lab.ps1"
+        dest: C:\Windows\Temp\apply-si-cydeploy-lab.ps1
+
+    - name: Deploy SI CyDeploy templates
+      ansible.windows.win_copy:
+        src: "{{ playbook_dir }}/../../../templates/si/cydeploy/"
+        dest: C:\CyberLab\_Templates\SI-CyDeploy\
+
+    - name: "Seed SI CyDeploy labs for {{ cydeploy_pod_name }}"
+      ansible.windows.win_shell: >
+        powershell.exe -ExecutionPolicy Bypass -File C:\Windows\Temp\apply-si-cydeploy-lab.ps1
+        -PodId {{ cydeploy_pod_id }} -LabId {{ cydeploy_lab_id | default('ALL') }}
+        -TemplatesPath "C:\CyberLab\_Templates\SI-CyDeploy"
+        -ForceReseed {{ '1' if (force_reseed | default(false) | bool) else '0' }}
+      register: cydeploy_si_seed
+
+    - name: Report the SI CyDeploy seed outcome
+      ansible.builtin.debug:
+        msg:
+          pod: "{{ cydeploy_pod_name }}"
+          host: "{{ cydeploy_expected_hostname }}"
+          action: "seed SI {{ cydeploy_lab_id | default('ALL') }}"
+          result: "{{ 'seeded' if cydeploy_si_seed.rc == 0 else 'failed' }}"
+          output: "{{ cydeploy_si_seed.stdout_lines | default([]) }}"
+          rollback: "CYDEPLOY - Reset SI {{ cydeploy_lab_id | default('ALL') }}, or roll back to {{ cydeploy_snapshot_name }}"

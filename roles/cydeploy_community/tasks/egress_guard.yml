@@ -1,0 +1,64 @@
+---
+# Local firewall guard for the CyDeploy agent binaries.
+#
+# The agent's named pipe grants BUILTIN\Users read and write access, and only
+# four commands check for an administrator. scan_network:<CIDR>, scan_topology,
+# discover_devices, cve_scan and create_backup are all accepted from an ordinary
+# interactive session, which on a pod member server means the student. Nothing in
+# the four CyDeploy labs needs the agent to reach another machine: discovery,
+# application inventory, CVE matching, the Spooler change check and the firewall
+# change check are all host-local. So the agent's three binaries are denied any
+# outbound path, for every protocol and profile, and a student typing
+# scan_network:10.50.1.0/24 at the tray gets an empty result instead of a sweep
+# of the shared domain controllers.
+#
+# These rules are outbound and program-scoped: they do not touch RDP, WinRM or
+# anything else on the host, and they live outside the P<NN>-CYDEPLOY-* namespace
+# that the SC-M5-L1 lab and its reset create and delete.
+- name: Deny the CyDeploy agent binaries any outbound network path
+  community.windows.win_firewall_rule:
+    name: "{{ cydeploy_guard_rule_prefix }}-{{ item.key }}"
+    program: "{{ item.value }}"
+    direction: out
+    action: block
+    protocol: any
+    profiles: domain,private,public
+    enabled: true
+    state: present
+    description: >-
+      CyDeploy lab guard. Keeps the CyDefense agent's scans inside this pod
+      member server. Managed by the cydeploy_community Ansible role; do not
+      delete. See docs/cydeploy/CYDEPLOY-AGENT-FINDINGS.md.
+  loop: "{{ cydeploy_guard_programs | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  vars:
+    cydeploy_guard_programs:
+      service: "{{ cydeploy_install_dir }}\\CyDefenseService.exe"
+      tray: "{{ cydeploy_install_dir }}\\CyDefenseTray.exe"
+      imaging: "{{ cydeploy_install_dir }}\\CyDefenseImagingHelper.exe"
+
+# ICMP echo is how the network scanner finds live hosts, and a program-scoped
+# block covers it only when the protocol is named explicitly on some builds, so
+# it is denied again by protocol for the same three binaries.
+- name: Deny the CyDeploy agent binaries outbound ICMP
+  community.windows.win_firewall_rule:
+    name: "{{ cydeploy_guard_rule_prefix }}-icmp-{{ item.key }}"
+    program: "{{ item.value }}"
+    direction: out
+    action: block
+    protocol: icmpv4
+    profiles: domain,private,public
+    enabled: true
+    state: present
+    description: >-
+      CyDeploy lab guard (ICMP). Managed by the cydeploy_community Ansible
+      role; do not delete.
+  loop: "{{ cydeploy_guard_programs | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  vars:
+    cydeploy_guard_programs:
+      service: "{{ cydeploy_install_dir }}\\CyDefenseService.exe"
+      tray: "{{ cydeploy_install_dir }}\\CyDefenseTray.exe"
+      imaging: "{{ cydeploy_install_dir }}\\CyDefenseImagingHelper.exe"

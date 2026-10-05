@@ -1,0 +1,75 @@
+---
+# Make CyDeploy's presence on a pod server true again.
+#
+# CyDeploy is permanent once installed, but a pod server is a Windows box a
+# student has administrative rights on, and it can be rebuilt by
+# provision-pod-server.yml or rolled back in Proxmox. Any of those can leave
+# the agent missing, stopped, or no longer in the approved configuration.
+#
+# This play re-asserts all of it and is safe to run repeatedly: the agent is
+# reinstalled only if the MSI is not already registered, and the registry
+# values, the disabled imaging helper and the egress guard rules are written
+# every time. A pod that is already correct reports no change.
+#
+# Run it after a pod rebuild, after a Proxmox rollback, and between cohorts.
+# The preflight still refuses a pod that is assigned or recently used, so a
+# pod cannot be repaired underneath a working student.
+- name: "CYDEPLOY - Ensure Installed"
+  hosts: "{{ cydeploy_targets | mandatory }}"
+  gather_facts: false
+  serial: "{{ cydeploy_serial | default(2) }}"
+  any_errors_fatal: true
+  max_fail_percentage: 0
+  vars_files:
+    - ../../vars/cydeploy-pods.yml
+  tasks:
+    - name: Run the CyDeploy preflight checks
+      ansible.builtin.include_role:
+        name: cydeploy_preflight
+
+    - name: Require a recorded isolation finding before touching the agent
+      ansible.builtin.assert:
+        that:
+          - cydeploy_isolation_verified | default(false) | bool
+        fail_msg: >-
+          cydeploy_isolation_verified is not set. See
+          docs/cydeploy/CYDEPLOY-AGENT-FINDINGS.md.
+      when: cydeploy_install_enabled | bool
+
+    - name: Read the agent state before repairing anything
+      ansible.windows.win_powershell:
+        script: |
+          $svc = Get-Service -Name '{{ cydeploy_expected_service | default('CyDefenseService') }}' -ErrorAction SilentlyContinue
+          $cfg = Get-ItemProperty -Path 'HKLM:\SOFTWARE\CyDefense\Config' -ErrorAction SilentlyContinue
+          $guard = @(Get-NetFirewallRule -DisplayName '{{ cydeploy_guard_rule_prefix | default('CRC-CYDEPLOY-GUARD') }}-*' -ErrorAction SilentlyContinue |
+              Where-Object { $_.Enabled -eq 'True' -and $_.Action -eq 'Block' })
+          $Ansible.Result = @{
+              installed   = [bool]$svc
+              state       = if ($svc) { [string]$svc.Status } else { 'absent' }
+              start       = if ($svc) { [string]$svc.StartType } else { 'absent' }
+              online      = if ($cfg) { [int]$cfg.Online } else { -1 }
+              insights    = if ($cfg) { [int]$cfg.Insights } else { -1 }
+              guard_rules = $guard.Count
+          }
+      changed_when: false
+      register: cydeploy_state_before
+
+    - name: Report the drift found on this pod
+      ansible.builtin.debug:
+        msg:
+          pod: "{{ cydeploy_pod_name }}"
+          action: ensure
+          before: "{{ cydeploy_state_before.result }}"
+          drifted: >-
+            {{ not (cydeploy_state_before.result.installed | bool)
+               or cydeploy_state_before.result.state != 'Running'
+               or cydeploy_state_before.result.start != 'Automatic'
+               or cydeploy_state_before.result.online | int != cydeploy_online_mode | default(0) | int
+               or cydeploy_state_before.result.insights | int != (1 if cydeploy_insights_enabled | default(false) | bool else 0)
+               or ((cydeploy_guard_egress | default(true) | bool) and cydeploy_state_before.result.guard_rules | int == 0) }}
+
+    # The role is the single definition of the approved configuration, so
+    # repair is the install path run again rather than a second copy of it.
+    - name: Re-assert the approved CyDeploy configuration
+      ansible.builtin.include_role:
+        name: cydeploy_community

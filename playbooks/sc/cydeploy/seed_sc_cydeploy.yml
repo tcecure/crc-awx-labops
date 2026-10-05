@@ -1,0 +1,52 @@
+---
+# Seed the CyDeploy Community Edition SC lab (SC-M5-L1) on approved inactive pod
+# member servers.
+#
+# The seeded condition is a permissive INBOUND rule on the pod server's own
+# Windows Defender Firewall, named P<NN>-CYDEPLOY-ALLOW-ANY-INBOUND. No pod
+# gateway, campus firewall or shared service is touched: the student's work and
+# the verifier both stay inside this one host.
+#
+# cydeploy_targets is mandatory: there is no all-pods default, so a forgotten
+# variable fails the job instead of seeding every pod.
+- name: "CYDEPLOY - Seed SC Labs"
+  hosts: "{{ cydeploy_targets | mandatory }}"
+  gather_facts: false
+  serial: "{{ cydeploy_serial | default(1) }}"
+  any_errors_fatal: true
+  max_fail_percentage: 0
+  vars_files:
+    - ../../../vars/cydeploy-pods.yml
+  tasks:
+    - name: Run the CyDeploy preflight checks
+      ansible.builtin.include_role:
+        name: cydeploy_preflight
+
+    - name: Copy SC CyDeploy seed script
+      ansible.windows.win_copy:
+        src: "{{ playbook_dir }}/../../../roles/seed_sc_cydeploy/files/apply-sc-cydeploy-lab.ps1"
+        dest: C:\Windows\Temp\apply-sc-cydeploy-lab.ps1
+
+    - name: Deploy SC CyDeploy templates
+      ansible.windows.win_copy:
+        src: "{{ playbook_dir }}/../../../templates/sc/cydeploy/"
+        dest: C:\CyberLab\_Templates\SC-CyDeploy\
+
+    - name: "Seed SC CyDeploy lab for {{ cydeploy_pod_name }}"
+      ansible.windows.win_shell: >
+        powershell.exe -ExecutionPolicy Bypass -File C:\Windows\Temp\apply-sc-cydeploy-lab.ps1
+        -PodId {{ cydeploy_pod_id }} -LabId {{ cydeploy_lab_id | default('ALL') }}
+        -TemplatesPath "C:\CyberLab\_Templates\SC-CyDeploy"
+        -ForceReseed {{ '1' if (force_reseed | default(false) | bool) else '0' }}
+      register: cydeploy_sc_seed
+
+    - name: Report the SC CyDeploy seed outcome
+      ansible.builtin.debug:
+        msg:
+          pod: "{{ cydeploy_pod_name }}"
+          host: "{{ cydeploy_expected_hostname }}"
+          action: "seed SC {{ cydeploy_lab_id | default('ALL') }}"
+          result: "{{ 'seeded' if cydeploy_sc_seed.rc == 0 else 'failed' }}"
+          seeded_condition: "P{{ '%02d' | format(cydeploy_pod_id | int) }}-CYDEPLOY-ALLOW-ANY-INBOUND on the local firewall only"
+          output: "{{ cydeploy_sc_seed.stdout_lines | default([]) }}"
+          rollback: "CYDEPLOY - Reset SC-M5-L1, or roll back to {{ cydeploy_snapshot_name }}"

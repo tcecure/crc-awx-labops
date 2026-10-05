@@ -1,0 +1,116 @@
+---
+# Pod allowlist and safety settings for the CyDeploy Community Edition labs.
+#
+# Two lists govern every CyDeploy job. A pod must appear in
+# approved_cydeploy_pods and must not appear in protected_pods; the preflight
+# also fails outright if the two lists ever intersect, so an edit that adds a
+# live pod to the allowlist without removing it from the protected list stops
+# the rollout instead of running it.
+#
+# These lists are a static backstop. The authoritative, live answer comes from
+# the portal pod eligibility feed (see cydeploy_eligibility_url), which knows who
+# currently holds a seat and when each pod was last used through Guacamole.
+
+# Pods held by current learners. Never a CyDeploy target.
+protected_pods:
+  - Pod01 # Cohort 3 learner, access to 2026-10-18
+  - Pod02 # Cohort 3 learner, access to 2026-10-18
+  - Pod03 # Cohort 3 learner, access to 2026-10-18
+  - Pod04 # Cohort 4 learner, access 2026-10-04 to 2026-10-18
+
+# Pods CyDeploy may be deployed to, in rollout order.
+approved_cydeploy_pods:
+  - Pod19
+  - Pod20
+  - Pod15
+  - Pod16
+  - Pod17
+  - Pod18
+  - Pod05
+  - Pod06
+  - Pod07
+  - Pod08
+  - Pod09
+  - Pod10
+  - Pod11
+  - Pod12
+  - Pod13
+  - Pod14
+
+# Rollout waves, mirroring the inventory groups of the same name.
+cydeploy_pilot_pods:
+  - Pod19
+  - Pod20
+cydeploy_wave_two:
+  - Pod15
+  - Pod16
+  - Pod17
+  - Pod18
+cydeploy_wave_three:
+  - Pod05
+  - Pod06
+  - Pod07
+  - Pod08
+  - Pod09
+  - Pod10
+  - Pod11
+  - Pod12
+  - Pod13
+  - Pod14
+
+# Live eligibility feed. Read-only, token authenticated, served by the portal
+# from the cohort assignments it owns plus the Guacamole session history the
+# read-only collector ships to it.
+cydeploy_eligibility_url: "https://my.digitalrcc.com/api/integrations/awx/pod-eligibility"
+
+# Offline alternative: a JSON snapshot of the same shape, produced by
+# scripts/cydeploy-pod-eligibility.sh and staged on the control node. Used when
+# cydeploy_eligibility_source is 'file'.
+cydeploy_eligibility_source: portal
+cydeploy_eligibility_file: /runner/project/.cydeploy-eligibility.json
+
+# A pod must have been quiet this long before automation may touch it, and the
+# eligibility data itself must be no older than this.
+cydeploy_quiet_minutes: 120
+cydeploy_eligibility_max_age_minutes: 30
+
+# Proxmox facts used to prove a target is the VM we think it is, and to snapshot
+# it before anything is installed. VM id is 400 + pod number for POD01-20-SRV.
+cydeploy_proxmox_host: pve1
+cydeploy_vmid_base: 400
+cydeploy_snapshot_name: cydeploy-baseline
+cydeploy_require_snapshot: true
+
+# CyDeploy is a permanent part of a pod server once installed, so the install
+# finishes by taking a second snapshot with the agent present. Routine
+# between-cohort rollbacks restore this one and keep the agent;
+# cydeploy_snapshot_name is the pre-install escape hatch and reverting to it
+# removes CyDeploy from the pod.
+cydeploy_installed_snapshot_name: cydeploy-installed
+cydeploy_post_install_snapshot: true
+
+# Uninstalling is break-glass: an operator has to ask for it by name.
+cydeploy_removal_approved: false
+
+# Free space required on C: before installing CyDeploy.
+cydeploy_min_free_gb: 10
+
+# The approved vendor artifact. These live here, not only in the role defaults,
+# because the preflight role reads them before cydeploy_community is included and
+# a role default cannot gate another role's run.
+#
+# docs/cydeploy/CYDEPLOY-AGENT-FINDINGS.md records how the checksum, the product
+# code and the configuration below were established from the MSI itself.
+cydeploy_version: 1.0.16226.849
+cydeploy_installer_filename: CyDefenseAgent-1.0.16226.849.msi
+cydeploy_installer_sha256: 1648363b29d502eb978c0ae805a91fcc11e9c73f627097adfc84c79edd232fb9
+cydeploy_installer_path: 'C:\CyberLab\_Tools\CyDeploy\CyDefenseAgent-1.0.16226.849.msi'
+cydeploy_installer_src: "/var/lib/awx/projects/_cydeploy/CyDefenseAgent-1.0.16226.849.msi"
+cydeploy_product_code: '{00BDA44B-2F36-464E-BCF9-99E5BD743CA1}'
+
+# The isolation question is answered and recorded: the agent cannot confine
+# itself, so the cydeploy_community role denies its binaries any outbound path
+# and asserts the guard is in place before it reports success. See the findings
+# document. Installation is still off by default; an operator supplies
+# cydeploy_install_enabled=true per run.
+cydeploy_isolation_verified: true

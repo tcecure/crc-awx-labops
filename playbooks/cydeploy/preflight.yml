@@ -1,0 +1,18 @@
+---
+# CyDeploy preflight. Read-only: proves a pod may be touched, changes nothing.
+#
+# cydeploy_targets is mandatory and must name a CyDeploy inventory group or an
+# explicit podNN-srv host. There is no default, so a job that forgets it fails
+# instead of selecting every pod.
+- name: "CYDEPLOY - Preflight Inactive Pod"
+  hosts: "{{ cydeploy_targets | mandatory }}"
+  gather_facts: false
+  serial: "{{ cydeploy_serial | default(1) }}"
+  any_errors_fatal: true
+  max_fail_percentage: 0
+  vars_files:
+    - ../../vars/cydeploy-pods.yml
+  tasks:
+    - name: Run the CyDeploy preflight checks
+      ansible.builtin.include_role:
+        name: cydeploy_preflight

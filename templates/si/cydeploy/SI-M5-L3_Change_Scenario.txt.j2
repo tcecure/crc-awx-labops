@@ -1,0 +1,38 @@
+ACS MAINTENANCE REQUEST - Pod{{ pod_id_padded }}
+================================================
+
+CHANGE ID:   CHG-{{ prefix }}-2026-0431
+REQUESTED BY: ACS Security Operations
+TARGET:      POD{{ pod_id_padded }}-SRV (Pod{{ pod_id_padded }} application host)
+
+REQUESTED CHANGE
+----------------
+ACS Security has determined that the Print Spooler service (service name
+"Spooler") is not required for business operations on this host. Security has
+requested that the service be stopped and disabled.
+
+The service is running and set to start automatically today, so both the before
+and the after state are observable on this server.
+
+WHY THIS IS NOT A ONE-STEP TASK
+-------------------------------
+A change is only defensible if you can show the state of the environment BEFORE
+the change, the state AFTER the change, and that the difference is the change
+you intended - and nothing else.
+
+REQUIRED SEQUENCE
+-----------------
+1. Run CyDeploy discovery/configuration collection and record the baseline.
+2. Apply the approved change from the change request.
+3. Run CyDeploy discovery/configuration collection again.
+4. Compare the two results.
+5. Decide whether the change achieved the intended condition, and whether
+   anything unintended also changed.
+6. Record your determination as PASS or FAIL with supporting evidence.
+
+Record your work on {{ prefix }}_Baseline_Worksheet.docx and
+{{ prefix }}_Change_Validation_Report.docx, then submit the response file
+described in your lab guide.
+
+Scope: POD{{ pod_id_padded }}-SRV only. Do not change a service on the domain
+controllers, on another pod, or anywhere outside your own pod server.
