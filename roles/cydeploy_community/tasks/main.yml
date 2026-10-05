@@ -1,28 +1,38 @@
 ---
-# Feature-flagged installation of CyDeploy Community Edition.
+# Feature-flagged installation of the CyDefense Agent on one pod member server.
 #
 # Default behaviour is a clean skip: with cydeploy_install_enabled false this
 # role reports that installation is staged and changes nothing on the host.
+#
+# When it does run, the order matters. The agent is configured before its
+# services are allowed to do any work: the MSI is installed with the service
+# left stopped, the registry is corrected (the MSI ships Insights=1), the
+# imaging helper is disabled, the egress guard is written, and only then is the
+# service started. docs/cydeploy/CYDEPLOY-AGENT-FINDINGS.md explains why.
 - name: Report that CyDeploy installation is staged and disabled
   ansible.builtin.debug:
     msg: >-
-      CyDeploy Community Edition installation is disabled
+      CyDeploy agent installation is disabled
       (cydeploy_install_enabled=false). Nothing was installed or changed on
-      {{ inventory_hostname }}. Set cydeploy_install_enabled=true and provide
-      cydeploy_installer_path once the executable has been supplied and its
-      behaviour documented.
+      {{ inventory_hostname }}. Set cydeploy_install_enabled=true once the
+      vendor MSI is staged on the control node at {{ cydeploy_installer_src }}.
   when: not (cydeploy_install_enabled | bool)
 
-- name: Install CyDeploy Community Edition
+- name: Install and configure the CyDeploy agent
   when: cydeploy_install_enabled | bool
   block:
     - name: Fail fast when the installer path has not been provided
       ansible.builtin.fail:
         msg: >-
           cydeploy_install_enabled is true but cydeploy_installer_path is empty.
-          Supply the installer path (and cydeploy_install_args if the vendor
-          documents silent switches) before enabling installation.
       when: (cydeploy_installer_path | default('') | trim) == ''
+
+    - name: Fail fast when the installer checksum has not been pinned
+      ansible.builtin.fail:
+        msg: >-
+          cydeploy_installer_sha256 is empty. The installer checksum must be
+          pinned before any pod is allowed to run a vendor binary.
+      when: (cydeploy_installer_sha256 | default('') | trim) == ''
 
     - name: Ensure the CyDeploy tools directory exists
       ansible.windows.win_file:
@@ -35,106 +45,189 @@
         dest: "{{ cydeploy_installer_path }}"
       when: (cydeploy_installer_src | default('') | trim) != ''
 
-    - name: Confirm the CyDeploy installer is present
+    - name: Read the checksum of the staged installer
       ansible.windows.win_stat:
         path: "{{ cydeploy_installer_path }}"
+        checksum_algorithm: sha256
+        get_checksum: true
       register: cydeploy_installer_stat
 
     - name: Fail when the installer is not present on the target host
       ansible.builtin.fail:
         msg: >-
           CyDeploy installer not found at {{ cydeploy_installer_path }} on
-          {{ inventory_hostname }}. Stage the executable (or set
-          cydeploy_installer_src) and run again.
+          {{ inventory_hostname }}.
       when: not cydeploy_installer_stat.stat.exists
 
-    - name: Check whether CyDeploy has already been installed by this role
-      ansible.windows.win_stat:
-        path: "{{ cydeploy_tools_dir }}\\.installed"
-      register: cydeploy_installed_marker
+    - name: Fail when the staged installer is not the approved artifact
+      ansible.builtin.fail:
+        msg: >-
+          Installer checksum mismatch on {{ inventory_hostname }}. Expected
+          {{ cydeploy_installer_sha256 }}, found
+          {{ cydeploy_installer_stat.stat.checksum }}. Nothing was installed.
+      when: cydeploy_installer_stat.stat.checksum | lower != cydeploy_installer_sha256 | lower
 
-    - name: Read the recorded CyDeploy version
-      ansible.windows.win_powershell:
-        script: |
-          $marker = "{{ cydeploy_tools_dir }}\.installed"
-          $version = ''
-          if (Test-Path $marker) {
-              $line = Select-String -Path $marker -Pattern '^version:\s*(.+)$' | Select-Object -First 1
-              if ($line) { $version = $line.Matches[0].Groups[1].Value.Trim() }
-          }
-          $Ansible.Result = @{ version = $version }
-      changed_when: false
-      register: cydeploy_recorded_version
-
-    - name: Decide whether this version is already installed
-      ansible.builtin.set_fact:
-        cydeploy_already_current: >-
-          {{ cydeploy_installed_marker.stat.exists
-             and (cydeploy_version | default('') | trim) != ''
-             and cydeploy_recorded_version.result.version == (cydeploy_version | trim) }}
-
-    - name: Run the CyDeploy installer
-      ansible.windows.win_command: >-
-        "{{ cydeploy_installer_path }}" {{ cydeploy_install_args }}
+    # The MSI properties cover the first service start; the registry tasks below
+    # make the same settings survive a repair or an operator reinstall.
+    - name: Install the CyDefense Agent MSI offline
+      ansible.windows.win_package:
+        path: "{{ cydeploy_installer_path }}"
+        product_id: "{{ cydeploy_product_code }}"
+        state: present
+        arguments: >-
+          ONLINE_MODE={{ cydeploy_online_mode }}
+          APIURL={{ cydeploy_api_url }}
+          /norestart
+          /l*v "{{ cydeploy_install_log }}"
       register: cydeploy_install_result
-      changed_when: cydeploy_install_result.rc == 0
       async: "{{ cydeploy_install_timeout | int }}"
       poll: 15
-      when: not (cydeploy_already_current | bool)
 
-    - name: Verify the expected CyDeploy service
-      ansible.windows.win_service_info:
+    - name: Stop the CyDefense service while its configuration is corrected
+      ansible.windows.win_service:
         name: "{{ cydeploy_expected_service }}"
-      register: cydeploy_service_info
+        state: stopped
       failed_when: false
-      when: (cydeploy_expected_service | default('') | trim) != ''
 
-    - name: Report the CyDeploy service state
-      ansible.builtin.debug:
-        msg: >-
-          CyDeploy service {{ cydeploy_expected_service }} exists=
-          {{ (cydeploy_service_info.services | default([]) | length) > 0 }}
-      when: (cydeploy_expected_service | default('') | trim) != ''
+    - name: Apply the pod-local agent configuration
+      ansible.windows.win_regedit:
+        path: HKLM:\SOFTWARE\CyDefense\Config
+        name: "{{ item.name }}"
+        data: "{{ item.data }}"
+        type: "{{ item.type }}"
+      loop:
+        # Heartbeat, enrollment, job polling and uploads all hang off Online.
+        - { name: Online, data: "{{ cydeploy_online_mode | int }}", type: dword }
+        # Shipped as 1 by the MSI. Student keystroke-adjacent telemetry is not
+        # in scope for these labs.
+        - { name: Insights, data: "{{ 1 if cydeploy_insights_enabled | bool else 0 }}", type: dword }
+        - { name: System, data: "{{ cydeploy_api_url }}", type: string }
+        - { name: AllowInvalidServerCert, data: 0, type: dword }
+        - { name: ScanOutputFolder, data: "{{ cydeploy_workspace_dir }}\\Exports", type: string }
+        - { name: BackupTarget, data: "{{ cydeploy_workspace_dir }}\\Backups", type: string }
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Disable the digital-twin imaging helper
+      ansible.windows.win_service:
+        name: "{{ cydeploy_helper_service }}"
+        state: stopped
+        start_mode: disabled
+      when: not (cydeploy_imaging_helper_enabled | bool)
+      failed_when: false
+
+    - name: Keep the CyDeploy agent binaries off every network
+      ansible.builtin.include_tasks: egress_guard.yml
+      when: cydeploy_guard_egress | bool
 
     - name: Create the pod-local CyDeploy workspace
       ansible.windows.win_file:
-        path: "{{ cydeploy_workspace_dir }}"
+        path: "{{ item }}"
         state: directory
+      loop:
+        - "{{ cydeploy_workspace_dir }}"
+        - "{{ cydeploy_workspace_dir }}\\Exports"
+        - "{{ cydeploy_workspace_dir }}\\Backups"
+
+    - name: Stage the CVE dataset for offline seeding
+      ansible.windows.win_copy:
+        src: "{{ cydeploy_cve_dataset_src }}"
+        dest: "{{ cydeploy_cve_dataset_dest }}"
+      when: (cydeploy_cve_dataset_src | default('') | trim) != ''
 
     - name: Write the pod-local CyDeploy scope file
       ansible.windows.win_copy:
         content: |
-          # Scope for CyDeploy Community Edition on {{ inventory_hostname | upper }}.
+          # Scope for the CyDeploy agent on {{ inventory_hostname | upper }}.
           #
           # This pod only. The shared domain controllers, the management network,
           # the Proxmox and Guacamole hosts, the Client Delivery environment and
           # every other pod are out of scope and must never be discovered or
           # assessed from here.
+          #
+          # The agent cannot enforce this itself: scan_network:<CIDR>,
+          # scan_topology and create_backup are accepted from any interactive
+          # user, and this build's licence check always returns true. The local
+          # firewall rules named {{ cydeploy_guard_rule_prefix }}-* are what keeps
+          # a scan inside this host; do not remove them.
           pod: {{ cydeploy_pod_name | default('Pod' ~ ('%02d' | format(pod_id | int))) }}
           scope_host: {{ cydeploy_expected_hostname | default(inventory_hostname | upper) }}
           scope_address: {{ ansible_host }}/32
+          agent_version: {{ cydeploy_version }}
+          agent_online: {{ cydeploy_online_mode }}
+          agent_insights: {{ 1 if cydeploy_insights_enabled | bool else 0 }}
+          imaging_helper: {{ 'enabled' if cydeploy_imaging_helper_enabled | bool else 'disabled' }}
           excluded:
             - 10.50.1.10   # DC01-P01, shared directory service
             - 10.50.1.11   # DC02-P01, shared directory service
             - 192.168.1.0/24  # management network
         dest: "{{ cydeploy_workspace_dir }}\\scope.yml"
 
+    - name: Start the CyDefense service with the corrected configuration
+      ansible.windows.win_service:
+        name: "{{ cydeploy_expected_service }}"
+        state: started
+        start_mode: auto
+
+    - name: Read back the applied agent configuration
+      ansible.windows.win_powershell:
+        script: |
+          $ErrorActionPreference = 'Stop'
+          $cfg = Get-ItemProperty -Path 'HKLM:\SOFTWARE\CyDefense\Config'
+          $svc = Get-Service -Name '{{ cydeploy_expected_service }}'
+          $helper = Get-Service -Name '{{ cydeploy_helper_service }}' -ErrorAction SilentlyContinue
+          $guard = @(Get-NetFirewallRule -DisplayName '{{ cydeploy_guard_rule_prefix }}-*' -ErrorAction SilentlyContinue |
+              Where-Object { $_.Enabled -eq 'True' -and $_.Action -eq 'Block' })
+          $Ansible.Result = @{
+              online          = [int]$cfg.Online
+              insights        = [int]$cfg.Insights
+              api             = [string]$cfg.System
+              service_state   = [string]$svc.Status
+              helper_start    = if ($helper) { [string]$helper.StartType } else { 'absent' }
+              guard_rules     = $guard.Count
+          }
+      changed_when: false
+      register: cydeploy_applied
+
+    - name: Fail when the agent did not come up in the approved configuration
+      ansible.builtin.assert:
+        that:
+          - cydeploy_applied.result.service_state == 'Running'
+          - cydeploy_applied.result.online | int == cydeploy_online_mode | int
+          - cydeploy_applied.result.insights | int == (1 if cydeploy_insights_enabled | bool else 0)
+          - cydeploy_imaging_helper_enabled | bool or cydeploy_applied.result.helper_start in ['Disabled', 'absent']
+          - not (cydeploy_guard_egress | bool) or cydeploy_applied.result.guard_rules | int > 0
+        fail_msg: >-
+          CyDeploy agent on {{ inventory_hostname }} is not in the approved
+          configuration: {{ cydeploy_applied.result }}. Treat the pod as
+          unsafe for student use until this is corrected or the agent removed.
+
     - name: Record that this role installed CyDeploy
       ansible.windows.win_copy:
         content: |
-          CyDeploy Community Edition installed by the cydeploy_community role
+          CyDefense Agent installed by the cydeploy_community role
           at {{ ansible_date_time.iso8601 | default('unknown time') }}
           installer: {{ cydeploy_installer_path }}
-          version: {{ cydeploy_version | default('') }}
+          sha256: {{ cydeploy_installer_sha256 }}
+          version: {{ cydeploy_version }}
+          product_code: {{ cydeploy_product_code }}
+          online: {{ cydeploy_online_mode }}
+          insights: {{ 1 if cydeploy_insights_enabled | bool else 0 }}
+          imaging_helper: {{ 'enabled' if cydeploy_imaging_helper_enabled | bool else 'disabled' }}
+          egress_guard_rules: {{ cydeploy_applied.result.guard_rules }}
           workspace: {{ cydeploy_workspace_dir }}
         dest: "{{ cydeploy_tools_dir }}\\.installed"
-      when: not (cydeploy_already_current | bool)
 
     - name: Report the installation outcome
       ansible.builtin.debug:
         msg:
           pod: "{{ cydeploy_pod_name | default('Pod' ~ ('%02d' | format(pod_id | int))) }}"
           action: install
-          result: "{{ 'already at this version' if cydeploy_already_current | bool else 'installed' }}"
-          version: "{{ cydeploy_version | default('unrecorded') }}"
+          result: "{{ 'installed' if cydeploy_install_result.changed else 'already installed' }}"
+          version: "{{ cydeploy_version }}"
+          service: "{{ cydeploy_applied.result.service_state }}"
+          online: "{{ cydeploy_applied.result.online }}"
+          insights: "{{ cydeploy_applied.result.insights }}"
+          imaging_helper: "{{ cydeploy_applied.result.helper_start }}"
+          egress_guard_rules: "{{ cydeploy_applied.result.guard_rules }}"
           workspace: "{{ cydeploy_workspace_dir }}"

@@ -83,3 +83,23 @@ cydeploy_require_snapshot: true
 
 # Free space required on C: before installing CyDeploy.
 cydeploy_min_free_gb: 10
+
+# The approved vendor artifact. These live here, not only in the role defaults,
+# because the preflight role reads them before cydeploy_community is included and
+# a role default cannot gate another role's run.
+#
+# docs/cydeploy/CYDEPLOY-AGENT-FINDINGS.md records how the checksum, the product
+# code and the configuration below were established from the MSI itself.
+cydeploy_version: 1.0.16226.849
+cydeploy_installer_filename: CyDefenseAgent-1.0.16226.849.msi
+cydeploy_installer_sha256: 1648363b29d502eb978c0ae805a91fcc11e9c73f627097adfc84c79edd232fb9
+cydeploy_installer_path: 'C:\CyberLab\_Tools\CyDeploy\CyDefenseAgent-1.0.16226.849.msi'
+cydeploy_installer_src: "/var/lib/awx/projects/_cydeploy/CyDefenseAgent-1.0.16226.849.msi"
+cydeploy_product_code: '{00BDA44B-2F36-464E-BCF9-99E5BD743CA1}'
+
+# The isolation question is answered and recorded: the agent cannot confine
+# itself, so the cydeploy_community role denies its binaries any outbound path
+# and asserts the guard is in place before it reports success. See the findings
+# document. Installation is still off by default; an operator supplies
+# cydeploy_install_enabled=true per run.
+cydeploy_isolation_verified: true

@@ -1,8 +1,9 @@
 ---
 # Install and configure CyDeploy Community Edition on an approved inactive pod.
 #
-# Disabled until an administrator supplies the installer, its checksum and a
-# recorded answer to the isolation question (see docs/cydeploy/ARCHITECTURE.md).
+# Disabled until an administrator stages the approved installer on the control
+# node; the checksum and the isolation finding are recorded in
+# docs/cydeploy/CYDEPLOY-AGENT-FINDINGS.md.
 # With cydeploy_install_enabled false this playbook still runs end to end and
 # reports what it would do, which is how the rollout is rehearsed safely.
 - name: "CYDEPLOY - Install and Configure"
@@ -36,7 +37,7 @@
           Installation is enabled but cydeploy_isolation_verified is not set.
           CyDeploy must be shown to scan only this pod - no shared domain, no
           management network, no other pod - and that finding recorded in
-          docs/cydeploy/ARCHITECTURE.md before any pod is installed.
+          docs/cydeploy/CYDEPLOY-AGENT-FINDINGS.md before any pod is installed.
       when: cydeploy_install_enabled | bool
 
     - name: Install CyDeploy Community Edition

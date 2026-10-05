@@ -1,0 +1,176 @@
+"""Configuration guarantees for the CyDefense agent install.
+
+The supplied agent cannot confine itself: its licence check always returns true
+and its command pipe accepts network scans and volume imaging from any
+interactive user (docs/cydeploy/CYDEPLOY-AGENT-FINDINGS.md). Everything that
+keeps it inside one pod therefore lives in this repository, so these tests lock
+it in: the artifact is checksum-pinned, the agent is installed offline with
+insights and the imaging helper off, its binaries are denied every outbound
+path, and the rules that do the denying are outside the namespace a student lab
+is allowed to delete.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+import yaml
+
+REPO = Path(__file__).resolve().parents[1]
+ROLE = REPO / "roles" / "cydeploy_community"
+DEFAULTS = ROLE / "defaults" / "main.yml"
+INSTALL_TASKS = ROLE / "tasks" / "main.yml"
+GUARD_TASKS = ROLE / "tasks" / "egress_guard.yml"
+UNINSTALL_TASKS = ROLE / "tasks" / "uninstall.yml"
+POD_VARS = REPO / "vars" / "cydeploy-pods.yml"
+FINDINGS = REPO / "docs" / "cydeploy" / "CYDEPLOY-AGENT-FINDINGS.md"
+
+APPROVED_SHA256 = "1648363b29d502eb978c0ae805a91fcc11e9c73f627097adfc84c79edd232fb9"
+PRODUCT_CODE = "{00BDA44B-2F36-464E-BCF9-99E5BD743CA1}"
+
+
+@pytest.fixture(scope="module")
+def defaults() -> dict:
+    return yaml.safe_load(DEFAULTS.read_text())
+
+
+@pytest.fixture(scope="module")
+def pod_vars() -> dict:
+    return yaml.safe_load(POD_VARS.read_text())
+
+
+def test_installation_is_off_by_default(defaults: dict) -> None:
+    assert defaults["cydeploy_install_enabled"] is False
+
+
+def test_artifact_is_pinned_in_both_places(defaults: dict, pod_vars: dict) -> None:
+    # The preflight role reads these before cydeploy_community is included, so a
+    # role default alone cannot gate the run; both copies must agree.
+    for source in (defaults, pod_vars):
+        assert source["cydeploy_installer_sha256"] == APPROVED_SHA256
+        assert source["cydeploy_product_code"] == PRODUCT_CODE
+        assert source["cydeploy_version"] == "1.0.16226.849"
+
+
+def test_agent_is_installed_offline_with_telemetry_off(defaults: dict) -> None:
+    assert defaults["cydeploy_online_mode"] == 0
+    assert "localhost" in defaults["cydeploy_api_url"]
+    assert defaults["cydeploy_insights_enabled"] is False
+    assert defaults["cydeploy_imaging_helper_enabled"] is False
+    assert defaults["cydeploy_guard_egress"] is True
+
+
+def test_install_applies_offline_properties_and_corrects_insights() -> None:
+    body = INSTALL_TASKS.read_text()
+
+    assert "ONLINE_MODE={{ cydeploy_online_mode }}" in body
+    assert "APIURL={{ cydeploy_api_url }}" in body
+    # The MSI ships Insights=1, so the registry value must be written explicitly
+    # rather than left at the installer default.
+    assert "name: Insights" in body
+    assert "name: Online" in body
+    assert "AllowInvalidServerCert" in body
+
+
+def test_service_is_configured_before_it_is_started() -> None:
+    body = INSTALL_TASKS.read_text()
+    tasks = yaml.safe_load(body)
+    names = [
+        task["name"]
+        for block in tasks
+        for task in block.get("block", [block])
+    ]
+
+    stop = names.index("Stop the CyDefense service while its configuration is corrected")
+    config = names.index("Apply the pod-local agent configuration")
+    guard = names.index("Keep the CyDeploy agent binaries off every network")
+    start = names.index("Start the CyDefense service with the corrected configuration")
+
+    assert stop < config < guard < start, (
+        "the agent must be configured and fenced before it is allowed to run"
+    )
+
+
+def test_install_asserts_the_applied_configuration() -> None:
+    body = INSTALL_TASKS.read_text()
+
+    assert "cydeploy_applied.result.service_state == 'Running'" in body
+    assert "cydeploy_applied.result.online | int == cydeploy_online_mode | int" in body
+    assert "cydeploy_applied.result.insights | int" in body
+    assert "cydeploy_applied.result.guard_rules | int > 0" in body
+
+
+def test_install_refuses_an_unpinned_or_mismatched_installer() -> None:
+    body = INSTALL_TASKS.read_text()
+
+    assert "cydeploy_installer_sha256 | default('') | trim) == ''" in body
+    assert (
+        "cydeploy_installer_stat.stat.checksum | lower != cydeploy_installer_sha256 | lower"
+        in body
+    )
+
+
+def test_guard_blocks_every_agent_binary_outbound() -> None:
+    tasks = yaml.safe_load(GUARD_TASKS.read_text())
+    assert tasks, "the egress guard must do something"
+
+    for task in tasks:
+        rule = task["community.windows.win_firewall_rule"]
+        assert rule["direction"] == "out"
+        assert rule["action"] == "block"
+        assert rule["enabled"] is True
+        assert rule["profiles"] == "domain,private,public"
+
+        programs = task["vars"]["cydeploy_guard_programs"]
+        assert set(programs) == {"service", "tray", "imaging"}
+        assert all(path.endswith(".exe") for path in programs.values())
+
+    protocols = {task["community.windows.win_firewall_rule"]["protocol"] for task in tasks}
+    assert {"any", "icmpv4"} <= protocols, (
+        "the scanner finds hosts with ICMP echo, so ICMP must be denied by "
+        "protocol as well as by the catch-all rule"
+    )
+
+
+def test_guard_namespace_is_outside_the_student_lab_namespace(defaults: dict) -> None:
+    prefix = defaults["cydeploy_guard_rule_prefix"]
+
+    # SC-M5-L1 seeds P<NN>-CYDEPLOY-* rules and its reset deletes everything in
+    # that namespace. The guard must not be deletable by a student exercise.
+    assert not prefix.startswith("P")
+    assert "CYDEPLOY-GUARD" in prefix
+
+    reset = (REPO / "roles" / "seed_sc_cydeploy" / "files" / "reset-sc-cydeploy-labs.ps1").read_text()
+    assert prefix not in reset, (
+        "the SC-M5-L1 reset must not match the CyDeploy egress guard rules"
+    )
+
+
+def test_removal_uses_the_product_code_and_clears_agent_state() -> None:
+    body = UNINSTALL_TASKS.read_text()
+
+    assert 'product_id: "{{ cydeploy_product_code }}"' in body
+    assert "state: absent" in body
+    for path in (
+        r"C:\ProgramData\CyDefense",
+        r"C:\ProgramData\CyDeploy.AgentEnrollment",
+    ):
+        assert path in body, f"removal must clear {path}"
+    assert "Remove the CyDeploy egress guard rules" in body
+    assert "HKLM:\\SOFTWARE\\CyDefense" in body
+
+
+def test_findings_document_records_the_isolation_decision() -> None:
+    body = FINDINGS.read_text()
+
+    assert APPROVED_SHA256 in body
+    assert PRODUCT_CODE in body
+    for claim in (
+        "HasLicenseFeature",
+        "BUILTIN\\Users",
+        "scan_network",
+        "cvelistv5",
+        "CRC-CYDEPLOY-GUARD",
+    ):
+        assert claim in body, f"the findings document must address {claim}"
