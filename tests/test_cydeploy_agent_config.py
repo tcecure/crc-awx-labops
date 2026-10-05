@@ -172,5 +172,12 @@ def test_findings_document_records_the_isolation_decision() -> None:
         "scan_network",
         "cvelistv5",
         "CRC-CYDEPLOY-GUARD",
+        # Learning mode records the student's screen and keystrokes and is not
+        # gated by the Insights flag; only ONLINE_MODE=0 keeps it unreachable.
+        "startLearning",
+        "EnsureInsightUploaderRunning",
+        # The on-premise server is the offline topology, and is explicitly out of
+        # scope for pods and domain controllers.
+        "CyDeployWebSetup-1.0.16226.940.msi",
     ):
         assert claim in body, f"the findings document must address {claim}"

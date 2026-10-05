@@ -143,6 +143,56 @@ CyDeploy existed. Worth raising with the vendor: a pipe that accepts
 `scan_network` from `BUILTIN\Users` is a privilege boundary problem in their
 product, not in this lab.
 
+## Session recording exists, and is not covered by the Insights opt-in
+
+Undocumented in the vendor's agent page: the agent can record a student's
+session. It ships `Accord.Video.FFMPEG` and has a Learning mode that captures
+screenshots and screen video, packages them with the behavioural event stream and
+uploads them —
+
+```text
+RunStartLearning: started UserInsight capture for learning.
+RunStartLearning: session {0} capturing continuously until stopped.
+Command [learning_artifacts]: session {0} sent {1} folders
+Command [replay_results]: accepted results for run {0} (nav={1}, func={2}, steps={3}).
+```
+
+— with a data model that includes `keyEvents`, `mouseEvents`, `navigations`,
+`steps`, `focusSeconds` and window titles. The web platform's own configuration
+confirms the shape: it drops `key_down,key_up,mouse_down,mouse_up,mouse_wheel`
+*centrally* while noting they are "still captured locally for Learning".
+
+Two things matter here. Learning is started by a server-pushed job
+(`ExecuteAgentJob[startLearning]`), so an offline, unenrolled agent cannot be
+asked to record — which is the posture the role installs. And the
+`RunStartLearningAsync` path calls `EnsureInsightUploaderRunning()` without
+reading the `Insights` flag first, so `Insights=0` does not by itself prevent
+recording; only the absence of a server does. That is the strongest argument for
+`ONLINE_MODE=0` with no enrollment token: screen-recording a student is not
+something a vendor job queue should be able to turn on.
+
+## A self-hosted server exists — relevant, but not on a pod
+
+`CyDeployWebSetup-1.0.16226.940.msi` (SHA-256
+`68b3006f1858cad02100bd32c8cbc75cece7effccfe84ac68e71a8e07c875e98`, product code
+`{ED1FBA12-5A17-4ADE-9039-E78B35D66AC9}`) is the on-premise half: an ASP.NET
+Core API as the `CyDeployApi` service plus an Angular portal, over SQL Server.
+
+It answers the question the agent documentation does not — what the agent talks
+to when it has no internet. Its API default port is `57523`, exactly the agent's
+built-in `APIURL` default, so a lab-local server is the intended offline
+topology, and the vendor's own configuration comment states the entitlement
+worker makes no outbound calls until a tenant token is configured (their claim,
+unverified here).
+
+Not in scope for this rollout, and it must not be installed on a pod or on a
+domain controller: it wants IIS/Kestrel, SQL Server and a certificate, and the
+install is driven by `CyDeploySetup.exe` with `/SqlServer /SqlDatabase /ApiPort
+/PortalPort /ServiceAccount /ServicePassword /AdminPassword /EnableSsl
+/SslCertThumbprint /ApiUrl /WebUrl`. If enrolled agents are ever wanted, it
+needs its own VM and its own decision, and it would re-open everything
+`ONLINE_MODE=0` currently closes — including Learning.
+
 ## CVE data does not ship with the installer
 
 The CVE scan reads `C:\ProgramData\CyDefense\cvelistv5`, which the service seeds
