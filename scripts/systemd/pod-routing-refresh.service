@@ -1,0 +1,6 @@
+[Unit]
+Description=Re-assert CRC lab pod routing (idempotent refresh)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/pod-routing.sh
