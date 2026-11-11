@@ -70,8 +70,23 @@
               {%- set _ = labs.update({'SC-' ~ lab_key: lab_val}) -%}
             {%- endfor -%}
             {%- for lab_key, lab_val in gw.items() -%}
-              {%- set _ = labs.update({'SC-' ~ lab_key: lab_val}) -%}
+              {%- set k = 'SC-' ~ lab_key -%}
+              {%- if k in labs -%}
+                {#- M3-L1 is graded on the gateway ruleset AND the student's audit
+                    record, so a lab checked on both sides needs both to pass. -#}
+                {%- set _ = labs.update({k: {
+                      'completed': (lab_val.completed | default(false)) and (labs[k].completed | default(false)),
+                      'reason': (lab_val.reason | default('')) ~ ' | ' ~ (labs[k].reason | default('')) }}) -%}
+              {%- else -%}
+                {%- set _ = labs.update({k: lab_val}) -%}
+              {%- endif -%}
             {%- endfor -%}
+            {#- An unreachable gateway must not let the audit record alone pass M3-L1. -#}
+            {%- if 'SC-M3-L1' in labs and 'M3-L1' not in gw -%}
+              {%- set _ = labs.update({'SC-M3-L1': {
+                    'completed': false,
+                    'reason': 'rule audit not verified (gateway unreachable) | ' ~ (labs['SC-M3-L1'].reason | default('')) }}) -%}
+            {%- endif -%}
             {%- set _ = pods.update({'pod' ~ pad: labs}) -%}
           {%- endfor -%}
           {{ pods }}

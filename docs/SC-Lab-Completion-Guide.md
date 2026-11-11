@@ -594,13 +594,18 @@ A previous administrator left messy, insecure firewall rules. You must audit eve
    - Web browsing should still work
    - Unauthorized traffic should be blocked
 
-7. **Save evidence:**
+7. **Save evidence — this file is required to pass the lab:**
    ```
-   Save as: C:\CyberLab\PodXX\SC-Artifacts\M3-L1_Audit_Complete.txt
+   Save as: C:\CyberLab\PodXX\SC-Artifacts\SC-M3-L1_Completed.txt
    Save as: C:\CyberLab\PodXX\SC-Artifacts\M3-L1_CleanRules.png
    ```
+   `SC-M3-L1_Completed.txt` is your completed audit table — one line per rule with
+   its issue type and what you did about it. Note the underscore before
+   "Completed"; the checker looks for that exact name.
 
-**How the automated check scores this lab:** it objects to a pass rule of **any to
+**How the automated check scores this lab:** it needs both your audit record
+(`SC-M3-L1_Completed.txt`, at least 50 bytes) and a clean ruleset. The ruleset
+half objects to a pass rule of **any to
 any** with no protocol, and to **two identical rules on the same interface tab**
 (same action, protocol, source and destination). Duplicates are judged per
 interface, so the separate default-deny rule each interface needs after M2-L2 and

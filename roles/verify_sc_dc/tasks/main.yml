@@ -8,6 +8,9 @@
 #   M4-L1  Firewall Log Investigation
 #   M4-L2  Verify SC Compliance
 # The eight hands-on labs are verified on the pfSense gateway (verify_sc_gw).
+# M3-L1 (Rule Audit) is graded on both: the gateway proves the ruleset is clean,
+# and the audit record below proves the student performed the audit. Without the
+# record the check credited itself as soon as M1-L2 removed the any/any rule.
 # Produces hostvar podXX_sc_dc_results = { 'M1-L1': {completed, reason}, ... }
 
 - name: "Pod{{ '%02d' | format(pod_id) }} SC M1-L1 — Trust boundary worksheet completed"
@@ -74,10 +77,25 @@
       else { @{ completed=$false; reason=($reasons -join "; ") } }
   register: v_m4l2
 
+- name: "Pod{{ '%02d' | format(pod_id) }} SC M3-L1 — Rule audit record written"
+  ansible.windows.win_powershell:
+    script: |
+      $podName = "Pod{{ '%02d' | format(pod_id) }}"
+      $artifactDir = "C:\CyberLab\$podName\SC-Artifacts"
+      $reasons = @()
+      $done = @("SC-M3-L1_Completed.txt","SC-M3-L1_Completed.csv") |
+              ForEach-Object { Join-Path $artifactDir $_ } | Where-Object { Test-Path $_ } | Select-Object -First 1
+      if (-not $done) { $reasons += "SC-M3-L1_Completed.(txt/csv) not found" }
+      elseif ((Get-Item $done).Length -lt 50) { $reasons += "audit record too short (incomplete)" }
+      if ($reasons.Count -eq 0) { @{ completed=$true; reason="Rule audit record submitted" } }
+      else { @{ completed=$false; reason=($reasons -join "; ") } }
+  register: v_m3l1
+
 - name: "Consolidate Pod{{ '%02d' | format(pod_id) }} SC document-lab results"
   ansible.builtin.set_fact:
     "pod{{ '%02d' | format(pod_id) }}_sc_dc_results":
       M1-L1: "{{ v_m1l1.output[0] }}"
       M2-L1: "{{ v_m2l1.output[0] }}"
+      M3-L1: "{{ v_m3l1.output[0] }}"
       M4-L1: "{{ v_m4l1.output[0] }}"
       M4-L2: "{{ v_m4l2.output[0] }}"
