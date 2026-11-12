@@ -32,6 +32,11 @@ The `verify_sc_gw` role checks pfSense configuration state via SSH/PHP. The `ver
 
 ### M3-L1: Firewall Rule Audit
 - **GW Check:** No Allow Any rules, and no duplicate rule *within the same interface*
+- **DC/Server Check:** `SC-Artifacts\SC-M3-L1_Completed.txt` (or `.csv`), at least 50 bytes
+- **Both halves must pass.** The ruleset alone is not proof of the audit: deleting the
+  any/any rule is part of M1-L2, so without the audit record this lab credited itself.
+  If the gateway is unreachable the lab reads incomplete rather than passing on the
+  record alone.
 - **Expected:** PASS:RulesClean
 - A duplicate is compared on interface + action + protocol + source + destination. Every
   interface legitimately ends in its own catch-all deny, so the LAN, DMZ and VLAN denies are

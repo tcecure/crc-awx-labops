@@ -1,0 +1,11 @@
+[Unit]
+Description=Re-assert CRC lab pod routing every 10 minutes
+
+[Timer]
+OnBootSec=2min
+OnCalendar=*:0/10
+AccuracySec=30s
+Unit=pod-routing-refresh.service
+
+[Install]
+WantedBy=timers.target

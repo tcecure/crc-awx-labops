@@ -36,6 +36,14 @@ adds the `10.51.XX.2/24` router address, SNATs traffic entering a pod's
 firewall network to that address, and permits forwarding **only between the
 matching pod's two networks**, so pods cannot reach each other.
 
+The `10.51.XX.2/24` addresses are also declared in VM 100's
+`/etc/netplan/99-pod-networks.yaml` next to each `10.50.XX.1/24`, because a
+`systemd-networkd` restart flushes any address networkd does not own — that is
+what silently removed all twenty of them and broke firewall access from every
+pod member server. `scripts/systemd/pod-routing.timer` (plus
+`pod-routing-refresh.service`) re-runs the idempotent script every ten minutes
+as a safety net.
+
 Shared DC01 is the one exception: because every student shares that host, it is
 allowed to reach `10.51.XX.1` for all pods. Per-pod isolation of firewall
 access returns once students move to their own `PODXX-SRV` member servers, at
@@ -58,6 +66,28 @@ done
 ```
 
 All twenty should return `200`.
+
+Note that pve1 reaches the firewalls over its own `10.51.XX.100` bridge
+addresses, so a `200` there does **not** prove the student path works. Check
+from VM 100 and from a pod member server as well:
+
+```bash
+# on VM 100
+ip -br a | grep -c '10\.51\.'   # must be 20
+```
+
+## Symptom: "can't reach this page" for `10.51.XX.1` from PODXX-SRV
+
+If the pod firewall answers from pve1 but times out from the student's session
+host, VM 100 has lost its `10.51.XX.2` addresses. Confirm with the `ip -br a`
+count above and re-apply:
+
+```bash
+/usr/local/sbin/pod-routing.sh
+```
+
+The forward rules survive this failure (iptables state is independent of the
+addresses), so only the addresses come back.
 
 ## Recovering a wedged gateway
 
