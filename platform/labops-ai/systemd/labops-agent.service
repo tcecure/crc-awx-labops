@@ -1,5 +1,8 @@
 [Unit]
-Description=DigitalRCC LabOps AI - private OpenHands Agent Server (pinned digest)
+# Under per-run isolation this brings up the model proxy only — the investigation
+# containers are created by the gateway, one per run, and are not part of the compose
+# stack. It still starts the shared agent when compose/.env selects the rollback file.
+Description=DigitalRCC LabOps AI - model proxy (and, on rollback, the shared agent server)
 Requires=docker.service
 After=docker.service network-online.target
 

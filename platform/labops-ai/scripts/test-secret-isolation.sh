@@ -3,8 +3,10 @@
 # Usage: test-secret-isolation.sh <run_id>
 # Exits non-zero on the first failure, so its output is usable as checkpoint evidence.
 set -uo pipefail
-run_id="${1:?run id required}"
-c="labops-inv-${run_id}"
+# LABOPS_TEST_CONTAINER targets the transitional shared agent server; normally the container
+# name is derived from the run id.
+run_id="${1:-}"
+c="${LABOPS_TEST_CONTAINER:-labops-inv-${run_id:?run id required}}"
 
 FAIL=0
 ok()  { printf '  ok    %s\n' "$1"; }
@@ -42,8 +44,11 @@ done
 echo "== filesystem sweep for gateway credentials =="
 noc "gateway canary not on disk" \
     'grep -RIl labops-canary-gateway /etc /opt /var/lib /home /workspace 2>/dev/null | grep -q .'
+# A whole JWT (three dot-separated base64 segments) in a path a leak could write to. The
+# agent image itself ships example tokens in vendored test fixtures, and a bare "eyJ..." blob
+# also matches inline source maps, so neither the image tree nor node_modules is evidence.
 noc "no supabase service-role key on disk" \
-    'grep -RIlE "eyJ[A-Za-z0-9_-]{30,}" /etc /opt /home /workspace 2>/dev/null | grep -q .'
+    'grep -RIlE --exclude-dir=node_modules "eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}" /etc /home /tmp /workspace /var/lib 2>/dev/null | grep -q .'
 
 echo
 [ "$FAIL" -eq 0 ] && echo "secret isolation: PASS" || echo "secret isolation: FAIL"

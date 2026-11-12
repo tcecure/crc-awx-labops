@@ -204,8 +204,284 @@ commit with the production Supabase values the host env names and promoted:
 | `/admin/labops`, `/api/labops/health` anonymous | 307, 401 |
 | Public `/` and `/labops` | 302 → `/labops`, 200 |
 
+## Release 20260829235329 — per-investigation runtime, applied to production
+
+Applied to `drcc-labops-01` (the only environment; there is no staging), write switches all
+still `false`.
+
+Changes made on the host:
+
+| Change | Detail | Rollback |
+| --- | --- | --- |
+| `platform/labops-ai` tree refreshed under `/opt/labops/platform` | root-owned, launcher `0755` | previous tree in `/etc/labops/backups` era release; re-extract from the repo at the prior commit |
+| `/etc/sudoers.d/labops-gateway` | one rule for `run-investigation.sh`, `visudo -cf` clean | `rm /etc/sudoers.d/labops-gateway` (the gateway then cannot launch containers) |
+| `/etc/labops/gateway.env` | appended `LABOPS_RUNTIME_*`, `LABOPS_MODEL_PROXY_TOKEN`, `LABOPS_AGENT_IMAGE`, `LABOPS_AGENT_ENV_FILE`, `LABOPS_WORKSPACE_RETENTION_HOURS`; timestamped copy in `/etc/labops/backups` | restore that copy, restart the gateway |
+| `labops-gateway.service`, `labops-agent.service` | gateway now reads `gateway.env`; `NoNewPrivileges=no` so it can call `sudo -n` for the launcher | previous units are in the git history; `systemctl daemon-reload` after restoring |
+| App release `20260829235329` promoted via `/opt/labops/app/current` | per-run runtime, restart recovery, deadline sweep | repoint the symlink at `20260825235156`, restart |
+| 4 investigation containers left by an interrupted 2026-08-29 test | stopped through the launcher | none needed |
+
+Results:
+
+| Test | Result |
+| --- | --- |
+| `test-investigation-isolation.sh` (real pinned image, two runs) | PASS — non-root, read-only rootfs, own volume only, no host bind, no usable container tooling, limits applied, cross-run filesystem denial |
+| Cross-investigation network denial (new) | PASS — B cannot reach A's agent port, AWX, a student pod or the internet; only the model proxy answers |
+| `test-secret-isolation.sh` | PASS — no Supabase/AWX/Wiki/provider credential in the container, its env, `/proc`, or on disk |
+| `test-egress-isolation.sh` | PASS — only `…/v1/` through the proxy; proxy refuses other paths, CONNECT, and never echoes the key |
+| `verify-deployment.sh` | ALL CHECKS PASSED |
+| Gateway restart with an investigation container present | reaped it: `restart recovery ended 0 investigation(s) and reaped 1 workspace(s)` |
+| Local console after deploy | `/labops` 200 |
+| Public edge from off-host | `/` 302, `/labops` 200, `/api/labops/health` 401 |
+| Existing systems | `crc.ai` 307, tracker 302, `my.digitalrcc.com` 200 — unchanged |
+
+Two defects the deployment exposed, both fixed in code rather than on the host:
+
+1. The first release was built with the developer's `.env.local`, which still names the
+   legacy `DRCC-staging` project; `NEXT_PUBLIC_*` values are inlined at build time, so the
+   gateway held a staging URL with the production service key and every query failed with
+   *Invalid API key*. **Builds for this host must export the host's own public Supabase
+   values**, which is how release `20260829235329` was produced.
+2. Reaping a container whose run has no `ai_runs` row hit the `ai_tool_actions` foreign key
+   and abandoned recovery. Cleanup of an unknown container is no longer audited against a
+   run that does not exist.
+
+## Release 20260830191742 — runtime failure text sanitised, applied to production
+
+App-only promotion; no host configuration, network rule or write switch changed (all five
+switches still `false`), and no production row touched other than removing the two approved
+throwaway test accounts.
+
+| Change | Detail | Rollback |
+| --- | --- | --- |
+| App release `20260830191742` promoted via `/opt/labops/app/current` | runtime failures reported to staff without the launcher path, its stderr or the raw spawn error; the detail goes to the service journal only | `ln -sfn /opt/labops/app/releases/20260829235329 /opt/labops/app/current && systemctl restart labops-gateway` |
+| `labops-test-staff@tcecure.com`, `labops-test-student@tcecure.com` | created for authenticated testing under owner approval, then deleted with their `profiles`/`user_roles` rows | re-create with the same procedure if further authenticated testing is approved |
+
+Results:
+
+| Test | Result |
+| --- | --- |
+| Artifact check before promotion | production ref in 19 files, legacy staging ref in 0, `could not be invoked: ` in 0 |
+| `verify-deployment.sh` after promotion | ALL CHECKS PASSED |
+| Local console | `/` 200, `/labops` 200, `/api/labops/health` 401 anonymous |
+| Public edge from off-host | `/` 302, `/labops` 200, `/api/labops/health` 401 |
+| Existing systems | `crc.ai` 307, tracker 302, `my.digitalrcc.com` 200 — unchanged |
+| Gateway journal after restart | started clean, `NRestarts=0`, launcher `list` call succeeded (restart recovery ran, nothing to reap) |
+| Not-configured route matrix under `next build && next start` | all 10 gateway routes `503 application/json {"code":"not_configured"}` |
+| Test accounts after the run | both absent from `auth.users`, `profiles` and `user_roles` |
+
+Local canary testing (a `next dev` harness with fake credentials, no production data) reported
+two defects, both now closed:
+
+1. A start against a host with no launcher returned the raw spawn error, including the
+   launcher path, and that text was persisted as `ai_runs.failure_reason` and rendered in the
+   investigation list, the detail banner and tool-action summaries. Staff now see a fixed
+   message and the host detail is written only to `journalctl -u labops-gateway`.
+2. `.../cancel`, `.../findings-note` and `.../activity` answered `404 text/html` in
+   not-configured mode. That is a `next dev` on-demand compilation artefact: under a
+   production build every gateway route answers `503` JSON, verified above.
+
+## Provider key installed — model proxy only
+
+The owner supplied the OpenAI key and it was written to `/etc/labops/model-proxy.env`
+(`root:root 0640`), the only file on the host that holds it. The previous file was kept as
+`model-proxy.env.bak-<epoch>`; the key was piped over stdin to a root-only script, so it never
+appeared in a shell history, a log line or a repository.
+
+| Check | Result |
+| --- | --- |
+| `LABOPS_LLM_API_KEY` in `gateway.env` | still the `via-model-proxy` sentinel |
+| provider key in `agent.env` | absent |
+| `labops-model-proxy` container env | holds the key; investigation containers are not part of the compose stack and receive neither the key nor the proxy env file |
+| proxy without a run id (`/v1/models`) | `400 labops: missing X-LabOps-Run` — a call cannot bypass run accounting |
+| proxy with a run-scoped path (`/r/<uuid>/v1/models`) | `200` from `api.openai.com`, so the key is valid and reaches the provider through the proxy only |
+| `LABOPS_LLM_MODEL` (`openai/gpt-5.5`) | present in the account's model list |
+
+Rollback: `sudo cp /etc/labops/model-proxy.env.bak-<epoch> /etc/labops/model-proxy.env &&
+sudo systemctl restart labops-agent.service` restores the placeholder; revoking the key at the
+provider is the owner's control.
+
+## First pilot attempt: `Agent server returned 500`, and the fix
+
+The owner started the pilot investigation on the designated test ticket
+(`support_requests` `199eaa35-…`, run `9fd501bb-…`). Sanitized intake was persisted, the
+container launched, and `POST /api/conversations` then failed. The run was recorded as
+`provider_error` with `Agent server returned 500` and no conversation id.
+
+The agent container's own log gave the cause: while starting a conversation the SDK creates
+its LLM profile store under `/home/openhands/.openhands`, which the read-only rootfs refused
+(`OSError: [Errno 30] Read-only file system`). Nothing to do with the provider key — a call
+from inside an investigation container through the run-scoped proxy returns a real completion
+from `gpt-5.5` (`/v1/models` `200`, `/v1/chat/completions` `200`).
+
+`run-investigation.sh` now mounts a `64m` tmpfs at `/home/openhands/.openhands`
+(`0700`, owned by `10001`), alongside the existing `.config` and `.cache` mounts, so the
+state stays inside the run and dies with it. `POST /api/conversations` returns `201` on a
+freshly launched container, and `test-investigation-isolation.sh` — which now asserts that
+directory is writable — passes every check, including cross-investigation network denial and
+workspace destruction.
+
+Rollback: `sudo cp /opt/labops/platform/labops-ai/scripts/run-investigation.sh.bak-<stamp>
+/opt/labops/platform/labops-ai/scripts/run-investigation.sh`. No service restart is needed —
+the gateway invokes the script per run.
+
+## Release 20260831111015 — the operator can answer the agent's confirmation gate
+
+The first pilot run reached `Awaiting Approval` — the agent server holds every proposed
+action under `AlwaysConfirm` — and the console had no way to answer it, so the run could not
+progress at all. App-only promotion; no host configuration, network rule, image or write
+switch changed (all five switches still `false`).
+
+| Change | Detail | Rollback |
+| --- | --- | --- |
+| App release `20260831111015` promoted via `/opt/labops/app/current` | owner-only `POST /api/labops/investigations/{id}/step` (`{ accept, reason? }`) plus the Allow/Refuse control on the run page; usage read from `stats.usage_to_metrics`, where the pinned agent server actually reports it; the activity relay resumes from a persisted cursor instead of replaying the timeline | `ln -sfn /opt/labops/app/releases/20260830191742 /opt/labops/app/current && systemctl restart labops-gateway` |
+
+Verified against the live agent server before wiring the app to it:
+`POST /api/conversations/<id>/events/respond_to_confirmation` with `{"accept":true}` returned
+`200 {"success":true}`, the held `find` command ran, and the agent proposed its next step
+(spend moved `$0.04848` → `$0.064838`), so the gate resumes rather than ending the run.
+
+| Test | Result |
+| --- | --- |
+| Artifact check before promotion | production Supabase ref in 19 server files, legacy staging ref in 0 |
+| `verify-deployment.sh` after promotion | ALL CHECKS PASSED |
+| Local console | `/labops` 200, `/api/labops/health` 401 anonymous, `/api/labops/investigations/<id>/step` 401 anonymous |
+| Restart recovery | ended the in-flight run `b557c4e3` as designed and destroyed its workspace — no investigation container or volume remains |
+
+Cost of the promotion: an investigation open at restart is always ended by recovery, so the
+first pilot run was terminated by this deploy and the approval path has to be exercised on a
+fresh run.
+
+## Release 20260831114521 — the held step survives a page reload
+
+UI testing of the previous release against a local stack found one real defect in the safety
+gate itself: on a fresh load of a run in `awaiting_approval` the Allow/Refuse panel said
+"The proposed step has no description", because the panel derived the description only from
+live relay frames and the relay deliberately resumes past events it has already persisted.
+An operator could therefore approve an action blind. App-only promotion; no host
+configuration, network rule, image or write switch changed (all five switches still `false`).
+
+| Change | Detail | Rollback |
+| --- | --- | --- |
+| App release `20260831114521` promoted via `/opt/labops/app/current` | the run page reads the held action out of the persisted `ai_run_events` timeline and hands it to the decision panel, so the description is present after a reload or a relay reconnect; a run with no agent conversation now answers `409` rather than `404` | `ln -sfn /opt/labops/app/releases/20260831111015 /opt/labops/app/current && sudo systemctl restart labops-gateway` |
+
+| Test | Result |
+| --- | --- |
+| `npm run typecheck`, `npm run lint`, `npm test` | pass, 192 tests (2 new: relay cursor, held-step summary) |
+| Artifact check before promotion | production Supabase ref in 19 server files, legacy staging ref in 0 |
+| `verify-deployment.sh` after promotion | ALL CHECKS PASSED |
+| Local console | `/labops` 200, `/api/labops/health` 401 anonymous, `/api/labops/investigations/<id>/step` 401 anonymous |
+| Edge | `/labops` 200, health 401, `/step` 401 anonymous; `crc.ai` 307 and the portal 200, unchanged |
+| Containers after restart | no investigation container or volume remains |
+
+## Pilot runs 2026-08-31 — two owner-approved read-only investigations
+
+Both runs were started by the pilot operator on the labelled test record
+(`199eaa35-2372-40d3-ab1b-9da5930aa029`) and both reached `succeeded`.
+
+| Evidence | Run `2380f499` | Run `3dbd4f9a` |
+| --- | --- | --- |
+| Sanitized intake | assigned secret and student email replaced in the stored prompt | same |
+| Internal staff note | absent from the brief and from `ai_messages` | same |
+| Owner approvals in `ai_tool_actions` | 2 × `agent.action.allow` | 2 × `agent.action.allow` |
+| Model activity in `ai_model_usage` | 3 rows, 15.3k prompt / 998 completion tokens, $0.085 | 3 rows, 24.2k prompt / 1 479 completion tokens, $0.106 |
+| Workspace destruction | `runtime.workspace.destroy` succeeded | same |
+| Findings / resolution | empty — the agent had no read integration to investigate with | same |
+
+Two reporting defects the runs exposed, fixed in release `20260831134458`:
+
+- the agent's own replies were never persisted. The pinned agent server puts message text
+  under `MessageEvent.llm_message`, which the event normalizer did not read, so every
+  `MessageEvent` — including the agent's conclusion — stored as an empty summary and the
+  operator saw only tool steps.
+- the audit record understated sanitization: `internalMessagesExcluded` was always `0`
+  because the store filters `is_internal` in SQL and the brief counted only what it was
+  given, and message-level redactions were dropped from `provenance.redactions` even though
+  the redaction itself had happened.
+
+| Change | Detail | Rollback |
+| --- | --- | --- |
+| App release `20260831134458` promoted via `/opt/labops/app/current` | agent replies persist; brief provenance reports the internal notes the store withheld and the redactions applied inside conversation messages | `ln -sfn /opt/labops/app/releases/20260831114521 /opt/labops/app/current && sudo systemctl restart labops-gateway` |
+
+| Test | Result |
+| --- | --- |
+| `npm run typecheck`, `npm run lint`, `npm test`, `npm run build` | pass, 195 tests (3 new: `llm_message`, error/refusal text, provenance counts) |
+| Artifact check before promotion | production Supabase ref present, legacy staging ref in 0 files |
+| `verify-deployment.sh` after promotion | ALL CHECKS PASSED |
+| Local console | `/labops` 200, `/api/labops/health` 401 anonymous |
+| Edge | `/labops` 200 |
+
+Still unexercised on production, and not claimed as validated: cancellation, the token and
+wall-clock limits, and a findings write (`support_notes` remains `false`).
+
+## Pilot run 3 — refusal and the wall-clock limit, on release `20260831134458`
+
+Run `c8331ecb` on the same test record, started 14:54 UTC. The operator allowed one step
+and refused the next; the run was then left idle and the gateway ended it on its deadline.
+
+| Evidence | Result |
+| --- | --- |
+| Owner decisions in `ai_tool_actions` | `agent.action.allow` 15:04:34, `agent.action.refuse` 15:07:11, both attributed to the pilot operator |
+| Refusal reached the agent | `UserRejectObservation` persisted: "Refused by … Propose a different step or report what you already know." |
+| Wall-clock limit | status `timed_out`, `failure_reason` "The 20-minute time limit for an investigation elapsed." at 15:14:12 — the deadline sweep, not a provider or agent error |
+| Spend stopped at the limit | 2 `ai_model_usage` rows, 15.3k prompt / 575 completion tokens, $0.094 |
+| Workspace | `runtime.workspace.destroy` succeeded 15:14:13; no investigation container or volume remains on the host |
+| `llm_message` fix | `MessageEvent` rows now carry text, where the same event stored an empty summary on the previous release |
+
+Still unexercised, and not claimed as validated: cancellation by the operator, the agent's
+own written conclusion in `ai_messages`, and any findings write (`support_notes` is `false`).
+The token budget was deliberately not forced with a reduced-budget run: the wall-clock
+cut-off exercises the same termination and workspace-teardown path.
+
+## Pilot run 4 — cancellation, and run 5 — the agent's written conclusion
+
+Both on the same labelled test record, release `20260831134458`.
+
+| Evidence | Run `a26bc2a3` (cancellation) | Run `2d03b3d7` (completion) |
+| --- | --- | --- |
+| Final status | `cancelled`, `failure_reason` "Cancelled by eddie.barlow@tcecure.com." | `succeeded`, no failure reason |
+| Owner decisions in `ai_tool_actions` | `agent.conversation.cancel` succeeded 16:09:27 | 2 × `agent.action.allow` |
+| Spend | no `ai_model_usage` row — cancelled before the first completion | 3 rows, 23.4k prompt / 1 166 completion tokens, $0.092 |
+| Workspace | `runtime.workspace.destroy` succeeded 16:09:28 | `runtime.workspace.destroy` succeeded |
+| Containers/volumes after the run | none for the investigation | none for the investigation |
+| Agent's written conclusion | n/a | persisted in `ai_run_events`: a triage summary that identifies the record as the pilot test record and states what it could and could not verify |
+
+Run 5 confirms the `llm_message` fix on production: the agent's prose is in the timeline the
+operator reads, where the earlier runs stored empty summaries. It also showed the prose was
+only in the timeline — `ai_messages` held the brief and nothing else, so the conversation
+lost the answer once the timeline was replaced. Fixed in release `20260831162833`: an agent
+`MessageEvent` is appended to `ai_messages` as the assistant turn while it is relayed, and a
+user-sourced `MessageEvent` (the server's echo of the brief) is not.
+
+| Change | Detail | Rollback |
+| --- | --- | --- |
+| App release `20260831162833` promoted via `/opt/labops/app/current` | the agent's replies are stored in the run conversation, not only the event timeline | `ln -sfn /opt/labops/app/releases/20260831134458 /opt/labops/app/current && sudo systemctl restart labops-gateway` |
+
+| Test | Result |
+| --- | --- |
+| `npm run typecheck`, `npm run lint`, `npm test`, `npm run build` | pass, 196 tests (1 new: agent prose stored, brief echo not) |
+| Artifact check before promotion | production Supabase ref in 41 files, legacy staging ref in 0 |
+| `verify-deployment.sh` after promotion | ALL CHECKS PASSED |
+| Local console | `/labops` 200, `/api/labops/health` 401 anonymous |
+| Write switches | `global`, `support_notes`, `github`, `wikijs`, `awx` all `false` |
+
+Not claimed as validated: the assistant-turn persistence in release `20260831162833` is
+covered by unit tests only — starting an investigation is owner-only, so it has had no live
+run since promotion. A findings write is still unexercised (`support_notes` is `false`).
+
+### Test data removal
+
+After the evidence above was recorded, the labelled test record
+`199eaa35-2372-40d3-ab1b-9da5930aa029` and its two conversation messages were deleted from
+production, along with the seven pilot `ai_runs` rows. All five `ai_*` tables are back to 0
+rows and the only remaining `support_requests` row is the real one.
+
+`service_role` holds no `DELETE` on `ai_run_events`, `ai_model_usage` or `ai_tool_actions`
+— the audit trail is append-only through the API, so a direct delete answers
+`42501 permission denied`. Their rows go only with their run, by the `run_id` foreign key's
+`ON DELETE CASCADE`, which is how the pilot rows were removed. Removing audit rows for a run
+that still exists therefore requires a deliberate SQL-level grant, not an API call.
+
 ## Not done yet
 
-- OpenAI key installation — owner-supplied, this host only.
 - AWX read-only token installation — owner-supplied.
 - PBS backup job for VMID 100.

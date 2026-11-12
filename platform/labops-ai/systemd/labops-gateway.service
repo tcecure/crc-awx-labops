@@ -8,12 +8,16 @@ Type=simple
 User=labops-gateway
 Group=labops-gateway
 WorkingDirectory=/opt/labops/app/current
-EnvironmentFile=/etc/labops/labops.env
+EnvironmentFile=/etc/labops/gateway.env
 ExecStart=/usr/bin/node server.js
 Restart=always
 RestartSec=5
 # The gateway holds every credential, so it gets the tightest sandbox the app allows.
-NoNewPrivileges=yes
+# NoNewPrivileges has to stay off: launching an investigation container is a call to
+# sudo(8), restricted by /etc/sudoers.d/labops-gateway to exactly one root-owned launcher
+# with no shell and no arguments of the caller's choosing. The alternative — giving this
+# service the Docker socket — would be root on the host.
+NoNewPrivileges=no
 PrivateTmp=yes
 PrivateDevices=yes
 ProtectSystem=strict

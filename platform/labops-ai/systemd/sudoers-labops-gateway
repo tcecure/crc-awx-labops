@@ -1,0 +1,17 @@
+# Installed as /etc/sudoers.d/labops-gateway, mode 0440, root:root.
+#
+# The gateway must create one container per investigation, and the only two ways to do that
+# are the Docker socket or a root-owned launcher. Socket access is root on the host, so the
+# gateway gets this instead: exactly one absolute, root-owned, non-writable script, no
+# shell, no wildcard beyond its own arguments, and no password prompt (the service user has
+# no password and no TTY).
+#
+# The launcher validates its own arguments — subcommand from a fixed set, run id must be a
+# uuid — so the widest thing reachable through this rule is "create, inspect or destroy an
+# investigation container".
+Defaults:labops-gateway !requiretty
+Defaults:labops-gateway env_reset
+# The proxy token is a per-deployment bearer for labops-model, not a provider key; the
+# launcher reads it from /etc/labops/model-proxy.env when it is not passed in, so nothing
+# has to survive env_reset.
+labops-gateway ALL=(root) NOPASSWD: /opt/labops/platform/labops-ai/scripts/run-investigation.sh *
