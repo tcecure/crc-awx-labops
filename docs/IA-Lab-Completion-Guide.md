@@ -1,6 +1,6 @@
 # CMMC Level 1 Identification & Authentication (IA) Labs — Student Completion Guide
 
-This guide provides step-by-step instructions for completing all 12 Identification & Authentication labs. Each lab presents a real-world identity management problem that you must find and fix using tools on the domain controller: Active Directory Users and Computers (ADUC), PowerShell, Task Scheduler, and file-based evidence artifacts.
+This guide provides step-by-step instructions for completing all 12 Identification & Authentication labs. Each lab presents a real-world identity management problem that you must find and fix using tools on your pod server: Active Directory Users and Computers (ADUC), PowerShell, Task Scheduler, and file-based evidence artifacts.
 
 ---
 
@@ -26,7 +26,7 @@ This guide provides step-by-step instructions for completing all 12 Identificati
 ### What You Need
 
 - Your **Pod number** (your instructor will assign this, e.g., Pod01, Pod05, Pod12)
-- Your **Guacamole login credentials** (your instructor will provide your username and password)
+- Your **Guacamole login credentials** — your username and lab password are shown in the portal at https://my.digitalrcc.com under **Start Here → Lab Access**
 - A password you choose for the accounts you create: **at least 12 characters**
   with an upper-case letter, a lower-case letter, a number and a symbol (for
   example `LabUser!2026#ia`). Your own sign-in password is shorter than this and
@@ -35,7 +35,7 @@ This guide provides step-by-step instructions for completing all 12 Identificati
 
 ### What You Will Be Doing
 
-You will work on a **Windows Server domain controller** to identify and remediate identity and authentication problems. Unlike the Access Control labs (which focus on group membership), the IA labs use a wider range of tools:
+You will work on your own **Windows Server pod server** to identify and remediate identity and authentication problems. Unlike the Access Control labs (which focus on group membership), the IA labs use a wider range of tools:
 
 - **Active Directory Users and Computers (ADUC)** — managing user accounts and properties
 - **PowerShell** — exporting reports, changing password policy, inspecting scheduled tasks
@@ -67,18 +67,20 @@ You will connect to the lab through **Apache Guacamole** — a web-based remote 
    - Pod 05 → `student05`
    - Pod 12 → `student12`
    - *(and so on — the number matches your assigned pod)*
-2. Enter your **Password** (provided by your instructor)
+2. Enter your **Password** — sign in to the portal at https://my.digitalrcc.com, open **Start Here**, and under **Lab Access** click **Show my lab password**
 3. Click **Login**
 
-### Step 3: Connect to the Domain Controller
+### Step 3: Connect to Your Pod Server
 
 | Connection Name | What It Is |
 |---|---|
-| **PODXX-DC** | Domain Controller — **use this for all IA labs** |
+| **PODXX-SRV** | Your pod server — **use this for all IA labs** |
 
-This is the only connection you get: every IA lab is done on this desktop.
+This is the only connection you get: every IA lab is done on this desktop. The
+server is joined to the `acs-p01.local` domain and carries the Active Directory
+management tools, so you never sign in to a domain controller.
 
-1. Click on **PODXX-DC** (where XX is your pod number, e.g., **POD03-DC**)
+1. Click on **PODXX-SRV** (where XX is your pod number, e.g., **POD03-SRV**)
 2. The remote desktop session opens directly in your browser — no extra login is needed
 3. Wait a few seconds for the Windows Server desktop to appear
 
@@ -106,7 +108,7 @@ cmd /c "set __COMPAT_LAYER=RunAsInvoker&& start "" mmc.exe dsa.msc"
 > **Do not open ADUC any other way.** Plain `dsa.msc`, **Server Manager → Tools**
 > and a blank MMC console all make Windows try to start it elevated and show a
 > **User Account Control** prompt for administrator credentials. Student accounts
-> are deliberately not administrators of the shared domain controller, so that
+> are deliberately not domain administrators, so that
 > prompt always fails with *"Logon failure: the user has not been granted the
 > requested logon type at this computer"* — nothing is broken. Click **No** and
 > use the shortcut (or the command above), which runs ADUC with your own
@@ -171,7 +173,7 @@ acs-p01.local
 
 ## Key Paths and Locations
 
-All IA files live under `C:\CyberLab\PodXX\` on the domain controller (replace XX with your pod number):
+All IA files live under `C:\CyberLab\PodXX\` on your pod server (replace XX with your pod number):
 
 | Path | Purpose |
 |---|---|
@@ -353,10 +355,12 @@ Module 2 covers the identities that are not people — service accounts, automat
 **Difficulty:** Intermediate | **Time:** 10 minutes | **Type:** Hands-on (ADUC + Task Scheduler)
 
 > **Where the task lives:** `PodXX ACS Nightly Backup` is a task on **your own
-> pod server**, not on the domain controller, and you are a local administrator
-> there — so you make the change yourself and both steps below are graded. Open
-> Task Scheduler from an elevated session (right-click → **Run as
-> administrator**) so Windows lets you save the task credential.
+> pod server**, where you are a local administrator — so you make the change
+> yourself and both steps below are graded. Open Task Scheduler from an elevated
+> session (right-click → **Run as administrator**) so Windows lets you save the
+> task credential. In **Change User or Group**, click **Locations...** and pick
+> `acs-p01.local` first: the dialog opens on PODXX-SRV, where a domain service
+> account cannot be found.
 
 #### Scenario
 The nightly backup task **`PodXX ACS Nightly Backup`** runs under a real employee's account, `PXX-s.jenkins`. Automated jobs should run as dedicated service accounts: when Steve leaves, the backup breaks, and his credentials are needlessly exposed.

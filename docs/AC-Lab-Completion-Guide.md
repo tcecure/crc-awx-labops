@@ -1,6 +1,6 @@
 # CMMC Level 1 Access Control (AC) Labs — Student Completion Guide
 
-This guide provides step-by-step instructions for completing all 12 Access Control labs. Each lab presents a real-world access control problem that you must identify and fix using Active Directory Users and Computers (ADUC) on the domain controller.
+This guide provides step-by-step instructions for completing all 12 Access Control labs. Each lab presents a real-world access control problem that you must identify and fix using Active Directory Users and Computers (ADUC) on your pod server.
 
 ---
 
@@ -25,7 +25,7 @@ This guide provides step-by-step instructions for completing all 12 Access Contr
 ### What You Need
 
 - Your **Pod number** (your instructor will assign this, e.g., Pod01, Pod05, Pod12)
-- Your **Guacamole login credentials** (your instructor will provide your username and password)
+- Your **Guacamole login credentials** — your username and lab password are shown in the portal at https://my.digitalrcc.com under **Start Here → Lab Access**
 - A computer with a web browser (Chrome, Firefox, or Edge) — no special software needed
 
 ### What You Will Be Doing
@@ -69,21 +69,26 @@ You will connect to the lab through **Apache Guacamole** — a web-based remote 
    - Pod 05 → `student05`
    - Pod 12 → `student12`
    - *(and so on — the number matches your assigned pod)*
-2. Enter your **Password** (provided by your instructor)
+2. Enter your **Password** — sign in to the portal at https://my.digitalrcc.com, open **Start Here**, and under **Lab Access** click **Show my lab password**
 3. Click **Login**
 
-### Step 3: Connect to the Domain Controller
+### Step 3: Connect to Your Pod Server
 
 After logging in you will see one connection for your pod:
 
 | Connection Name | What It Is |
 |---|---|
-| **PODXX-DC** | Domain Controller — your desktop for the AC labs and every other lab family |
+| **PODXX-SRV** | Your pod server — your desktop for the AC labs and every other lab family |
+
+This server is joined to the `acs-p01.local` domain and has the Active
+Directory management tools installed, so you administer the directory from it.
+You never sign in to a domain controller, and there is no **PODXX-DC**
+connection.
 
 Your pod's pfSense firewall (used in the SC labs) is not a connection here: you
 reach it by browsing to `http://10.51.XX.1` from inside this desktop.
 
-1. Click on **PODXX-DC** (where XX is your pod number, e.g., **POD03-DC**)
+1. Click on **PODXX-SRV** (where XX is your pod number, e.g., **POD03-SRV**)
 2. The remote desktop session will open directly in your browser — no extra login is needed (credentials are pre-configured)
 3. Wait a few seconds for the Windows Server desktop to appear
 
@@ -107,7 +112,7 @@ cmd /c "set __COMPAT_LAYER=RunAsInvoker&& start "" mmc.exe dsa.msc"
 > **Do not open ADUC any other way.** Plain `dsa.msc`, **Server Manager → Tools**
 > and a blank MMC console all make Windows try to start ADUC elevated and prompt
 > for administrator credentials. Student accounts are deliberately not
-> administrators of the shared domain controller, so that prompt always ends in
+> domain administrators, so that prompt always ends in
 > *"Logon failure: the user has not been granted the requested logon type at this
 > computer"* — nothing is broken. Click **No**, then use the desktop shortcut or
 > the command above; it runs ADUC with your own delegated pod permissions, which
@@ -472,13 +477,13 @@ Module 4 focuses on monitoring, reviewing, and documenting access control activi
 
 ### Lab L4.2 — Missing Audit Evidence (Empty Evidence Folder)
 
-**Scenario:** An access review was supposed to be conducted and documented in the evidence folder `C:\CyberLab\PodXX\Lab4-2` on the domain controller. However, the folder is empty — no evidence was collected. You need to perform a basic access review and document the results.
+**Scenario:** An access review was supposed to be conducted and documented in the evidence folder `C:\CyberLab\PodXX\Lab4-2` on your pod server. However, the folder is empty — no evidence was collected. You need to perform a basic access review and document the results.
 
 **Your Task:** Conduct a basic access review and save the evidence.
 
 **Step-by-Step Instructions:**
 
-1. Open **PowerShell** on the domain controller:
+1. Open **PowerShell** on your pod server:
    - Click the **Start** button
    - Type `PowerShell` and click **Windows PowerShell**
 
