@@ -52,6 +52,7 @@
       ansible.builtin.include_tasks: tasks/sync-drop-local.yml
       vars:
         drop_direction: export
+        sync_prune: true
 
     # Host state describes the session host, so a reset that left it behind
     # would keep crediting M2-L1 and M3-L2 from the previous cohort.

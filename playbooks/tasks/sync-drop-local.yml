@@ -8,8 +8,15 @@
 #   drop_direction: import   drop -> C:\CyberLab\PodXX  (before verification)
 #   drop_direction: export   C:\CyberLab\PodXX -> drop  (after seed or reset)
 #
+# The copy adds and overwrites but never deletes, because each side owns
+# content the other has never seen: the DC owns the seed, the session host owns
+# the student evidence. Only a reset asks for the destination to be pruned,
+# with sync_prune=true.
+#
 # A no-op outside member_server mode.
 - name: "Move pod evidence on the domain controller: {{ drop_direction }}"
+  vars:
+    drop_copy_mode: "{{ '/MIR' if (sync_prune | default(false) | bool) else '/E' }}"
   ansible.windows.win_shell: |
     $ErrorActionPreference = 'Stop'
     $pod = 'Pod{0:D2}' -f {{ item }}
@@ -19,7 +26,7 @@
     else { $src = $lab; $dst = $drop }
     if (-not (Test-Path -LiteralPath $src)) { 'nothing_to_sync'; exit 0 }
     New-Item -ItemType Directory -Force -Path $dst | Out-Null
-    $null = robocopy $src $dst /MIR /R:2 /W:2 /NFL /NDL /NJH /NJS /NP
+    $null = robocopy $src $dst {{ drop_copy_mode }} /XF AC.seeded IA.seeded /R:2 /W:2 /NFL /NDL /NJH /NJS /NP
     if ($LASTEXITCODE -gt 7) { throw "robocopy exit $LASTEXITCODE" }
     '{0} {1}={2}' -f $pod, '{{ drop_direction }}', (Get-ChildItem -Recurse -File -LiteralPath $dst |
       Measure-Object).Count
@@ -32,3 +39,13 @@
   ansible.builtin.debug:
     msg: "{{ drop_sync.results | default([]) | map(attribute='stdout') | map('trim') | list }}"
   when: (crc_target_mode | default('shared_dc')) == 'member_server'
+
+- name: Warn that the export still has to reach the session hosts
+  ansible.builtin.debug:
+    msg: >-
+      Seeded evidence is only in C:\CyberLab\_drop on the domain controller.
+      Run playbooks/sync-pod-evidence.yml with sync_direction=push (the
+      "+ Deliver" workflows do this) or the next evidence pull mirrors it away.
+  when:
+    - (crc_target_mode | default('shared_dc')) == 'member_server'
+    - drop_direction == 'export'
