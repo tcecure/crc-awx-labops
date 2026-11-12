@@ -1,0 +1,75 @@
+---
+# Remove the CyDefense Agent and everything this role created.
+#
+# Removal is by product code, not by installer path, so a pod can be cleaned up
+# even if the staged MSI has been deleted. The guard firewall rules, the agent's
+# own ProgramData tree and the agent's enrollment state are removed too: an
+# uninstall that leaves C:\ProgramData\CyDefense behind would leave scan exports
+# and VHDX images on a pod that is about to be handed to a student.
+- name: Check for an installation marker
+  ansible.windows.win_stat:
+    path: "{{ cydeploy_tools_dir }}\\.installed"
+  register: cydeploy_uninstall_marker
+
+- name: Stop the CyDeploy services before removal
+  ansible.windows.win_service:
+    name: "{{ item }}"
+    state: stopped
+  loop:
+    - "{{ cydeploy_expected_service }}"
+    - "{{ cydeploy_helper_service }}"
+  failed_when: false
+
+- name: Remove the CyDefense Agent MSI
+  ansible.windows.win_package:
+    product_id: "{{ cydeploy_product_code }}"
+    state: absent
+    arguments: >-
+      /norestart
+      /l*v "{{ cydeploy_uninstall_log }}"
+  register: cydeploy_uninstall_result
+  failed_when:
+    - cydeploy_uninstall_result.failed | default(false)
+    - not (cydeploy_uninstall_ignore_errors | bool)
+
+- name: Remove the CyDeploy egress guard rules
+  ansible.windows.win_powershell:
+    script: |
+      $ErrorActionPreference = 'Stop'
+      $rules = @(Get-NetFirewallRule -DisplayName '{{ cydeploy_guard_rule_prefix }}-*' -ErrorAction SilentlyContinue)
+      foreach ($rule in $rules) { Remove-NetFirewallRule -Name $rule.Name }
+      $Ansible.Changed = $rules.Count -gt 0
+      $Ansible.Result = @{ removed = $rules.Count }
+
+- name: Confirm the CyDeploy services are gone
+  ansible.windows.win_service_info:
+    name: "{{ item }}"
+  register: cydeploy_uninstall_service
+  failed_when: (cydeploy_uninstall_service.services | default([]) | length) > 0
+  loop:
+    - "{{ cydeploy_expected_service }}"
+    - "{{ cydeploy_helper_service }}"
+
+- name: Remove the CyDeploy workspace, installer, agent data and marker
+  ansible.windows.win_file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "{{ cydeploy_workspace_dir }}"
+    - "{{ cydeploy_tools_dir }}"
+    - 'C:\ProgramData\CyDefense'
+    - 'C:\ProgramData\CyDeploy.AgentEnrollment'
+
+- name: Remove the CyDeploy agent configuration key
+  ansible.windows.win_regedit:
+    path: HKLM:\SOFTWARE\CyDefense
+    state: absent
+    delete_key: true
+
+- name: Report the removal outcome
+  ansible.builtin.debug:
+    msg:
+      pod: "{{ cydeploy_pod_name | default('Pod' ~ ('%02d' | format(pod_id | int))) }}"
+      action: remove
+      installed_by_automation: "{{ cydeploy_uninstall_marker.stat.exists }}"
+      product_code: "{{ cydeploy_product_code }}"

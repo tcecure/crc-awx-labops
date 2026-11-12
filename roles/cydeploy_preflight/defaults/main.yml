@@ -1,0 +1,28 @@
+---
+# Token for the portal pod eligibility feed. Supplied by an AWX custom
+# credential that injects AWX_OPS_SECRET into the job environment, so the value
+# never appears in this repository or in job output.
+cydeploy_portal_token: "{{ lookup('env', 'AWX_OPS_SECRET') }}"
+
+# Fail if the pod has had Guacamole activity more recently than this.
+cydeploy_quiet_minutes: 120
+
+# Fail if the eligibility data itself is older than this.
+cydeploy_eligibility_max_age_minutes: 30
+
+# Where eligibility comes from: 'portal' (live HTTPS read) or 'file' (a snapshot
+# staged on the control node, used when the portal route is unavailable).
+cydeploy_eligibility_source: portal
+cydeploy_eligibility_file: /runner/project/.cydeploy-eligibility.json
+
+cydeploy_proxmox_host: pve1
+cydeploy_vmid_base: 400
+cydeploy_require_snapshot: true
+cydeploy_snapshot_name: cydeploy-baseline
+
+cydeploy_min_free_gb: 10
+
+# Checksum gate for the installer. Only consulted when installation is enabled.
+cydeploy_install_enabled: false
+cydeploy_installer_path: ""
+cydeploy_installer_sha256: ""

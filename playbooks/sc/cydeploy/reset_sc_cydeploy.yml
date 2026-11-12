@@ -1,0 +1,52 @@
+---
+# Reset the CyDeploy Community Edition SC lab on approved inactive pod servers.
+#
+# Removes the P<NN>-CYDEPLOY-* local firewall rules, the
+# SC-Artifacts\CyDeploy tree and the SC-CYDEPLOY.seeded marker. Non-CyDeploy
+# host firewall rules, the pod gateway and the campus firewall are untouched, as
+# is the core SC family and its SC.seeded marker.
+#
+# cydeploy_targets is mandatory: there is no all-pods default.
+- name: "CYDEPLOY - Reset SC Labs"
+  hosts: "{{ cydeploy_targets | mandatory }}"
+  gather_facts: false
+  serial: "{{ cydeploy_serial | default(2) }}"
+  any_errors_fatal: true
+  max_fail_percentage: 0
+  vars_files:
+    - ../../../vars/cydeploy-pods.yml
+  tasks:
+    - name: Run the CyDeploy preflight checks
+      ansible.builtin.include_role:
+        name: cydeploy_preflight
+
+    - name: Copy SC CyDeploy reset script
+      ansible.windows.win_copy:
+        src: "{{ playbook_dir }}/../../../roles/seed_sc_cydeploy/files/reset-sc-cydeploy-labs.ps1"
+        dest: C:\Windows\Temp\reset-sc-cydeploy-labs.ps1
+
+    - name: "Reset SC CyDeploy lab for {{ cydeploy_pod_name }}"
+      ansible.windows.win_shell: >
+        powershell.exe -ExecutionPolicy Bypass -File C:\Windows\Temp\reset-sc-cydeploy-labs.ps1
+        -PodId {{ cydeploy_pod_id }} -LabId {{ cydeploy_lab_id | default('ALL') }}
+      register: cydeploy_sc_reset
+
+    - name: Confirm the student is still reachable after the reset
+      ansible.windows.win_shell: |
+        $rules = @(Get-NetFirewallRule -Direction Inbound -Action Allow -Enabled True -ErrorAction SilentlyContinue |
+            Where-Object { $_.DisplayGroup -like '*Remote Desktop*' })
+        if ($rules.Count -lt 1) { throw 'No enabled inbound Remote Desktop rule remains; the pod would be unreachable' }
+        $svc = Get-Service -Name 'WinRM' -ErrorAction SilentlyContinue
+        if (-not $svc -or $svc.Status -ne 'Running') { throw 'WinRM is not running; automation would lose this pod' }
+        'access preserved'
+      changed_when: false
+
+    - name: Report the SC CyDeploy reset outcome
+      ansible.builtin.debug:
+        msg:
+          pod: "{{ cydeploy_pod_name }}"
+          host: "{{ cydeploy_expected_hostname }}"
+          action: "reset SC {{ cydeploy_lab_id | default('ALL') }}"
+          result: "{{ 'reset to baseline' if cydeploy_sc_reset.rc == 0 else 'failed' }}"
+          output: "{{ cydeploy_sc_reset.stdout_lines | default([]) }}"
+          next: "CYDEPLOY - Seed SC-M5-L1 to stage the lab again"

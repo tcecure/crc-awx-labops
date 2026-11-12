@@ -1,0 +1,44 @@
+ACS FIREWALL CHANGE REQUEST - Pod{{ pod_id_padded }}
+====================================================
+
+CHANGE ID:    CHG-{{ prefix }}-2026-0552
+REQUESTED BY: ACS Network Security
+TARGET:       POD{{ pod_id_padded }}-SRV host firewall (Windows Defender
+              Firewall on this server only)
+
+FINDING
+-------
+The host firewall on POD{{ pod_id_padded }}-SRV contains a permissive inbound
+rule:
+
+    {{ prefix }}-CYDEPLOY-ALLOW-ANY-INBOUND
+
+It accepts TCP traffic on any port from any source address - a troubleshooting
+rule that was never removed. ACS Network Security has requested that it be
+replaced with rules that permit only the communication this server actually
+needs.
+
+THE TRAP
+--------
+Tightening a firewall without knowing what depends on it breaks production. The
+point of this lab is to let discovered system and dependency information drive
+the network change.
+
+REQUIRED SEQUENCE
+-----------------
+1. Review {{ prefix }}_Required_Communication_Matrix.csv.
+2. Run CyDeploy discovery for Pod{{ pod_id_padded }} and identify which inbound
+   paths the discovered systems and services appear to need.
+3. Record your dependency analysis on {{ prefix }}_Dependency_Worksheet.docx.
+4. Apply the approved change on this server: remove or disable the permissive
+   rule, and create replacement rules named {{ prefix }}-CYDEPLOY-<purpose> that
+   permit only the required paths. Each replacement rule must name specific
+   remote addresses and specific ports - never "Any".
+5. Validate that required connectivity still works after the change. Your own
+   remote desktop session and the grading channel both depend on it.
+6. Record the outcome on {{ prefix }}_Change_Validation_Report.docx and submit
+   the response file described in your lab guide.
+
+Scope: the local firewall of POD{{ pod_id_padded }}-SRV only. Do not change the
+pod gateway, another pod, the shared domain, the campus firewall, or the
+management network.

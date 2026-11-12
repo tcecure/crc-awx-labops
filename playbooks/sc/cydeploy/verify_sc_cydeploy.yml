@@ -1,0 +1,122 @@
+---
+# Verify the CyDeploy Community Edition SC lab (SC-M5-L1) on approved inactive
+# pod member servers.
+#
+# Read-only on the pod: the verifier reads the student's response file and the
+# local Windows Defender Firewall rule set. It never reads or writes the pod
+# gateway, the campus firewall or any shared service.
+#
+# cydeploy_targets is mandatory: there is no all-pods default. Tracker/portal
+# publication stays behind cydeploy_publish_progress so a staged run cannot move
+# a live student's completion percentage.
+- name: "CYDEPLOY - Verify SC Labs"
+  hosts: "{{ cydeploy_targets | mandatory }}"
+  gather_facts: false
+  serial: "{{ cydeploy_serial | default(2) }}"
+  vars_files:
+    - ../../../vars/cydeploy-pods.yml
+  tasks:
+    - name: Run the CyDeploy preflight checks
+      ansible.builtin.include_role:
+        name: cydeploy_preflight
+
+    - name: "Verify SC CyDeploy lab for {{ cydeploy_pod_name }}"
+      ansible.builtin.include_role:
+        name: verify_sc_cydeploy
+      vars:
+        pod_id: "{{ cydeploy_pod_id }}"
+
+- name: Consolidate SC CyDeploy results and produce report
+  hosts: localhost
+  gather_facts: false
+  connection: local
+  tasks:
+    - name: Build SC CyDeploy per-pod results from the hosts that ran
+      ansible.builtin.set_fact:
+        pod_results: >-
+          {%- set out = {} -%}
+          {%- for host in groups['all'] -%}
+            {%- set hv = hostvars[host] -%}
+            {%- for key, value in hv.items() -%}
+              {%- if key.startswith('pod') and key.endswith('_sc_cydeploy_results') -%}
+                {%- set _ = out.update({key | regex_replace('_sc_cydeploy_results$', ''): value}) -%}
+              {%- endif -%}
+            {%- endfor -%}
+          {%- endfor -%}
+          {{ out }}
+
+    - name: Require at least one verified pod
+      ansible.builtin.assert:
+        that:
+          - pod_results | length > 0
+        fail_msg: >-
+          No SC CyDeploy results were collected. Check that cydeploy_targets
+          named approved inactive pod servers and that preflight passed.
+
+    - name: Build SC CyDeploy tracker artifacts
+      ansible.builtin.set_fact:
+        pod_results_pub: >-
+          {%- set pods_out = {} -%}
+          {%- for pod_key, pod_val in pod_results.items() -%}
+            {%- set labs = {} -%}
+            {%- for lab_key, lab_val in pod_val.items() -%}
+              {%- set _ = labs.update({'SC-' ~ lab_key: lab_val}) -%}
+            {%- endfor -%}
+            {%- set _ = pods_out.update({pod_key: labs}) -%}
+          {%- endfor -%}
+          {{ pods_out }}
+
+    - name: Compute SC CyDeploy totals
+      ansible.builtin.set_fact:
+        total_completed: >-
+          {%- set count = [0] -%}
+          {%- for pod_val in pod_results.values() -%}
+            {%- for lab_val in pod_val.values() -%}
+              {%- if lab_val.completed | default(false) -%}{%- set _ = count.append(count.pop() + 1) -%}{%- endif -%}
+            {%- endfor -%}
+          {%- endfor -%}
+          {{ count[0] }}
+        total_incomplete: >-
+          {%- set count = [0] -%}
+          {%- for pod_val in pod_results.values() -%}
+            {%- for lab_val in pod_val.values() -%}
+              {%- if not (lab_val.completed | default(false)) -%}{%- set _ = count.append(count.pop() + 1) -%}{%- endif -%}
+            {%- endfor -%}
+          {%- endfor -%}
+          {{ count[0] }}
+
+    - name: Publish SC CyDeploy results as AWX job artifacts
+      ansible.builtin.set_stats:
+        data: "{{ pod_results_pub }}"
+        aggregate: false
+        per_host: false
+
+    - name: Report that tracker synchronization is staged off
+      ansible.builtin.debug:
+        msg: >-
+          SC CyDeploy tracker synchronization is disabled
+          (cydeploy_publish_progress=false). Results were published as job
+          artifacts only; student completion percentages were not touched.
+      when: not (cydeploy_publish_progress | default(false) | bool)
+
+    - name: Synchronize SC CyDeploy results with the DRCC portal
+      ansible.builtin.include_tasks: ../../tasks/publish-progress.yml
+      vars:
+        progress_family: SC-CYDEPLOY
+        progress_pods: "{{ pod_results_pub }}"
+      when: cydeploy_publish_progress | default(false) | bool
+
+    - name: Write SC CyDeploy verification report
+      ansible.builtin.copy:
+        content: "{{ {'course': 'CMMC SC CyDeploy Community Edition', 'pods': pod_results_pub, 'totals': {'completed': total_completed | int, 'incomplete': total_incomplete | int}} | to_nice_json }}"
+        dest: /runner/artifacts/SC_CyDeploy_Verification_Report.json
+      failed_when: false
+
+    - name: Print SC CyDeploy completion matrix
+      ansible.builtin.debug:
+        msg: |
+          === CMMC SC CyDeploy Community Edition ===
+          {% for pod_key, pod_val in pod_results.items() %}
+          {{ pod_key | upper }}: M5 [L1 {{ 'C' if pod_val['M5-L1'].completed | default(false) else 'I' }}]
+          {% endfor %}
+          TOTAL: completed={{ total_completed }} incomplete={{ total_incomplete }}

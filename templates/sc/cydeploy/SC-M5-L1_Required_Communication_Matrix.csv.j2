@@ -1,0 +1,7 @@
+PathId,Source,Destination,Protocol,Port,Purpose,BusinessRequired
+PATH-01,10.50.{{ pod_id }}.0/24,POD{{ pod_id_padded }}-SRV,TCP,3389,Remote desktop for the pod analyst,Yes
+PATH-02,10.50.1.10,POD{{ pod_id_padded }}-SRV,TCP,445,SMB - Group Policy and evidence drop from the domain controller,Yes
+PATH-03,192.168.1.103,POD{{ pod_id_padded }}-SRV,TCP,5985,WinRM - lab automation and grading,Yes
+PATH-04,10.50.1.10,POD{{ pod_id_padded }}-SRV,TCP,135,RPC endpoint mapper for domain management,Yes
+PATH-05,ANY,POD{{ pod_id_padded }}-SRV,TCP,3389,Remote desktop from any source address,No
+PATH-06,ANY,POD{{ pod_id_padded }}-SRV,TCP,ANY,Unrestricted inbound access on every port,No
