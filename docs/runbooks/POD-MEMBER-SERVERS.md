@@ -218,10 +218,29 @@ Remove-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\WinS
 Restart-Service TermService -Force
 ```
 
-**Scheduled tasks with a stored credential.** A local account that is not in
+**Scheduled tasks with a stored credential.** An account that is not in
 Administrators (or another holder of `SeBatchLogonRight`) registers the task fine
-but the run fails with `LastTaskResult: 267011` and no output. Grant *Log on as a
-batch job* to the account, or run the task as a member of Administrators.
+but the run fails with `LastTaskResult: 267011` and no output, and the Security
+log records 4625 `0xC000015B` — "not granted the requested logon type at this
+machine". `playbooks/seed-ia-session-host.yml` grants `SeBatchLogonRight` to
+`ACS-P01\Domain Users` on the pod server for exactly this reason: IA M2-L1 has
+the student point the task at a service account they invent, so the account
+cannot be named ahead of time. The grant is scoped to the single-student session
+host only — never to the shared domain controllers. Check it with:
+
+```powershell
+secedit /export /areas USER_RIGHTS /cfg $env:TEMP\ur.inf | Out-Null
+Get-Content $env:TEMP\ur.inf | Select-String '^SeBatchLogonRight'
+```
+
+**Task Scheduler silently reverts a run-as change.** Picking a new account,
+clicking OK, getting no password prompt and finding the old account back on
+reopen means the save was refused, not applied. Either *Do not store password*
+was checked — that asks the Task Scheduler service for an S4U logon, which needs
+`SeTcbPrivilege` and fails `0x80070005` even for a local administrator here — or
+the MMC was not elevated, so the `Administrators` write ACE on
+`C:\Windows\System32\Tasks\<task>` is deny-only. Save with a stored password from
+an elevated Task Scheduler.
 
 **`whoami /groups` shows Administrators as "deny only".** That is UAC token
 filtering, not a missing membership — check capability from an elevated prompt.

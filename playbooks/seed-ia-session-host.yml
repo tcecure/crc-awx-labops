@@ -5,6 +5,11 @@
 #   M2-L1  "PodNN ACS Nightly Backup" runs as the human account PNN-s.jenkins
 #          and the student repoints it at their own service account. Storing a
 #          task credential needs local admin, which the student only has here.
+#          The account a task runs as also needs SeBatchLogonRight, and the
+#          service account the student creates cannot be named in advance, so
+#          the right is granted to the domain users that sign in to this pod
+#          server. Without it the task saves but every run dies with 4625
+#          0xC000015B / LastTaskResult 267011, including the seeded one.
 #   M3-L2  the local account policy is weak (6 characters, no complexity, no
 #          lockout) and the student hardens it. The domain policy is shared by
 #          all 20 pods, so grading it credited every pod as soon as one student
@@ -40,6 +45,55 @@
       {{ ((crc_target_mode | default('shared_dc')) == 'member_server')
          and ((pod_scope | length) == 0 or (pod_num | int) in pod_scope) }}
   tasks:
+    # USER_RIGHTS is a separate secedit area from the SECURITYPOLICY the M3-L2
+    # seed writes and the student hardens, so the two do not overwrite each
+    # other. Export first and re-apply the whole list: secedit /configure
+    # replaces the members of a right rather than adding to them.
+    - name: "Let domain accounts run scheduled tasks on {{ pod_name }}"
+      ansible.windows.win_shell: |
+        $ErrorActionPreference = 'Stop'
+        $sid = (New-Object System.Security.Principal.NTAccount(
+          '{{ netbios }}\Domain Users')).Translate(
+          [System.Security.Principal.SecurityIdentifier]).Value
+        $export = Join-Path $env:TEMP 'crc-batch-logon-current.inf'
+        Remove-Item -LiteralPath $export -Force -ErrorAction SilentlyContinue
+        $null = secedit /export /areas USER_RIGHTS /cfg $export
+        if ($LASTEXITCODE -ne 0) { throw "secedit /export exit $LASTEXITCODE" }
+        $line = @(Get-Content -LiteralPath $export |
+          Where-Object { $_ -match '^SeBatchLogonRight' })[0]
+        $members = @()
+        if ($line) {
+          $members = @(($line -split '=', 2)[1] -split ',' |
+            ForEach-Object { $_.Trim() } | Where-Object { $_ })
+        }
+        if ($members -contains "*$sid") {
+          Remove-Item -LiteralPath $export -Force -ErrorAction SilentlyContinue
+          'batch_logon_already_granted'
+          return
+        }
+        $members += "*$sid"
+        $inf = Join-Path $env:TEMP 'crc-batch-logon.inf'
+        $body = "[Unicode]`r`nUnicode=yes`r`n[Version]`r`n" +
+          "signature=`"`$CHICAGO`$`"`r`nRevision=1`r`n[Privilege Rights]`r`n" +
+          "SeBatchLogonRight = " + [string]::Join(',', $members) + "`r`n"
+        $utf16 = [System.Text.Encoding]::Unicode
+        [System.IO.File]::WriteAllText($inf, $body, $utf16)
+        $db = Join-Path $env:TEMP 'crc-batch-logon.sdb'
+        Remove-Item -LiteralPath $db -Force -ErrorAction SilentlyContinue
+        $log = Join-Path $env:TEMP 'crc-batch-logon.log'
+        $null = secedit /configure /db $db /cfg $inf `
+          /areas USER_RIGHTS /log $log
+        if ($LASTEXITCODE -ne 0) {
+          throw "secedit /configure exit $LASTEXITCODE - see $log"
+        }
+        Remove-Item -LiteralPath $export, $inf, $db -Force `
+          -ErrorAction SilentlyContinue
+        'batch_logon_granted'
+      register: batch_logon
+      changed_when: >-
+        'batch_logon_granted' in (batch_logon.stdout | default(''))
+      when: in_scope | bool
+
     - name: "Seed the weak M3-L2 local account policy on {{ pod_name }}"
       ansible.windows.win_shell: |
         $ErrorActionPreference = 'Stop'
